@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Clock } from 'lucide-react';
+import { BookOpen, Clock, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -12,6 +12,23 @@ const difficultyColors = {
 
 export const BookCard = ({ book, progress }) => {
   const progressPercent = progress ? Math.round((progress.words_read / 500) * 100) : 0;
+  const isImporting = book.import_status === 'importing';
+  
+  if (isImporting) {
+    return (
+      <Card className="overflow-hidden border border-border h-full opacity-70">
+        <div className="aspect-[3/4] relative overflow-hidden bg-muted flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+        <div className="p-4 space-y-2">
+          <h3 className="font-serif text-lg font-medium text-foreground line-clamp-1">
+            {book.title_jp || book.title}
+          </h3>
+          <p className="text-sm text-muted-foreground">Importing...</p>
+        </div>
+      </Card>
+    );
+  }
   
   return (
     <Link to={`/read/${book.id}`} data-testid={`book-card-${book.id}`}>
@@ -39,7 +56,7 @@ export const BookCard = ({ book, progress }) => {
           {/* Difficulty Badge */}
           <Badge 
             variant="outline" 
-            className={`absolute top-3 right-3 text-xs ${difficultyColors[book.difficulty]}`}
+            className={`absolute top-3 right-3 text-xs ${difficultyColors[book.difficulty] || difficultyColors.intermediate}`}
           >
             {book.difficulty}
           </Badge>
@@ -48,13 +65,13 @@ export const BookCard = ({ book, progress }) => {
         {/* Book Info */}
         <div className="p-4 space-y-2">
           <h3 className="font-serif text-lg font-medium text-foreground line-clamp-1 group-hover:text-primary transition-colors">
-            {book.title_jp}
+            {book.title_jp || book.title}
           </h3>
           <p className="text-sm text-muted-foreground line-clamp-1">
             {book.title}
           </p>
           <p className="text-xs text-muted-foreground">
-            {book.author_jp}
+            {book.author_jp || book.author}
           </p>
           
           <div className="flex items-center justify-between pt-2">

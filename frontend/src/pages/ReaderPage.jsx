@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -11,7 +11,7 @@ import {
   Sun,
   Loader2,
   Home,
-  X
+  ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -29,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import ScriptToggle from '@/components/reader/ScriptToggle';
@@ -39,6 +38,7 @@ import {
   getBook,
   getChapters,
   getSentences,
+  getSentencesCount,
   lookupWord,
   getVocabulary,
   createBookmark,
@@ -48,18 +48,24 @@ import {
 } from '@/lib/api';
 import { toast } from 'sonner';
 
+const SENTENCES_PER_PAGE = 50;
+
 export const ReaderPage = () => {
   const { bookId, chapterId } = useParams();
   const navigate = useNavigate();
   const { theme, toggleTheme, readerSettings, updateReaderSettings } = useTheme();
+  const sentinelRef = useRef(null);
 
   const [book, setBook] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [currentChapter, setCurrentChapter] = useState(null);
   const [sentences, setSentences] = useState([]);
+  const [totalSentences, setTotalSentences] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [savedWords, setSavedWords] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
+  const [hasMore, setHasMore] = useState(true);
 
   // Dictionary popup state
   const [selectedWord, setSelectedWord] = useState(null);
@@ -81,15 +87,31 @@ export const ReaderPage = () => {
       const chapter = chapters.find(c => c.id === chapterId);
       if (chapter) {
         setCurrentChapter(chapter);
-        fetchSentences(chapterId);
+        loadChapterSentences(chapterId, true);
       }
     } else if (chapters.length > 0 && !chapterId) {
-      // Default to first chapter
       const firstChapter = chapters[0];
       setCurrentChapter(firstChapter);
       navigate(`/read/${bookId}/${firstChapter.id}`, { replace: true });
     }
   }, [chapterId, chapters, bookId, navigate]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (!sentinelRef.current || !hasMore || loadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadMoreSentences();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, sentences.length]);
 
   const fetchBookData = async () => {
     setLoading(true);
@@ -113,10 +135,16 @@ export const ReaderPage = () => {
     }
   };
 
-  const fetchSentences = async (chapId) => {
+  const loadChapterSentences = async (chapId, reset = false) => {
     try {
-      const res = await getSentences(chapId);
+      // Get total count first
+      const countRes = await getSentencesCount(chapId);
+      setTotalSentences(countRes.data.count);
+      
+      // Load first batch
+      const res = await getSentences(chapId, 0, SENTENCES_PER_PAGE);
       setSentences(res.data);
+      setHasMore(res.data.length < countRes.data.count);
       
       // Update reading progress
       if (res.data.length > 0) {
@@ -124,11 +152,37 @@ export const ReaderPage = () => {
           book_id: bookId,
           chapter_id: chapId,
           sentence_id: res.data[0].id,
-          words_read: res.data.length * 5 // Approximate words per sentence
+          words_read: res.data.length * 5
         });
       }
     } catch (error) {
       console.error('Failed to fetch sentences:', error);
+      toast.error('Failed to load chapter content');
+    }
+  };
+
+  const loadMoreSentences = async () => {
+    if (!currentChapter || loadingMore || !hasMore) return;
+    
+    setLoadingMore(true);
+    try {
+      const res = await getSentences(currentChapter.id, sentences.length, SENTENCES_PER_PAGE);
+      setSentences(prev => [...prev, ...res.data]);
+      setHasMore(sentences.length + res.data.length < totalSentences);
+      
+      // Update progress
+      if (res.data.length > 0) {
+        await updateProgress({
+          book_id: bookId,
+          chapter_id: currentChapter.id,
+          sentence_id: res.data[res.data.length - 1].id,
+          words_read: res.data.length * 5
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load more sentences:', error);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -163,6 +217,8 @@ export const ReaderPage = () => {
   };
 
   const handleChapterChange = (chapId) => {
+    setSentences([]);
+    setHasMore(true);
     navigate(`/read/${bookId}/${chapId}`);
   };
 
@@ -260,13 +316,13 @@ export const ReaderPage = () => {
             </Link>
             <Separator orientation="vertical" className="h-6" />
             <div className="hidden sm:block">
-              <p className="text-sm font-medium text-foreground line-clamp-1">{book?.title_jp}</p>
-              <p className="text-xs text-muted-foreground line-clamp-1">{currentChapter?.title_jp}</p>
+              <p className="text-sm font-medium text-foreground line-clamp-1">{book?.title_jp || book?.title}</p>
+              <p className="text-xs text-muted-foreground line-clamp-1">{currentChapter?.title_jp || currentChapter?.title}</p>
             </div>
           </div>
 
           {/* Center - Chapter Select */}
-          <Select value={currentChapter?.id} onValueChange={handleChapterChange}>
+          <Select value={currentChapter?.id || ''} onValueChange={handleChapterChange}>
             <SelectTrigger className="w-48" data-testid="chapter-select">
               <SelectValue placeholder="Select chapter" />
             </SelectTrigger>
@@ -302,11 +358,11 @@ export const ReaderPage = () => {
                       <Button
                         key={chapter.id}
                         variant={chapter.id === currentChapter?.id ? 'default' : 'ghost'}
-                        className="w-full justify-start"
+                        className="w-full justify-start text-left"
                         onClick={() => handleChapterChange(chapter.id)}
                       >
                         <span className="truncate">
-                          {chapter.chapter_number}. {chapter.title_jp}
+                          {chapter.chapter_number}. {chapter.title_jp || chapter.title}
                         </span>
                       </Button>
                     ))}
@@ -395,8 +451,15 @@ export const ReaderPage = () => {
           {/* Chapter Title */}
           <div className="text-center mb-12">
             <p className="text-sm text-muted-foreground mb-2">Chapter {currentChapter?.chapter_number}</p>
-            <h1 className="text-3xl font-serif text-foreground">{currentChapter?.title_jp}</h1>
-            <p className="text-lg text-muted-foreground mt-1">{currentChapter?.title}</p>
+            <h1 className="text-3xl font-serif text-foreground">{currentChapter?.title_jp || currentChapter?.title}</h1>
+            {currentChapter?.title_jp && currentChapter?.title && (
+              <p className="text-lg text-muted-foreground mt-1">{currentChapter.title}</p>
+            )}
+            {totalSentences > 0 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                {sentences.length} / {totalSentences} sentences loaded
+              </p>
+            )}
           </div>
 
           {/* Sentences */}
@@ -407,33 +470,24 @@ export const ReaderPage = () => {
                 className="reader-sentence group relative"
                 data-testid={`sentence-${sentence.id}`}
               >
-                <div className={`${scriptMode !== 'english' ? 'jp-text' : ''}`}>
-                  {scriptMode !== 'english' && sentence.words ? (
-                    // Render clickable words
-                    <span>
-                      {getSentenceText(sentence).split('').map((char, idx) => {
-                        const word = sentence.words?.find(w => 
-                          getSentenceText(sentence).includes(w.word) && 
-                          getSentenceText(sentence).indexOf(w.word) <= idx &&
-                          getSentenceText(sentence).indexOf(w.word) + w.word.length > idx
-                        );
-                        
-                        if (word && getSentenceText(sentence).indexOf(word.word) === idx) {
-                          return (
-                            <span
-                              key={idx}
-                              className="reader-word"
-                              onClick={(e) => handleWordClick(word.word, e)}
-                              data-testid={`word-${word.word}`}
-                            >
-                              {word.word}
-                            </span>
-                          );
-                        } else if (word) {
-                          return null; // Part of a word already rendered
+                <div className={`${scriptMode !== 'english' && scriptMode !== 'romaji' ? 'jp-text' : ''}`}>
+                  {scriptMode !== 'english' ? (
+                    <span
+                      className="reader-word cursor-pointer hover:bg-primary/10 hover:text-primary rounded px-0.5 transition-colors"
+                      onClick={(e) => {
+                        const text = getSentenceText(sentence);
+                        // Get clicked word (simplified - click anywhere triggers lookup)
+                        const selection = window.getSelection();
+                        if (selection && selection.toString().trim()) {
+                          handleWordClick(selection.toString().trim(), e);
+                        } else {
+                          // Look up first word/phrase
+                          const firstWord = text.split(/[\s、。！？]/)[0];
+                          if (firstWord) handleWordClick(firstWord, e);
                         }
-                        return <span key={idx}>{char}</span>;
-                      })}
+                      }}
+                    >
+                      {getSentenceText(sentence)}
                     </span>
                   ) : (
                     <span>{getSentenceText(sentence)}</span>
@@ -445,7 +499,10 @@ export const ReaderPage = () => {
                   variant="ghost"
                   size="icon"
                   className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => toggleBookmark(sentence.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleBookmark(sentence.id);
+                  }}
                   data-testid={`bookmark-btn-${sentence.id}`}
                 >
                   {isBookmarked(sentence.id) ? (
@@ -456,6 +513,20 @@ export const ReaderPage = () => {
                 </Button>
               </div>
             ))}
+            
+            {/* Load more sentinel */}
+            {hasMore && (
+              <div ref={sentinelRef} className="py-8 text-center">
+                {loadingMore ? (
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                ) : (
+                  <Button variant="ghost" onClick={loadMoreSentences}>
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    Load more sentences
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Chapter Navigation */}
@@ -495,7 +566,7 @@ export const ReaderPage = () => {
               className="fixed z-50 w-80 p-8 shadow-float border border-border flex items-center justify-center"
               style={{
                 left: `${Math.min(popupPosition.x, window.innerWidth - 340)}px`,
-                top: `${popupPosition.y + 10}px`,
+                top: `${Math.min(popupPosition.y + 10, window.innerHeight - 300)}px`,
               }}
             >
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
