@@ -1,0 +1,177 @@
+{
+  "typography": {
+    "font_family": {
+      "headings": "\"Noto Serif JP\", \"Merriweather\", serif",
+      "body": "\"Noto Sans JP\", \"Inter\", sans-serif",
+      "mono": "\"JetBrains Mono\", monospace",
+      "japanese_script": "\"Noto Serif JP\", serif"
+    },
+    "weights": {
+      "light": 300,
+      "regular": 400,
+      "medium": 500,
+      "bold": 700
+    },
+    "sizes": {
+      "xs": "0.75rem",
+      "sm": "0.875rem",
+      "base": "1rem",
+      "lg": "1.125rem",
+      "xl": "1.25rem",
+      "2xl": "1.5rem",
+      "3xl": "1.875rem",
+      "4xl": "2.25rem",
+      "5xl": "3rem"
+    },
+    "line_height": {
+      "tight": "1.2",
+      "normal": "1.6",
+      "relaxed": "1.8",
+      "loose": "2.0"
+    },
+    "japanese_specifics": {
+      "line_height_multiplier": 1.15,
+      "letter_spacing_adjust": "0.05em",
+      "ruby_alignment": "ruby-position: over;"
+    },
+    "google_fonts_url": "https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@300;400;500;700&family=Merriweather:wght@300;400;700&family=Inter:wght@300;400;500;700&display=swap"
+  },
+  "colors": {
+    "theme_strategy": "dual_theme",
+    "light": {
+      "background": "#F9F7F2",
+      "surface": "#FFFFFF",
+      "surface_highlight": "#F0EFE9",
+      "text_primary": "#2B2B2B",
+      "text_secondary": "#595959",
+      "text_muted": "#8C8C8C",
+      "primary": "#D3382F",
+      "primary_hover": "#B02E26",
+      "secondary": "#727D71",
+      "border": "#E5E5E5",
+      "success": "#4A7C59",
+      "warning": "#D4A017",
+      "error": "#D3382F"
+    },
+    "dark": {
+      "background": "#1A1F2C",
+      "surface": "#252A37",
+      "surface_highlight": "#2F3646",
+      "text_primary": "#E0E0E0",
+      "text_secondary": "#A0A0A0",
+      "text_muted": "#6B7280",
+      "primary": "#FF6B6B",
+      "primary_hover": "#FA5252",
+      "secondary": "#8FA3A3",
+      "border": "#374151",
+      "success": "#66BB6A",
+      "warning": "#FBC02D",
+      "error": "#FF6B6B"
+    },
+    "semantic": {
+      "kanji_highlight": "text-primary font-medium",
+      "vocabulary_saved": "text-success",
+      "reader_bg_paper": "bg-[#F9F7F2] dark:bg-[#1A1F2C]",
+      "reader_text_ink": "text-[#2B2B2B] dark:text-[#E0E0E0]"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "sm": "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+      "card": "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)",
+      "float": "0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04)",
+      "reader_focus": "none"
+    },
+    "radius": {
+      "default": "0.5rem",
+      "card": "0.75rem",
+      "pill": "9999px"
+    },
+    "textures": {
+      "paper_grain": "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E\")",
+      "overlay_opacity": "0.03"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-white hover:bg-primary_hover rounded-full px-6 py-2 shadow-sm transition-all active:scale-95",
+      "secondary": "bg-secondary/10 text-secondary hover:bg-secondary/20 rounded-full px-6 py-2 transition-all",
+      "ghost": "text-text_secondary hover:bg-surface_highlight hover:text-text_primary rounded-lg px-4 py-2 transition-colors",
+      "icon": "p-2 rounded-full hover:bg-surface_highlight text-text_secondary transition-colors"
+    },
+    "cards": {
+      "default": "bg-surface border border-border rounded-xl p-6 shadow-card",
+      "interactive": "bg-surface border border-border rounded-xl p-6 shadow-card hover:shadow-float hover:border-primary/20 transition-all cursor-pointer",
+      "reader_popup": "bg-surface dark:bg-surface border border-border rounded-lg shadow-float p-4 min-w-[300px] z-50"
+    },
+    "inputs": {
+      "default": "bg-surface border border-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-text_muted"
+    },
+    "navigation": {
+      "sidebar": "w-64 border-r border-border bg-background h-screen sticky top-0 flex flex-col p-6",
+      "mobile_nav": "fixed bottom-0 left-0 w-full bg-surface/90 backdrop-blur-md border-t border-border p-4 flex justify-around z-40"
+    }
+  },
+  "layout": {
+    "spacing_scale": {
+      "section_gap": "py-24",
+      "element_gap": "gap-6",
+      "reader_margin": "max-w-[65ch] mx-auto px-6 md:px-0 py-12"
+    },
+    "grids": {
+      "bento_dashboard": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+      "book_library": "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8"
+    }
+  },
+  "motion": {
+    "transitions": {
+      "default": "transition-all duration-200 ease-in-out",
+      "slow": "transition-all duration-500 ease-out"
+    },
+    "animations": {
+      "fade_in": "animate-in fade-in duration-500",
+      "slide_up": "animate-in slide-in-from-bottom-4 fade-in duration-500",
+      "page_turn": "origin-left transition-transform duration-500 ease-in-out"
+    }
+  },
+  "accessibility": {
+    "contrast_check": "Ensure text-primary on background meets WCAG AA (4.5:1).",
+    "interactive_targets": "Min touch target 44px for mobile.",
+    "focus_states": "Visible focus ring on all interactive elements (tabindex=0).",
+    "screen_reader": "Use semantic HTML (article for book content, nav for menus)."
+  },
+  "assets": {
+    "icons_library": "lucide-react",
+    "image_urls": {
+      "hero_background": "https://images.unsplash.com/photo-1699006599483-3d217e2a3459?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwxfHxqYXBhbmVzZSUyMG1pbmltYWxpc3QlMjB1aSUyMGRlc2lnbiUyMHplbiUyMGdhcmRlbiUyMHRleHR1cmUlMjBzdWJ0bGUlMjB3YXNoaSUyMHBhcGVyJTIwdGV4dHVyZSUyMHNlYW1sZXNzJTIwaW5rJTIwd2FzaCUyMHBhaW50aW5nJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzI3Mjc1NjN8MA&ixlib=rb-4.1.0&q=85",
+      "book_placeholder_1": "https://images.unsplash.com/photo-1755541608519-3746dbfb11d6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHw0fHxqYXBhbmVzZSUyMG1pbmltYWxpc3QlMjB1aSUyMGRlc2lnbiUyMHplbiUyMGdhcmRlbiUyMHRleHR1cmUlMjBzdWJ0bGUlMjB3YXNoaSUyMHBhcGVyJTIwdGV4dHVyZSUyMHNlYW1sZXNzJTIwaW5rJTIwd2FzaCUyMHBhaW50aW5nJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzI3Mjc1NjN8MA&ixlib=rb-4.1.0&q=85",
+      "book_placeholder_2": "https://images.unsplash.com/photo-1683661649247-c23fa93b15e5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwyfHxqYXBhbmVzZSUyMG1pbmltYWxpc3QlMjB1aSUyMGRlc2lnbiUyMHplbiUyMGdhcmRlbiUyMHRleHR1cmUlMjBzdWJ0bGUlMjB3YXNoaSUyMHBhcGVyJTIwdGV4dHVyZSUyMHNlYW1sZXNzJTIwaW5rJTIwd2FzaCUyMHBhaW50aW5nJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzI3Mjc1NjN8MA&ixlib=rb-4.1.0&q=85",
+      "zen_texture": "https://images.unsplash.com/photo-1623613466635-915ad5dfafa2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwzfHxqYXBhbmVzZSUyMG1pbmltYWxpc3QlMjB1aSUyMGRlc2lnbiUyMHplbiUyMGdhcmRlbiUyMHRleHR1cmUlMjBzdWJ0bGUlMjB3YXNoaSUyMHBhcGVyJTIwdGV4dHVyZSUyMHNlYW1sZXNzJTIwaW5rJTIwd2FzaCUyMHBhaW50aW5nJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzI3Mjc1NjN8MA&ixlib=rb-4.1.0&q=85"
+    }
+  },
+  "instructions_to_main_agent": {
+    "setup": [
+      "Update tailwind.config.js to include new colors (rice paper, sumi ink, vermilion) and fonts.",
+      "Install 'lucide-react' for icons.",
+      "Add Google Fonts link to public/index.html head.",
+      "Configure global styles in index.css for the paper texture overlay."
+    ],
+    "components_implementation": [
+      "Create a 'ReaderLayout' component that isolates the reading environment from the main app chrome.",
+      "Implement 'RubyText' component for handling <ruby><rb>Kanji</rb><rt>Furigana</rt></ruby> rendering with proper styling.",
+      "Build a 'DictionaryCard' that can be positioned absolutely near the clicked word.",
+      "Use 'SegmentedControl' for script toggles (Kanji/Kana/Romaji/EN)."
+    ],
+    "theme_handling": [
+      "Use 'next-themes' or a simple React Context for Dark/Light mode.",
+      "Ensure the reader text color is not pure black (#000) but Sumi Ink (#2B2B2B) for eye comfort."
+    ]
+  },
+  "universal_guidelines": [
+    "Do not use gradients for backgrounds; use solid colors or subtle grain textures.",
+    "Avoid centering text in the reader view; use left alignment with justified fallbacks if necessary.",
+    "Use 'Noto Serif JP' for all Japanese headings and literary content.",
+    "Ensure 65ch max-width for reading containers to prevent eye fatigue.",
+    "All interactive elements must have data-testid attributes."
+  ]
+}
