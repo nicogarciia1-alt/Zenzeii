@@ -7,7 +7,24 @@ export const getBooks = () => axios.get(`${API}/books`);
 export const getBook = (bookId) => axios.get(`${API}/books/${bookId}`);
 export const getChapters = (bookId) => axios.get(`${API}/books/${bookId}/chapters`);
 export const getChapter = (chapterId) => axios.get(`${API}/chapters/${chapterId}`);
-export const getSentences = (chapterId) => axios.get(`${API}/chapters/${chapterId}/sentences`);
+export const getSentences = (chapterId, skip = 0, limit = 50) => 
+  axios.get(`${API}/chapters/${chapterId}/sentences`, { params: { skip, limit } });
+export const getSentencesCount = (chapterId) => 
+  axios.get(`${API}/chapters/${chapterId}/sentences/count`);
+export const deleteBook = (bookId) => axios.delete(`${API}/books/${bookId}`);
+
+// Book Import API
+export const getAvailableBooks = () => axios.get(`${API}/books/available/list`);
+export const searchGutenberg = (query) => axios.get(`${API}/books/search/gutenberg`, { params: { query } });
+export const importBook = (data) => axios.post(`${API}/books/import`, data);
+export const uploadBook = (file, title, author) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return axios.post(`${API}/books/upload?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+};
+export const getBookImportStatus = (bookId) => axios.get(`${API}/books/${bookId}/status`);
 
 // Dictionary API
 export const lookupWord = (word) => axios.get(`${API}/dictionary/${encodeURIComponent(word)}`);
@@ -32,6 +49,3 @@ export const updateProgress = (data) => axios.post(`${API}/progress`, data);
 
 // Stats API
 export const getStats = () => axios.get(`${API}/stats`);
-
-// Seed API
-export const seedDatabase = () => axios.post(`${API}/seed`);

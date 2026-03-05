@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, File, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -13,6 +13,23 @@ from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
 import httpx
+import asyncio
+
+# Import services
+from services.book_import import (
+    fetch_gutenberg_text,
+    clean_gutenberg_text,
+    split_into_chapters,
+    split_into_sentences,
+    search_gutenberg,
+    GUTENBERG_BOOKS,
+    get_book_cover
+)
+from services.translation import (
+    translate_sentences_batch,
+    translate_title,
+    translate_author
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -82,6 +99,8 @@ class BookResponse(BaseModel):
     total_chapters: int
     difficulty: str
     genre: str
+    import_status: str = "completed"
+    sentences_count: int = 0
 
 class ChapterResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -90,6 +109,7 @@ class ChapterResponse(BaseModel):
     chapter_number: int
     title: str
     title_jp: str
+    sentences_count: int = 0
 
 class SentenceResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -101,7 +121,7 @@ class SentenceResponse(BaseModel):
     japanese_katakana: str
     japanese_romaji: str
     english: str
-    words: List[Dict[str, Any]]
+    words: List[Dict[str, Any]] = []
 
 class WordDefinition(BaseModel):
     word: str
@@ -179,6 +199,19 @@ class FlashcardReviewRequest(BaseModel):
     word_id: str
     correct: bool
 
+class ImportBookRequest(BaseModel):
+    book_key: Optional[str] = None  # For predefined books
+    gutenberg_id: Optional[int] = None  # For custom Gutenberg imports
+    title: Optional[str] = None
+    author: Optional[str] = None
+
+class GutenbergSearchResult(BaseModel):
+    gutenberg_id: int
+    title: str
+    author: str
+    languages: List[str]
+    download_count: int
+
 # ========================
 # AUTH HELPERS
 # ========================
@@ -213,18 +246,25 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))) -> Optional[dict]:
+    """Get user if authenticated, otherwise return None"""
+    if not credentials:
+        return None
+    try:
+        return await get_current_user(credentials)
+    except:
+        return None
+
 # ========================
 # AUTH ENDPOINTS
 # ========================
 
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
-    # Check if user exists
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Create user
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     user_doc = {
@@ -291,7 +331,7 @@ async def get_book(book_id: str):
 
 @api_router.get("/books/{book_id}/chapters", response_model=List[ChapterResponse])
 async def get_chapters(book_id: str):
-    chapters = await db.chapters.find({"book_id": book_id}, {"_id": 0}).sort("chapter_number", 1).to_list(100)
+    chapters = await db.chapters.find({"book_id": book_id}, {"_id": 0}).sort("chapter_number", 1).to_list(200)
     return chapters
 
 @api_router.get("/chapters/{chapter_id}", response_model=ChapterResponse)
@@ -302,9 +342,376 @@ async def get_chapter(chapter_id: str):
     return chapter
 
 @api_router.get("/chapters/{chapter_id}/sentences", response_model=List[SentenceResponse])
-async def get_sentences(chapter_id: str):
-    sentences = await db.sentences.find({"chapter_id": chapter_id}, {"_id": 0}).sort("order", 1).to_list(500)
+async def get_sentences(
+    chapter_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200)
+):
+    """Get sentences with pagination for large chapters"""
+    sentences = await db.sentences.find(
+        {"chapter_id": chapter_id},
+        {"_id": 0}
+    ).sort("order", 1).skip(skip).limit(limit).to_list(limit)
     return sentences
+
+@api_router.get("/chapters/{chapter_id}/sentences/count")
+async def get_sentences_count(chapter_id: str):
+    """Get total sentence count for a chapter"""
+    count = await db.sentences.count_documents({"chapter_id": chapter_id})
+    return {"count": count, "chapter_id": chapter_id}
+
+# ========================
+# BOOK IMPORT ENDPOINTS
+# ========================
+
+@api_router.get("/books/available/list")
+async def get_available_books():
+    """Get list of predefined books available for import"""
+    available = []
+    for key, info in GUTENBERG_BOOKS.items():
+        # Check if already imported
+        existing = await db.books.find_one({"id": key})
+        available.append({
+            "book_key": key,
+            "title": info["title"],
+            "author": info["author"],
+            "gutenberg_id": info["gutenberg_id"],
+            "genre": info["genre"],
+            "difficulty": info["difficulty"],
+            "is_imported": existing is not None,
+            "import_status": existing.get("import_status", "not_started") if existing else "not_started"
+        })
+    return available
+
+@api_router.get("/books/search/gutenberg", response_model=List[GutenbergSearchResult])
+async def search_gutenberg_books(query: str = Query(..., min_length=2)):
+    """Search Project Gutenberg for books"""
+    results = await search_gutenberg(query)
+    return results
+
+@api_router.post("/books/import")
+async def import_book(request: ImportBookRequest, background_tasks: BackgroundTasks):
+    """Start importing a book from Project Gutenberg"""
+    
+    # Determine which book to import
+    if request.book_key and request.book_key in GUTENBERG_BOOKS:
+        book_info = GUTENBERG_BOOKS[request.book_key]
+        book_id = request.book_key
+        gutenberg_id = book_info["gutenberg_id"]
+        title = book_info["title"]
+        author = book_info["author"]
+        genre = book_info.get("genre", "literature")
+        difficulty = book_info.get("difficulty", "intermediate")
+    elif request.gutenberg_id:
+        book_id = f"gutenberg-{request.gutenberg_id}"
+        gutenberg_id = request.gutenberg_id
+        title = request.title or f"Book {request.gutenberg_id}"
+        author = request.author or "Unknown"
+        genre = "literature"
+        difficulty = "intermediate"
+    else:
+        raise HTTPException(status_code=400, detail="Must provide book_key or gutenberg_id")
+    
+    # Check if already importing
+    existing = await db.books.find_one({"id": book_id})
+    if existing:
+        if existing.get("import_status") == "completed":
+            return {"message": "Book already imported", "book_id": book_id, "status": "completed"}
+        elif existing.get("import_status") == "importing":
+            return {"message": "Book import in progress", "book_id": book_id, "status": "importing"}
+    
+    # Create book record with importing status
+    book_doc = {
+        "id": book_id,
+        "title": title,
+        "title_jp": title,  # Will be updated by background task
+        "author": author,
+        "author_jp": author,  # Will be updated by background task
+        "cover_image": get_book_cover(book_id),
+        "description": f"A classic work by {author}",
+        "description_jp": "",
+        "total_chapters": 0,
+        "difficulty": difficulty,
+        "genre": genre,
+        "import_status": "importing",
+        "sentences_count": 0,
+        "gutenberg_id": gutenberg_id,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if existing:
+        await db.books.update_one({"id": book_id}, {"$set": book_doc})
+    else:
+        await db.books.insert_one(book_doc)
+    
+    # Start background import task
+    background_tasks.add_task(process_book_import, book_id, gutenberg_id)
+    
+    return {
+        "message": "Book import started",
+        "book_id": book_id,
+        "status": "importing"
+    }
+
+async def process_book_import(book_id: str, gutenberg_id: int):
+    """Background task to process book import"""
+    try:
+        logger.info(f"Starting import for book {book_id} (Gutenberg ID: {gutenberg_id})")
+        
+        # Fetch book text from Gutenberg
+        raw_text = await fetch_gutenberg_text(gutenberg_id)
+        if not raw_text:
+            await db.books.update_one(
+                {"id": book_id},
+                {"$set": {"import_status": "failed", "error": "Could not fetch book from Gutenberg"}}
+            )
+            return
+        
+        # Clean and process text
+        clean_text = clean_gutenberg_text(raw_text)
+        chapters = split_into_chapters(clean_text, book_id)
+        
+        logger.info(f"Found {len(chapters)} chapters for {book_id}")
+        
+        # Get book info for title translation
+        book = await db.books.find_one({"id": book_id}, {"_id": 0})
+        
+        # Translate book title and author
+        title_jp = await translate_title(book["title"])
+        author_jp = await translate_author(book["author"])
+        
+        # Process each chapter
+        total_sentences = 0
+        chapter_docs = []
+        
+        for chapter in chapters:
+            # Split chapter into sentences
+            sentences = split_into_sentences(chapter['content'])
+            
+            if not sentences:
+                continue
+            
+            # Translate chapter title
+            chapter_title_jp = await translate_title(chapter['title'])
+            
+            chapter_doc = {
+                "id": chapter['id'],
+                "book_id": book_id,
+                "chapter_number": chapter['chapter_number'],
+                "title": chapter['title'],
+                "title_jp": chapter_title_jp,
+                "sentences_count": len(sentences)
+            }
+            chapter_docs.append(chapter_doc)
+            
+            # Translate sentences in batches
+            logger.info(f"Translating {len(sentences)} sentences for chapter {chapter['chapter_number']}")
+            translated_sentences = await translate_sentences_batch(sentences, batch_size=5)
+            
+            # Create sentence documents
+            sentence_docs = []
+            for i, trans in enumerate(translated_sentences):
+                sentence_doc = {
+                    "id": f"{chapter['id']}-s{i+1}",
+                    "chapter_id": chapter['id'],
+                    "order": i + 1,
+                    "english": trans["english"],
+                    "japanese_kanji": trans["japanese_kanji"],
+                    "japanese_hiragana": trans["japanese_hiragana"],
+                    "japanese_katakana": trans["japanese_katakana"],
+                    "japanese_romaji": trans["japanese_romaji"],
+                    "words": []  # Words can be extracted later or on-demand
+                }
+                sentence_docs.append(sentence_doc)
+            
+            # Insert sentences
+            if sentence_docs:
+                await db.sentences.insert_many(sentence_docs)
+                total_sentences += len(sentence_docs)
+            
+            # Update progress
+            await db.books.update_one(
+                {"id": book_id},
+                {"$set": {"sentences_count": total_sentences}}
+            )
+        
+        # Insert chapters
+        if chapter_docs:
+            await db.chapters.insert_many(chapter_docs)
+        
+        # Update book with final status
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {
+                "import_status": "completed",
+                "title_jp": title_jp,
+                "author_jp": author_jp,
+                "description_jp": await translate_title(book.get("description", "")),
+                "total_chapters": len(chapter_docs),
+                "sentences_count": total_sentences
+            }}
+        )
+        
+        logger.info(f"Completed import for {book_id}: {len(chapter_docs)} chapters, {total_sentences} sentences")
+        
+    except Exception as e:
+        logger.error(f"Book import failed for {book_id}: {e}")
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {"import_status": "failed", "error": str(e)}}
+        )
+
+@api_router.post("/books/upload")
+async def upload_book(
+    file: UploadFile = File(...),
+    title: str = Query(...),
+    author: str = Query(...),
+    background_tasks: BackgroundTasks = None
+):
+    """Upload a book file (txt format) for import"""
+    if not file.filename.endswith('.txt'):
+        raise HTTPException(status_code=400, detail="Only .txt files are supported")
+    
+    # Read file content
+    content = await file.read()
+    try:
+        text = content.decode('utf-8')
+    except UnicodeDecodeError:
+        text = content.decode('latin-1')
+    
+    # Generate book ID
+    book_id = f"upload-{str(uuid.uuid4())[:8]}"
+    
+    # Create book record
+    book_doc = {
+        "id": book_id,
+        "title": title,
+        "title_jp": title,
+        "author": author,
+        "author_jp": author,
+        "cover_image": get_book_cover("default"),
+        "description": f"Uploaded book: {title}",
+        "description_jp": "",
+        "total_chapters": 0,
+        "difficulty": "intermediate",
+        "genre": "literature",
+        "import_status": "importing",
+        "sentences_count": 0,
+        "source": "upload",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.books.insert_one(book_doc)
+    
+    # Process in background
+    background_tasks.add_task(process_uploaded_book, book_id, text, title, author)
+    
+    return {
+        "message": "Book upload started",
+        "book_id": book_id,
+        "status": "importing"
+    }
+
+async def process_uploaded_book(book_id: str, text: str, title: str, author: str):
+    """Process uploaded book text"""
+    try:
+        # Clean and process
+        clean_text = clean_gutenberg_text(text)
+        chapters = split_into_chapters(clean_text, book_id)
+        
+        # Translate metadata
+        title_jp = await translate_title(title)
+        author_jp = await translate_author(author)
+        
+        total_sentences = 0
+        chapter_docs = []
+        
+        for chapter in chapters:
+            sentences = split_into_sentences(chapter['content'])
+            if not sentences:
+                continue
+            
+            chapter_title_jp = await translate_title(chapter['title'])
+            
+            chapter_doc = {
+                "id": chapter['id'],
+                "book_id": book_id,
+                "chapter_number": chapter['chapter_number'],
+                "title": chapter['title'],
+                "title_jp": chapter_title_jp,
+                "sentences_count": len(sentences)
+            }
+            chapter_docs.append(chapter_doc)
+            
+            translated = await translate_sentences_batch(sentences, batch_size=5)
+            
+            sentence_docs = []
+            for i, trans in enumerate(translated):
+                sentence_docs.append({
+                    "id": f"{chapter['id']}-s{i+1}",
+                    "chapter_id": chapter['id'],
+                    "order": i + 1,
+                    "english": trans["english"],
+                    "japanese_kanji": trans["japanese_kanji"],
+                    "japanese_hiragana": trans["japanese_hiragana"],
+                    "japanese_katakana": trans["japanese_katakana"],
+                    "japanese_romaji": trans["japanese_romaji"],
+                    "words": []
+                })
+            
+            if sentence_docs:
+                await db.sentences.insert_many(sentence_docs)
+                total_sentences += len(sentence_docs)
+        
+        if chapter_docs:
+            await db.chapters.insert_many(chapter_docs)
+        
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {
+                "import_status": "completed",
+                "title_jp": title_jp,
+                "author_jp": author_jp,
+                "total_chapters": len(chapter_docs),
+                "sentences_count": total_sentences
+            }}
+        )
+        
+    except Exception as e:
+        logger.error(f"Upload processing failed: {e}")
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {"import_status": "failed", "error": str(e)}}
+        )
+
+@api_router.get("/books/{book_id}/status")
+async def get_book_import_status(book_id: str):
+    """Get import status for a book"""
+    book = await db.books.find_one({"id": book_id}, {"_id": 0})
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    return {
+        "book_id": book_id,
+        "status": book.get("import_status", "unknown"),
+        "total_chapters": book.get("total_chapters", 0),
+        "sentences_count": book.get("sentences_count", 0),
+        "error": book.get("error")
+    }
+
+@api_router.delete("/books/{book_id}")
+async def delete_book(book_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a book and all its content"""
+    book = await db.books.find_one({"id": book_id})
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    # Delete all related data
+    await db.sentences.delete_many({"chapter_id": {"$regex": f"^{book_id}-"}})
+    await db.chapters.delete_many({"book_id": book_id})
+    await db.books.delete_one({"id": book_id})
+    
+    return {"message": "Book deleted successfully"}
 
 # ========================
 # DICTIONARY ENDPOINT
@@ -312,7 +719,7 @@ async def get_sentences(chapter_id: str):
 
 @api_router.get("/dictionary/{word}", response_model=WordDefinition)
 async def lookup_word(word: str):
-    # Try Jisho API first
+    """Look up a Japanese word using Jisho API"""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -330,7 +737,7 @@ async def lookup_word(word: str):
                     return WordDefinition(
                         word=japanese.get("word", word),
                         reading=japanese.get("reading", ""),
-                        romaji=japanese.get("reading", ""),  # Would need proper conversion
+                        romaji=japanese.get("reading", ""),
                         meanings=[m for sense in senses for m in sense.get("english_definitions", [])[:3]],
                         parts_of_speech=[p for sense in senses for p in sense.get("parts_of_speech", [])[:2]],
                         example_sentence=None,
@@ -339,12 +746,11 @@ async def lookup_word(word: str):
     except Exception as e:
         logger.warning(f"Jisho API failed: {e}")
     
-    # Fallback to local dictionary
+    # Fallback
     local_word = await db.dictionary.find_one({"word": word}, {"_id": 0})
     if local_word:
         return WordDefinition(**local_word)
     
-    # Return basic response if nothing found
     return WordDefinition(
         word=word,
         reading=word,
@@ -367,7 +773,6 @@ async def get_vocabulary(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/vocabulary", response_model=SavedWordResponse)
 async def save_word(word_data: SaveWordRequest, current_user: dict = Depends(get_current_user)):
-    # Check if word already saved
     existing = await db.saved_words.find_one({
         "user_id": current_user["id"],
         "word": word_data.word
@@ -395,7 +800,6 @@ async def save_word(word_data: SaveWordRequest, current_user: dict = Depends(get
     }
     await db.saved_words.insert_one(word_doc)
     
-    # Update user vocabulary count
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"vocabulary_count": 1}}
@@ -466,11 +870,9 @@ async def submit_review(review: FlashcardReviewRequest, current_user: dict = Dep
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
     
-    # Spaced repetition logic
     current_level = word.get("mastery_level", 0)
     if review.correct:
         new_level = min(current_level + 1, 5)
-        # Increase interval exponentially
         days_until_review = 2 ** new_level
     else:
         new_level = max(current_level - 1, 0)
@@ -569,7 +971,6 @@ async def update_progress(progress: ReadingProgressRequest, current_user: dict =
         )
         updated = await db.reading_progress.find_one({"id": existing["id"]}, {"_id": 0})
         
-        # Update user total words read
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": {"total_words_read": progress.words_read}}
@@ -606,7 +1007,6 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
     vocab_count = await db.saved_words.count_documents({"user_id": current_user["id"]})
     books_in_progress = await db.reading_progress.count_documents({"user_id": current_user["id"]})
     
-    # Get mastery distribution
     mastery_pipeline = [
         {"$match": {"user_id": current_user["id"]}},
         {"$group": {"_id": "$mastery_level", "count": {"$sum": 1}}}
@@ -621,567 +1021,12 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
     }
 
 # ========================
-# SEED DATA ENDPOINT (for development)
-# ========================
-
-@api_router.post("/seed")
-async def seed_database():
-    # Check if already seeded
-    existing_books = await db.books.count_documents({})
-    if existing_books > 0:
-        return {"message": "Database already seeded", "books_count": existing_books}
-    
-    # Seed books with Japanese translations
-    books_data = [
-        {
-            "id": "alice-wonderland",
-            "title": "Alice in Wonderland",
-            "title_jp": "不思議の国のアリス",
-            "author": "Lewis Carroll",
-            "author_jp": "ルイス・キャロル",
-            "cover_image": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400",
-            "description": "Follow Alice down the rabbit hole into a world of wonder and curiosity.",
-            "description_jp": "アリスと一緒にウサギの穴を降りて、不思議と好奇心の世界へ。",
-            "total_chapters": 3,
-            "difficulty": "intermediate",
-            "genre": "fantasy"
-        },
-        {
-            "id": "sherlock-holmes",
-            "title": "A Study in Scarlet",
-            "title_jp": "緋色の研究",
-            "author": "Arthur Conan Doyle",
-            "author_jp": "アーサー・コナン・ドイル",
-            "cover_image": "https://images.unsplash.com/photo-1509021436665-8f07dbf5bf1d?w=400",
-            "description": "The first appearance of the legendary detective Sherlock Holmes.",
-            "description_jp": "伝説の探偵シャーロック・ホームズの初登場。",
-            "total_chapters": 2,
-            "difficulty": "advanced",
-            "genre": "mystery"
-        },
-        {
-            "id": "pride-prejudice",
-            "title": "Pride and Prejudice",
-            "title_jp": "高慢と偏見",
-            "author": "Jane Austen",
-            "author_jp": "ジェーン・オースティン",
-            "cover_image": "https://images.unsplash.com/photo-1474932430478-367dbb6832c1?w=400",
-            "description": "A classic tale of love, family, and social standing in Regency England.",
-            "description_jp": "リージェンシー時代のイギリスを舞台にした、愛と家族と社会的地位の古典的な物語。",
-            "total_chapters": 2,
-            "difficulty": "intermediate",
-            "genre": "romance"
-        },
-        {
-            "id": "anna-karenina",
-            "title": "Anna Karenina",
-            "title_jp": "アンナ・カレーニナ",
-            "author": "Leo Tolstoy",
-            "author_jp": "レフ・トルストイ",
-            "cover_image": "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400",
-            "description": "A timeless story of passion, betrayal, and the search for meaning.",
-            "description_jp": "情熱、裏切り、そして意味の探求についての永遠の物語。",
-            "total_chapters": 2,
-            "difficulty": "advanced",
-            "genre": "literary"
-        }
-    ]
-    
-    await db.books.insert_many(books_data)
-    
-    # Seed chapters and sentences for Alice in Wonderland
-    alice_chapters = [
-        {
-            "id": "alice-ch1",
-            "book_id": "alice-wonderland",
-            "chapter_number": 1,
-            "title": "Down the Rabbit Hole",
-            "title_jp": "ウサギの穴に落ちて"
-        },
-        {
-            "id": "alice-ch2",
-            "book_id": "alice-wonderland",
-            "chapter_number": 2,
-            "title": "The Pool of Tears",
-            "title_jp": "涙の池"
-        },
-        {
-            "id": "alice-ch3",
-            "book_id": "alice-wonderland",
-            "chapter_number": 3,
-            "title": "A Mad Tea-Party",
-            "title_jp": "狂ったお茶会"
-        }
-    ]
-    
-    alice_sentences_ch1 = [
-        {
-            "id": "alice-ch1-s1",
-            "chapter_id": "alice-ch1",
-            "order": 1,
-            "japanese_kanji": "アリスは姉のそばに座って、何もすることがなくて退屈していました。",
-            "japanese_hiragana": "ありすはあねのそばにすわって、なにもすることがなくてたいくつしていました。",
-            "japanese_katakana": "アリスハアネノソバニスワッテ、ナニモスルコトガナクテタイクツシテイマシタ。",
-            "japanese_romaji": "Arisu wa ane no soba ni suwatte, nanimo suru koto ga nakute taikutsu shite imashita.",
-            "english": "Alice was beginning to get very tired of sitting by her sister and having nothing to do.",
-            "words": [
-                {"word": "アリス", "reading": "ありす", "romaji": "arisu", "meaning": "Alice"},
-                {"word": "姉", "reading": "あね", "romaji": "ane", "meaning": "older sister"},
-                {"word": "座る", "reading": "すわる", "romaji": "suwaru", "meaning": "to sit"},
-                {"word": "退屈", "reading": "たいくつ", "romaji": "taikutsu", "meaning": "boredom"}
-            ]
-        },
-        {
-            "id": "alice-ch1-s2",
-            "chapter_id": "alice-ch1",
-            "order": 2,
-            "japanese_kanji": "一、二度、姉が読んでいる本をのぞいてみましたが、絵も会話もありませんでした。",
-            "japanese_hiragana": "いち、にど、あねがよんでいるほんをのぞいてみましたが、えもかいわもありませんでした。",
-            "japanese_katakana": "イチ、ニド、アネガヨンデイルホンヲノゾイテミマシタガ、エモカイワモアリマセンデシタ。",
-            "japanese_romaji": "Ichi, nido, ane ga yonde iru hon wo nozoite mimashita ga, e mo kaiwa mo arimasen deshita.",
-            "english": "Once or twice she peeped into the book her sister was reading, but it had no pictures or conversations in it.",
-            "words": [
-                {"word": "本", "reading": "ほん", "romaji": "hon", "meaning": "book"},
-                {"word": "絵", "reading": "え", "romaji": "e", "meaning": "picture"},
-                {"word": "会話", "reading": "かいわ", "romaji": "kaiwa", "meaning": "conversation"},
-                {"word": "読む", "reading": "よむ", "romaji": "yomu", "meaning": "to read"}
-            ]
-        },
-        {
-            "id": "alice-ch1-s3",
-            "chapter_id": "alice-ch1",
-            "order": 3,
-            "japanese_kanji": "「絵も会話もない本に何の意味があるの？」とアリスは思いました。",
-            "japanese_hiragana": "「えもかいわもないほんになんのいみがあるの？」とありすはおもいました。",
-            "japanese_katakana": "「エモカイワモナイホンニナンノイミガアルノ？」トアリスハオモイマシタ。",
-            "japanese_romaji": "\"E mo kaiwa mo nai hon ni nan no imi ga aru no?\" to Arisu wa omoimashita.",
-            "english": "\"And what is the use of a book,\" thought Alice, \"without pictures or conversations?\"",
-            "words": [
-                {"word": "意味", "reading": "いみ", "romaji": "imi", "meaning": "meaning"},
-                {"word": "思う", "reading": "おもう", "romaji": "omou", "meaning": "to think"}
-            ]
-        },
-        {
-            "id": "alice-ch1-s4",
-            "chapter_id": "alice-ch1",
-            "order": 4,
-            "japanese_kanji": "突然、ピンクの目をした白いウサギが近くを走り過ぎました。",
-            "japanese_hiragana": "とつぜん、ぴんくのめをしたしろいうさぎがちかくをはしりすぎました。",
-            "japanese_katakana": "トツゼン、ピンクノメヲシタシロイウサギガチカクヲハシリスギマシタ。",
-            "japanese_romaji": "Totsuzen, pinku no me wo shita shiroi usagi ga chikaku wo hashiri sugimashita.",
-            "english": "Suddenly a White Rabbit with pink eyes ran close by her.",
-            "words": [
-                {"word": "突然", "reading": "とつぜん", "romaji": "totsuzen", "meaning": "suddenly"},
-                {"word": "白い", "reading": "しろい", "romaji": "shiroi", "meaning": "white"},
-                {"word": "ウサギ", "reading": "うさぎ", "romaji": "usagi", "meaning": "rabbit"},
-                {"word": "走る", "reading": "はしる", "romaji": "hashiru", "meaning": "to run"}
-            ]
-        },
-        {
-            "id": "alice-ch1-s5",
-            "chapter_id": "alice-ch1",
-            "order": 5,
-            "japanese_kanji": "ウサギは「大変だ！大変だ！遅刻しちゃう！」と言いました。",
-            "japanese_hiragana": "うさぎは「たいへんだ！たいへんだ！ちこくしちゃう！」といいました。",
-            "japanese_katakana": "ウサギハ「タイヘンダ！タイヘンダ！チコクシチャウ！」トイイマシタ。",
-            "japanese_romaji": "Usagi wa \"Taihen da! Taihen da! Chikoku shichau!\" to iimashita.",
-            "english": "The Rabbit said, \"Oh dear! Oh dear! I shall be too late!\"",
-            "words": [
-                {"word": "大変", "reading": "たいへん", "romaji": "taihen", "meaning": "terrible, serious"},
-                {"word": "遅刻", "reading": "ちこく", "romaji": "chikoku", "meaning": "being late"},
-                {"word": "言う", "reading": "いう", "romaji": "iu", "meaning": "to say"}
-            ]
-        },
-        {
-            "id": "alice-ch1-s6",
-            "chapter_id": "alice-ch1",
-            "order": 6,
-            "japanese_kanji": "アリスはウサギの後を追って、大きな穴に飛び込みました。",
-            "japanese_hiragana": "ありすはうさぎのあとをおって、おおきなあなにとびこみました。",
-            "japanese_katakana": "アリスハウサギノアトヲオッテ、オオキナアナニトビコミマシタ。",
-            "japanese_romaji": "Arisu wa usagi no ato wo otte, ookina ana ni tobikomi mashita.",
-            "english": "Alice followed the Rabbit and jumped into a large hole.",
-            "words": [
-                {"word": "後", "reading": "あと", "romaji": "ato", "meaning": "after, behind"},
-                {"word": "追う", "reading": "おう", "romaji": "ou", "meaning": "to chase"},
-                {"word": "大きな", "reading": "おおきな", "romaji": "ookina", "meaning": "large, big"},
-                {"word": "穴", "reading": "あな", "romaji": "ana", "meaning": "hole"},
-                {"word": "飛び込む", "reading": "とびこむ", "romaji": "tobikomu", "meaning": "to jump into"}
-            ]
-        },
-        {
-            "id": "alice-ch1-s7",
-            "chapter_id": "alice-ch1",
-            "order": 7,
-            "japanese_kanji": "穴はとても深くて、アリスは長い間落ち続けました。",
-            "japanese_hiragana": "あなはとてもふかくて、ありすはながいあいだおちつづけました。",
-            "japanese_katakana": "アナハトテモフカクテ、アリスハナガイアイダオチツヅケマシタ。",
-            "japanese_romaji": "Ana wa totemo fukakute, Arisu wa nagai aida ochi tsuzukemashita.",
-            "english": "The hole was very deep, and Alice kept falling for a long time.",
-            "words": [
-                {"word": "深い", "reading": "ふかい", "romaji": "fukai", "meaning": "deep"},
-                {"word": "長い", "reading": "ながい", "romaji": "nagai", "meaning": "long"},
-                {"word": "間", "reading": "あいだ", "romaji": "aida", "meaning": "interval, period"},
-                {"word": "落ちる", "reading": "おちる", "romaji": "ochiru", "meaning": "to fall"},
-                {"word": "続ける", "reading": "つづける", "romaji": "tsuzukeru", "meaning": "to continue"}
-            ]
-        },
-        {
-            "id": "alice-ch1-s8",
-            "chapter_id": "alice-ch1",
-            "order": 8,
-            "japanese_kanji": "壁には本棚や地図や絵がたくさんありました。",
-            "japanese_hiragana": "かべにはほんだなやちずやえがたくさんありました。",
-            "japanese_katakana": "カベニハホンダナヤチズヤエガタクサンアリマシタ。",
-            "japanese_romaji": "Kabe ni wa hondana ya chizu ya e ga takusan arimashita.",
-            "english": "The walls were lined with bookshelves, maps, and pictures.",
-            "words": [
-                {"word": "壁", "reading": "かべ", "romaji": "kabe", "meaning": "wall"},
-                {"word": "本棚", "reading": "ほんだな", "romaji": "hondana", "meaning": "bookshelf"},
-                {"word": "地図", "reading": "ちず", "romaji": "chizu", "meaning": "map"},
-                {"word": "たくさん", "reading": "たくさん", "romaji": "takusan", "meaning": "many, a lot"}
-            ]
-        }
-    ]
-    
-    alice_sentences_ch2 = [
-        {
-            "id": "alice-ch2-s1",
-            "chapter_id": "alice-ch2",
-            "order": 1,
-            "japanese_kanji": "アリスは不思議な部屋に着きました。",
-            "japanese_hiragana": "ありすはふしぎなへやにつきました。",
-            "japanese_katakana": "アリスハフシギナヘヤニツキマシタ。",
-            "japanese_romaji": "Arisu wa fushigi na heya ni tsukimashita.",
-            "english": "Alice arrived in a strange room.",
-            "words": [
-                {"word": "不思議", "reading": "ふしぎ", "romaji": "fushigi", "meaning": "mysterious, strange"},
-                {"word": "部屋", "reading": "へや", "romaji": "heya", "meaning": "room"},
-                {"word": "着く", "reading": "つく", "romaji": "tsuku", "meaning": "to arrive"}
-            ]
-        },
-        {
-            "id": "alice-ch2-s2",
-            "chapter_id": "alice-ch2",
-            "order": 2,
-            "japanese_kanji": "テーブルの上に小さな瓶がありました。",
-            "japanese_hiragana": "てーぶるのうえにちいさなびんがありました。",
-            "japanese_katakana": "テーブルノウエニチイサナビンガアリマシタ。",
-            "japanese_romaji": "Teeburu no ue ni chiisana bin ga arimashita.",
-            "english": "On the table there was a small bottle.",
-            "words": [
-                {"word": "テーブル", "reading": "てーぶる", "romaji": "teeburu", "meaning": "table"},
-                {"word": "上", "reading": "うえ", "romaji": "ue", "meaning": "on, above"},
-                {"word": "小さな", "reading": "ちいさな", "romaji": "chiisana", "meaning": "small"},
-                {"word": "瓶", "reading": "びん", "romaji": "bin", "meaning": "bottle"}
-            ]
-        },
-        {
-            "id": "alice-ch2-s3",
-            "chapter_id": "alice-ch2",
-            "order": 3,
-            "japanese_kanji": "瓶には「私を飲んで」と書いてありました。",
-            "japanese_hiragana": "びんには「わたしをのんで」とかいてありました。",
-            "japanese_katakana": "ビンニハ「ワタシヲノンデ」トカイテアリマシタ。",
-            "japanese_romaji": "Bin ni wa \"watashi wo nonde\" to kaite arimashita.",
-            "english": "The bottle had a label that said \"Drink Me.\"",
-            "words": [
-                {"word": "私", "reading": "わたし", "romaji": "watashi", "meaning": "I, me"},
-                {"word": "飲む", "reading": "のむ", "romaji": "nomu", "meaning": "to drink"},
-                {"word": "書く", "reading": "かく", "romaji": "kaku", "meaning": "to write"}
-            ]
-        },
-        {
-            "id": "alice-ch2-s4",
-            "chapter_id": "alice-ch2",
-            "order": 4,
-            "japanese_kanji": "アリスはその液体を飲みました。",
-            "japanese_hiragana": "ありすはそのえきたいをのみました。",
-            "japanese_katakana": "アリスハソノエキタイヲノミマシタ。",
-            "japanese_romaji": "Arisu wa sono ekitai wo nomimashita.",
-            "english": "Alice drank the liquid.",
-            "words": [
-                {"word": "液体", "reading": "えきたい", "romaji": "ekitai", "meaning": "liquid"}
-            ]
-        },
-        {
-            "id": "alice-ch2-s5",
-            "chapter_id": "alice-ch2",
-            "order": 5,
-            "japanese_kanji": "すると、アリスはどんどん小さくなりました。",
-            "japanese_hiragana": "すると、ありすはどんどんちいさくなりました。",
-            "japanese_katakana": "スルト、アリスハドンドンチイサクナリマシタ。",
-            "japanese_romaji": "Suru to, Arisu wa dondon chiisaku narimashita.",
-            "english": "Then, Alice became smaller and smaller.",
-            "words": [
-                {"word": "どんどん", "reading": "どんどん", "romaji": "dondon", "meaning": "rapidly, steadily"},
-                {"word": "小さい", "reading": "ちいさい", "romaji": "chiisai", "meaning": "small"},
-                {"word": "なる", "reading": "なる", "romaji": "naru", "meaning": "to become"}
-            ]
-        }
-    ]
-    
-    # Sherlock Holmes chapters
-    sherlock_chapters = [
-        {
-            "id": "sherlock-ch1",
-            "book_id": "sherlock-holmes",
-            "chapter_number": 1,
-            "title": "Mr. Sherlock Holmes",
-            "title_jp": "シャーロック・ホームズ氏"
-        },
-        {
-            "id": "sherlock-ch2",
-            "book_id": "sherlock-holmes",
-            "chapter_number": 2,
-            "title": "The Science of Deduction",
-            "title_jp": "演繹の科学"
-        }
-    ]
-    
-    sherlock_sentences_ch1 = [
-        {
-            "id": "sherlock-ch1-s1",
-            "chapter_id": "sherlock-ch1",
-            "order": 1,
-            "japanese_kanji": "私がホームズと初めて会ったのは一八七八年のことでした。",
-            "japanese_hiragana": "わたしがほーむずとはじめてあったのはいちはちななはちねんのことでした。",
-            "japanese_katakana": "ワタシガホームズトハジメテアッタノハイチハチナナハチネンノコトデシタ。",
-            "japanese_romaji": "Watashi ga Hoomzu to hajimete atta no wa ichi hachi nana hachi nen no koto deshita.",
-            "english": "I first met Holmes in the year 1878.",
-            "words": [
-                {"word": "初めて", "reading": "はじめて", "romaji": "hajimete", "meaning": "for the first time"},
-                {"word": "会う", "reading": "あう", "romaji": "au", "meaning": "to meet"},
-                {"word": "年", "reading": "ねん", "romaji": "nen", "meaning": "year"}
-            ]
-        },
-        {
-            "id": "sherlock-ch1-s2",
-            "chapter_id": "sherlock-ch1",
-            "order": 2,
-            "japanese_kanji": "彼はとても背が高く、痩せていました。",
-            "japanese_hiragana": "かれはとてもせがたかく、やせていました。",
-            "japanese_katakana": "カレハトテモセガタカク、ヤセテイマシタ。",
-            "japanese_romaji": "Kare wa totemo se ga takaku, yasete imashita.",
-            "english": "He was very tall and thin.",
-            "words": [
-                {"word": "彼", "reading": "かれ", "romaji": "kare", "meaning": "he"},
-                {"word": "背", "reading": "せ", "romaji": "se", "meaning": "height, back"},
-                {"word": "高い", "reading": "たかい", "romaji": "takai", "meaning": "tall, high"},
-                {"word": "痩せる", "reading": "やせる", "romaji": "yaseru", "meaning": "to be thin"}
-            ]
-        },
-        {
-            "id": "sherlock-ch1-s3",
-            "chapter_id": "sherlock-ch1",
-            "order": 3,
-            "japanese_kanji": "ホームズは鷹のように鋭い目をしていました。",
-            "japanese_hiragana": "ほーむずはたかのようにするどいめをしていました。",
-            "japanese_katakana": "ホームズハタカノヨウニスルドイメヲシテイマシタ。",
-            "japanese_romaji": "Hoomzu wa taka no you ni surudoi me wo shite imashita.",
-            "english": "Holmes had eyes as sharp as a hawk.",
-            "words": [
-                {"word": "鷹", "reading": "たか", "romaji": "taka", "meaning": "hawk"},
-                {"word": "鋭い", "reading": "するどい", "romaji": "surudoi", "meaning": "sharp"},
-                {"word": "目", "reading": "め", "romaji": "me", "meaning": "eye"}
-            ]
-        },
-        {
-            "id": "sherlock-ch1-s4",
-            "chapter_id": "sherlock-ch1",
-            "order": 4,
-            "japanese_kanji": "私たちはベーカー街221Bで一緒に住むことにしました。",
-            "japanese_hiragana": "わたしたちはべーかーがいにひゃくにじゅういちびーでいっしょにすむことにしました。",
-            "japanese_katakana": "ワタシタチハベーカーガイニヒャクニジュウイチビーデイッショニスムコトニシマシタ。",
-            "japanese_romaji": "Watashitachi wa Beekaa gai 221B de issho ni sumu koto ni shimashita.",
-            "english": "We decided to live together at 221B Baker Street.",
-            "words": [
-                {"word": "一緒に", "reading": "いっしょに", "romaji": "issho ni", "meaning": "together"},
-                {"word": "住む", "reading": "すむ", "romaji": "sumu", "meaning": "to live, reside"}
-            ]
-        }
-    ]
-    
-    # Pride and Prejudice chapters
-    pride_chapters = [
-        {
-            "id": "pride-ch1",
-            "book_id": "pride-prejudice",
-            "chapter_number": 1,
-            "title": "A Single Man in Possession",
-            "title_jp": "独身の男性"
-        },
-        {
-            "id": "pride-ch2",
-            "book_id": "pride-prejudice",
-            "chapter_number": 2,
-            "title": "Mr. Bingley's Visit",
-            "title_jp": "ビングリー氏の訪問"
-        }
-    ]
-    
-    pride_sentences_ch1 = [
-        {
-            "id": "pride-ch1-s1",
-            "chapter_id": "pride-ch1",
-            "order": 1,
-            "japanese_kanji": "裕福な独身男性は妻を必要としているというのは、世間一般に認められた真理です。",
-            "japanese_hiragana": "ゆうふくなどくしんだんせいはつまをひつようとしているというのは、せけんいっぱんにみとめられたしんりです。",
-            "japanese_katakana": "ユウフクナドクシンダンセイハツマヲヒツヨウトシテイルトイウノハ、セケンイッパンニミトメラレタシンリデス。",
-            "japanese_romaji": "Yuufuku na dokushin dansei wa tsuma wo hitsuyou to shite iru to iu no wa, seken ippan ni mitomerareta shinri desu.",
-            "english": "It is a truth universally acknowledged that a single man in possession of a good fortune must be in want of a wife.",
-            "words": [
-                {"word": "裕福", "reading": "ゆうふく", "romaji": "yuufuku", "meaning": "wealthy"},
-                {"word": "独身", "reading": "どくしん", "romaji": "dokushin", "meaning": "single, unmarried"},
-                {"word": "男性", "reading": "だんせい", "romaji": "dansei", "meaning": "man, male"},
-                {"word": "妻", "reading": "つま", "romaji": "tsuma", "meaning": "wife"},
-                {"word": "必要", "reading": "ひつよう", "romaji": "hitsuyou", "meaning": "necessary"},
-                {"word": "真理", "reading": "しんり", "romaji": "shinri", "meaning": "truth"}
-            ]
-        },
-        {
-            "id": "pride-ch1-s2",
-            "chapter_id": "pride-ch1",
-            "order": 2,
-            "japanese_kanji": "「ねえ、ベネットさん」と彼の妻が言いました。",
-            "japanese_hiragana": "「ねえ、べねっとさん」とかれのつまがいいました。",
-            "japanese_katakana": "「ネエ、ベネットサン」トカレノツマガイイマシタ。",
-            "japanese_romaji": "\"Nee, Benetto-san\" to kare no tsuma ga iimashita.",
-            "english": "\"My dear Mr. Bennet,\" said his wife.",
-            "words": [
-                {"word": "言う", "reading": "いう", "romaji": "iu", "meaning": "to say"}
-            ]
-        },
-        {
-            "id": "pride-ch1-s3",
-            "chapter_id": "pride-ch1",
-            "order": 3,
-            "japanese_kanji": "「ネザーフィールドがついに借り手を見つけたと聞きましたか？」",
-            "japanese_hiragana": "「ねざーふぃーるどがついにかりてをみつけたとききましたか？」",
-            "japanese_katakana": "「ネザーフィールドガツイニカリテヲミツケタトキキマシタカ？」",
-            "japanese_romaji": "\"Nezaafiirudo ga tsuini karite wo mitsuketa to kikimashita ka?\"",
-            "english": "\"Have you heard that Netherfield Park is let at last?\"",
-            "words": [
-                {"word": "ついに", "reading": "ついに", "romaji": "tsuini", "meaning": "finally, at last"},
-                {"word": "借り手", "reading": "かりて", "romaji": "karite", "meaning": "renter, tenant"},
-                {"word": "見つける", "reading": "みつける", "romaji": "mitsukeru", "meaning": "to find"},
-                {"word": "聞く", "reading": "きく", "romaji": "kiku", "meaning": "to hear, listen"}
-            ]
-        },
-        {
-            "id": "pride-ch1-s4",
-            "chapter_id": "pride-ch1",
-            "order": 4,
-            "japanese_kanji": "ベネット氏は新聞を読みながら、妻の話を聞いていないふりをしました。",
-            "japanese_hiragana": "べねっとしはしんぶんをよみながら、つまのはなしをきいていないふりをしました。",
-            "japanese_katakana": "ベネットシハシンブンヲヨミナガラ、ツマノハナシヲキイテイナイフリヲシマシタ。",
-            "japanese_romaji": "Benetto-shi wa shinbun wo yomi nagara, tsuma no hanashi wo kiite inai furi wo shimashita.",
-            "english": "Mr. Bennet pretended not to listen to his wife while reading his newspaper.",
-            "words": [
-                {"word": "新聞", "reading": "しんぶん", "romaji": "shinbun", "meaning": "newspaper"},
-                {"word": "話", "reading": "はなし", "romaji": "hanashi", "meaning": "talk, story"},
-                {"word": "ふり", "reading": "ふり", "romaji": "furi", "meaning": "pretense"}
-            ]
-        }
-    ]
-    
-    # Anna Karenina chapters
-    anna_chapters = [
-        {
-            "id": "anna-ch1",
-            "book_id": "anna-karenina",
-            "chapter_number": 1,
-            "title": "Happy and Unhappy Families",
-            "title_jp": "幸福と不幸な家族"
-        },
-        {
-            "id": "anna-ch2",
-            "book_id": "anna-karenina",
-            "chapter_number": 2,
-            "title": "The Oblonskys",
-            "title_jp": "オブロンスキー家"
-        }
-    ]
-    
-    anna_sentences_ch1 = [
-        {
-            "id": "anna-ch1-s1",
-            "chapter_id": "anna-ch1",
-            "order": 1,
-            "japanese_kanji": "幸福な家庭はどれも似ているが、不幸な家庭はそれぞれ異なる不幸を抱えている。",
-            "japanese_hiragana": "こうふくなかていはどれもにているが、ふこうなかていはそれぞれことなるふこうをかかえている。",
-            "japanese_katakana": "コウフクナカテイハドレモニテイルガ、フコウナカテイハソレゾレコトナルフコウヲカカエテイル。",
-            "japanese_romaji": "Koufuku na katei wa dore mo nite iru ga, fukou na katei wa sorezore kotonaru fukou wo kakaete iru.",
-            "english": "Happy families are all alike; every unhappy family is unhappy in its own way.",
-            "words": [
-                {"word": "幸福", "reading": "こうふく", "romaji": "koufuku", "meaning": "happiness"},
-                {"word": "家庭", "reading": "かてい", "romaji": "katei", "meaning": "family, household"},
-                {"word": "似ている", "reading": "にている", "romaji": "nite iru", "meaning": "to be similar"},
-                {"word": "不幸", "reading": "ふこう", "romaji": "fukou", "meaning": "unhappiness, misfortune"},
-                {"word": "異なる", "reading": "ことなる", "romaji": "kotonaru", "meaning": "to differ"},
-                {"word": "抱える", "reading": "かかえる", "romaji": "kakaeru", "meaning": "to hold, carry"}
-            ]
-        },
-        {
-            "id": "anna-ch1-s2",
-            "chapter_id": "anna-ch1",
-            "order": 2,
-            "japanese_kanji": "オブロンスキー家では、すべてが混乱していました。",
-            "japanese_hiragana": "おぶろんすきーけでは、すべてがこんらんしていました。",
-            "japanese_katakana": "オブロンスキーケデハ、スベテガコンランシテイマシタ。",
-            "japanese_romaji": "Oburonskii-ke de wa, subete ga konran shite imashita.",
-            "english": "Everything was in confusion in the Oblonskys' house.",
-            "words": [
-                {"word": "すべて", "reading": "すべて", "romaji": "subete", "meaning": "everything, all"},
-                {"word": "混乱", "reading": "こんらん", "romaji": "konran", "meaning": "confusion, disorder"},
-                {"word": "家", "reading": "いえ", "romaji": "ie", "meaning": "house, family"}
-            ]
-        },
-        {
-            "id": "anna-ch1-s3",
-            "chapter_id": "anna-ch1",
-            "order": 3,
-            "japanese_kanji": "妻は夫が元家庭教師と関係を持っていたことを知ってしまいました。",
-            "japanese_hiragana": "つまはおっとがもときょういくしゃとかんけいをもっていたことをしってしまいました。",
-            "japanese_katakana": "ツマハオットガモトカテイキョウシトカンケイヲモッテイタコトヲシッテシマイマシタ。",
-            "japanese_romaji": "Tsuma wa otto ga moto kateikyoushi to kankei wo motte ita koto wo shitte shimaimashita.",
-            "english": "The wife had discovered that her husband was having an affair with the former governess.",
-            "words": [
-                {"word": "夫", "reading": "おっと", "romaji": "otto", "meaning": "husband"},
-                {"word": "家庭教師", "reading": "かていきょうし", "romaji": "kateikyoushi", "meaning": "governess, tutor"},
-                {"word": "関係", "reading": "かんけい", "romaji": "kankei", "meaning": "relationship, affair"},
-                {"word": "知る", "reading": "しる", "romaji": "shiru", "meaning": "to know, find out"}
-            ]
-        }
-    ]
-    
-    # Insert all chapters
-    all_chapters = alice_chapters + sherlock_chapters + pride_chapters + anna_chapters
-    await db.chapters.insert_many(all_chapters)
-    
-    # Insert all sentences
-    all_sentences = alice_sentences_ch1 + alice_sentences_ch2 + sherlock_sentences_ch1 + pride_sentences_ch1 + anna_sentences_ch1
-    await db.sentences.insert_many(all_sentences)
-    
-    # Seed basic dictionary entries
-    dictionary_entries = [
-        {"word": "本", "reading": "ほん", "romaji": "hon", "meanings": ["book"], "parts_of_speech": ["noun"]},
-        {"word": "読む", "reading": "よむ", "romaji": "yomu", "meanings": ["to read"], "parts_of_speech": ["verb"]},
-        {"word": "書く", "reading": "かく", "romaji": "kaku", "meanings": ["to write"], "parts_of_speech": ["verb"]},
-        {"word": "見る", "reading": "みる", "romaji": "miru", "meanings": ["to see", "to look"], "parts_of_speech": ["verb"]},
-        {"word": "聞く", "reading": "きく", "romaji": "kiku", "meanings": ["to hear", "to listen", "to ask"], "parts_of_speech": ["verb"]},
-    ]
-    await db.dictionary.insert_many(dictionary_entries)
-    
-    return {"message": "Database seeded successfully", "books": len(books_data), "chapters": len(all_chapters), "sentences": len(all_sentences)}
-
-# ========================
 # ROOT ENDPOINT
 # ========================
 
 @api_router.get("/")
 async def root():
-    return {"message": "Japanese Reading App API", "version": "1.0.0"}
+    return {"message": "Japanese Reading App API", "version": "2.0.0"}
 
 # Include the router in the main app
 app.include_router(api_router)
