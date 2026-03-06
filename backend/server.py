@@ -100,17 +100,21 @@ class BookResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     title: str
-    title_jp: str
+    title_jp: Optional[str] = None
+    title_en: Optional[str] = None
     author: str
-    author_jp: str
-    cover_image: str
-    description: str
-    description_jp: str
-    total_chapters: int
-    difficulty: str
-    genre: str
+    author_jp: Optional[str] = None
+    author_en: Optional[str] = None
+    cover_image: Optional[str] = None
+    description: Optional[str] = None
+    description_jp: Optional[str] = None
+    total_chapters: int = 0
+    difficulty: Optional[str] = "intermediate"
+    genre: Optional[str] = "literature"
     import_status: str = "completed"
     sentences_count: int = 0
+    book_language: Optional[str] = "en"
+    source: Optional[str] = "gutenberg"
 
 class ChapterResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -118,7 +122,7 @@ class ChapterResponse(BaseModel):
     book_id: str
     chapter_number: int
     title: str
-    title_jp: str
+    title_jp: Optional[str] = None
     sentences_count: int = 0
 
 class SentenceResponse(BaseModel):
@@ -126,13 +130,14 @@ class SentenceResponse(BaseModel):
     id: str
     chapter_id: str
     order: int
-    english: str
-    japanese_kanji: str  # Frontend compatibility
-    japanese_hiragana: str
-    japanese_katakana: str
-    japanese_romaji: str
+    english: Optional[str] = None
+    japanese_kanji: Optional[str] = None
+    japanese_hiragana: Optional[str] = None
+    japanese_katakana: Optional[str] = None
+    japanese_romaji: Optional[str] = None
     translation_status: str = "pending"
     words: List[Dict[str, Any]] = []
+    source_language: Optional[str] = "en"
 
 class WordDefinition(BaseModel):
     word: str
