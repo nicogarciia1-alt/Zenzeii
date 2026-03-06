@@ -17,6 +17,7 @@ export const deleteBook = (bookId) => axios.delete(`${API}/books/${bookId}`);
 export const getAvailableBooks = () => axios.get(`${API}/books/available/list`);
 export const searchGutenberg = (query) => axios.get(`${API}/books/search/gutenberg`, { params: { query } });
 export const importBook = (data) => axios.post(`${API}/books/import`, data);
+export const cancelBookImport = (bookId) => axios.post(`${API}/books/${bookId}/cancel`);
 export const uploadBook = (file, title, author) => {
   const formData = new FormData();
   formData.append('file', file);

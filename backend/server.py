@@ -7,7 +7,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Set
 import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
@@ -58,6 +58,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Track cancelled imports (in-memory, will reset on restart)
+cancelled_imports: Set[str] = set()
+
 # ========================
 # MODELS
 # ========================
@@ -101,6 +104,12 @@ class BookResponse(BaseModel):
     genre: str
     import_status: str = "completed"
     sentences_count: int = 0
+    total_sentences_estimate: int = 0
+    processed_sentences: int = 0
+    current_chapter: int = 0
+    total_chapters_found: int = 0
+    import_progress: float = 0.0
+    error: Optional[str] = None
 
 class ChapterResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -200,8 +209,8 @@ class FlashcardReviewRequest(BaseModel):
     correct: bool
 
 class ImportBookRequest(BaseModel):
-    book_key: Optional[str] = None  # For predefined books
-    gutenberg_id: Optional[int] = None  # For custom Gutenberg imports
+    book_key: Optional[str] = None
+    gutenberg_id: Optional[int] = None
     title: Optional[str] = None
     author: Optional[str] = None
 
@@ -211,6 +220,16 @@ class GutenbergSearchResult(BaseModel):
     author: str
     languages: List[str]
     download_count: int
+
+class ImportStatusResponse(BaseModel):
+    book_id: str
+    status: str
+    total_sentences: int
+    processed_sentences: int
+    progress_percent: float
+    current_chapter: int
+    total_chapters: int
+    error: Optional[str] = None
 
 # ========================
 # AUTH HELPERS
@@ -247,7 +266,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Invalid token")
 
 async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))) -> Optional[dict]:
-    """Get user if authenticated, otherwise return None"""
     if not credentials:
         return None
     try:
@@ -347,7 +365,6 @@ async def get_sentences(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200)
 ):
-    """Get sentences with pagination for large chapters"""
     sentences = await db.sentences.find(
         {"chapter_id": chapter_id},
         {"_id": 0}
@@ -356,7 +373,6 @@ async def get_sentences(
 
 @api_router.get("/chapters/{chapter_id}/sentences/count")
 async def get_sentences_count(chapter_id: str):
-    """Get total sentence count for a chapter"""
     count = await db.sentences.count_documents({"chapter_id": chapter_id})
     return {"count": count, "chapter_id": chapter_id}
 
@@ -366,10 +382,8 @@ async def get_sentences_count(chapter_id: str):
 
 @api_router.get("/books/available/list")
 async def get_available_books():
-    """Get list of predefined books available for import"""
     available = []
     for key, info in GUTENBERG_BOOKS.items():
-        # Check if already imported
         existing = await db.books.find_one({"id": key})
         available.append({
             "book_key": key,
@@ -385,7 +399,6 @@ async def get_available_books():
 
 @api_router.get("/books/search/gutenberg", response_model=List[GutenbergSearchResult])
 async def search_gutenberg_books(query: str = Query(..., min_length=2)):
-    """Search Project Gutenberg for books"""
     results = await search_gutenberg(query)
     return results
 
@@ -393,7 +406,6 @@ async def search_gutenberg_books(query: str = Query(..., min_length=2)):
 async def import_book(request: ImportBookRequest, background_tasks: BackgroundTasks):
     """Start importing a book from Project Gutenberg"""
     
-    # Determine which book to import
     if request.book_key and request.book_key in GUTENBERG_BOOKS:
         book_info = GUTENBERG_BOOKS[request.book_key]
         book_id = request.book_key
@@ -412,7 +424,9 @@ async def import_book(request: ImportBookRequest, background_tasks: BackgroundTa
     else:
         raise HTTPException(status_code=400, detail="Must provide book_key or gutenberg_id")
     
-    # Check if already importing
+    # Remove from cancelled set if it was there
+    cancelled_imports.discard(book_id)
+    
     existing = await db.books.find_one({"id": book_id})
     if existing:
         if existing.get("import_status") == "completed":
@@ -424,9 +438,9 @@ async def import_book(request: ImportBookRequest, background_tasks: BackgroundTa
     book_doc = {
         "id": book_id,
         "title": title,
-        "title_jp": title,  # Will be updated by background task
+        "title_jp": title,
         "author": author,
-        "author_jp": author,  # Will be updated by background task
+        "author_jp": author,
         "cover_image": get_book_cover(book_id),
         "description": f"A classic work by {author}",
         "description_jp": "",
@@ -435,16 +449,24 @@ async def import_book(request: ImportBookRequest, background_tasks: BackgroundTa
         "genre": genre,
         "import_status": "importing",
         "sentences_count": 0,
+        "total_sentences_estimate": 0,
+        "processed_sentences": 0,
+        "current_chapter": 0,
+        "total_chapters_found": 0,
+        "import_progress": 0.0,
         "gutenberg_id": gutenberg_id,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "error": None
     }
     
     if existing:
+        # Clear any previous data
+        await db.sentences.delete_many({"chapter_id": {"$regex": f"^{book_id}-"}})
+        await db.chapters.delete_many({"book_id": book_id})
         await db.books.update_one({"id": book_id}, {"$set": book_doc})
     else:
         await db.books.insert_one(book_doc)
     
-    # Start background import task
     background_tasks.add_task(process_book_import, book_id, gutenberg_id)
     
     return {
@@ -453,10 +475,64 @@ async def import_book(request: ImportBookRequest, background_tasks: BackgroundTa
         "status": "importing"
     }
 
+@api_router.post("/books/{book_id}/cancel")
+async def cancel_book_import(book_id: str):
+    """Cancel an ongoing book import"""
+    book = await db.books.find_one({"id": book_id})
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    if book.get("import_status") != "importing":
+        raise HTTPException(status_code=400, detail="Book is not currently importing")
+    
+    # Add to cancelled set
+    cancelled_imports.add(book_id)
+    
+    # Update status
+    await db.books.update_one(
+        {"id": book_id},
+        {"$set": {
+            "import_status": "cancelled",
+            "error": "Import cancelled by user"
+        }}
+    )
+    
+    logger.info(f"Import cancelled for book: {book_id}")
+    
+    return {"message": "Import cancelled", "book_id": book_id}
+
+@api_router.get("/books/{book_id}/status", response_model=ImportStatusResponse)
+async def get_book_import_status(book_id: str):
+    """Get detailed import status for a book"""
+    book = await db.books.find_one({"id": book_id}, {"_id": 0})
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    total = book.get("total_sentences_estimate", 0)
+    processed = book.get("processed_sentences", 0)
+    progress = (processed / total * 100) if total > 0 else book.get("import_progress", 0)
+    
+    return ImportStatusResponse(
+        book_id=book_id,
+        status=book.get("import_status", "unknown"),
+        total_sentences=total,
+        processed_sentences=processed,
+        progress_percent=round(progress, 1),
+        current_chapter=book.get("current_chapter", 0),
+        total_chapters=book.get("total_chapters_found", book.get("total_chapters", 0)),
+        error=book.get("error")
+    )
+
+
 async def process_book_import(book_id: str, gutenberg_id: int):
-    """Background task to process book import"""
+    """Background task to process book import with progress tracking and cancellation support"""
     try:
         logger.info(f"Starting import for book {book_id} (Gutenberg ID: {gutenberg_id})")
+        
+        # Check if cancelled before starting
+        if book_id in cancelled_imports:
+            logger.info(f"Import was cancelled before starting: {book_id}")
+            return
         
         # Fetch book text from Gutenberg
         raw_text = await fetch_gutenberg_text(gutenberg_id)
@@ -467,32 +543,84 @@ async def process_book_import(book_id: str, gutenberg_id: int):
             )
             return
         
+        # Check cancellation
+        if book_id in cancelled_imports:
+            logger.info(f"Import cancelled after fetch: {book_id}")
+            return
+        
         # Clean and process text
         clean_text = clean_gutenberg_text(raw_text)
         chapters = split_into_chapters(clean_text, book_id)
         
         logger.info(f"Found {len(chapters)} chapters for {book_id}")
         
+        # Calculate total sentences estimate
+        total_sentences_estimate = 0
+        chapter_sentences = []
+        for chapter in chapters:
+            sentences = split_into_sentences(chapter['content'])
+            chapter_sentences.append(sentences)
+            total_sentences_estimate += len(sentences)
+        
+        # Update book with totals
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {
+                "total_chapters_found": len(chapters),
+                "total_sentences_estimate": total_sentences_estimate
+            }}
+        )
+        
+        logger.info(f"Total sentences to translate: {total_sentences_estimate}")
+        
         # Get book info for title translation
         book = await db.books.find_one({"id": book_id}, {"_id": 0})
         
-        # Translate book title and author
-        title_jp = await translate_title(book["title"])
-        author_jp = await translate_author(book["author"])
+        # Translate book title and author (with error handling)
+        try:
+            title_jp = await translate_title(book["title"])
+        except Exception as e:
+            logger.error(f"Failed to translate book title: {e}")
+            title_jp = book["title"]
+        
+        try:
+            author_jp = await translate_author(book["author"])
+        except Exception as e:
+            logger.error(f"Failed to translate author: {e}")
+            author_jp = book["author"]
+        
+        # Update with translated metadata
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {"title_jp": title_jp, "author_jp": author_jp}}
+        )
         
         # Process each chapter
-        total_sentences = 0
+        processed_sentences = 0
         chapter_docs = []
+        failed_translations = 0
         
-        for chapter in chapters:
-            # Split chapter into sentences
-            sentences = split_into_sentences(chapter['content'])
+        for chapter_idx, (chapter, sentences) in enumerate(zip(chapters, chapter_sentences)):
+            # Check cancellation at each chapter
+            if book_id in cancelled_imports:
+                logger.info(f"Import cancelled at chapter {chapter_idx + 1}: {book_id}")
+                return
             
             if not sentences:
                 continue
             
+            # Update current chapter progress
+            await db.books.update_one(
+                {"id": book_id},
+                {"$set": {"current_chapter": chapter_idx + 1}}
+            )
+            
             # Translate chapter title
-            chapter_title_jp = await translate_title(chapter['title'])
+            try:
+                chapter_title_jp = await translate_title(chapter['title'])
+            except Exception as e:
+                logger.error(f"Failed to translate chapter title: {e}")
+                chapter_title_jp = chapter['title']
             
             chapter_doc = {
                 "id": chapter['id'],
@@ -504,62 +632,112 @@ async def process_book_import(book_id: str, gutenberg_id: int):
             }
             chapter_docs.append(chapter_doc)
             
+            # Insert chapter immediately so it's available
+            await db.chapters.insert_one(chapter_doc)
+            
+            # Progress callback for sentence translation
+            async def update_progress(translated, total):
+                nonlocal processed_sentences
+                current_processed = processed_sentences + translated
+                progress = (current_processed / total_sentences_estimate * 100) if total_sentences_estimate > 0 else 0
+                await db.books.update_one(
+                    {"id": book_id},
+                    {"$set": {
+                        "processed_sentences": current_processed,
+                        "import_progress": progress
+                    }}
+                )
+            
             # Translate sentences in batches
             logger.info(f"Translating {len(sentences)} sentences for chapter {chapter['chapter_number']}")
-            translated_sentences = await translate_sentences_batch(sentences, batch_size=5)
+            
+            try:
+                translated_sentences = await translate_sentences_batch(
+                    sentences, 
+                    batch_size=5,
+                    progress_callback=update_progress
+                )
+            except Exception as e:
+                logger.error(f"Chapter translation failed: {e}")
+                # Create placeholders for failed chapter
+                translated_sentences = [
+                    {
+                        "english": s,
+                        "japanese_kanji": f"[翻訳失敗] {s}",
+                        "japanese_hiragana": "",
+                        "japanese_katakana": "",
+                        "japanese_romaji": s.lower(),
+                        "translation_failed": True
+                    }
+                    for s in sentences
+                ]
+                failed_translations += len(sentences)
             
             # Create sentence documents
             sentence_docs = []
             for i, trans in enumerate(translated_sentences):
+                if trans.get("translation_failed"):
+                    failed_translations += 1
+                
                 sentence_doc = {
                     "id": f"{chapter['id']}-s{i+1}",
                     "chapter_id": chapter['id'],
                     "order": i + 1,
                     "english": trans["english"],
                     "japanese_kanji": trans["japanese_kanji"],
-                    "japanese_hiragana": trans["japanese_hiragana"],
-                    "japanese_katakana": trans["japanese_katakana"],
-                    "japanese_romaji": trans["japanese_romaji"],
-                    "words": []  # Words can be extracted later or on-demand
+                    "japanese_hiragana": trans.get("japanese_hiragana", ""),
+                    "japanese_katakana": trans.get("japanese_katakana", ""),
+                    "japanese_romaji": trans.get("japanese_romaji", ""),
+                    "words": [],
+                    "translation_failed": trans.get("translation_failed", False)
                 }
                 sentence_docs.append(sentence_doc)
             
             # Insert sentences
             if sentence_docs:
                 await db.sentences.insert_many(sentence_docs)
-                total_sentences += len(sentence_docs)
+                processed_sentences += len(sentence_docs)
             
-            # Update progress
+            # Update progress after chapter
+            progress = (processed_sentences / total_sentences_estimate * 100) if total_sentences_estimate > 0 else 0
             await db.books.update_one(
                 {"id": book_id},
-                {"$set": {"sentences_count": total_sentences}}
+                {"$set": {
+                    "sentences_count": processed_sentences,
+                    "processed_sentences": processed_sentences,
+                    "import_progress": progress
+                }}
             )
+            
+            logger.info(f"Chapter {chapter_idx + 1}/{len(chapters)} complete. Progress: {progress:.1f}%")
         
-        # Insert chapters
-        if chapter_docs:
-            await db.chapters.insert_many(chapter_docs)
+        # Final update
+        error_msg = None
+        if failed_translations > 0:
+            error_msg = f"{failed_translations} sentences failed to translate (using placeholders)"
         
-        # Update book with final status
         await db.books.update_one(
             {"id": book_id},
             {"$set": {
                 "import_status": "completed",
-                "title_jp": title_jp,
-                "author_jp": author_jp,
-                "description_jp": await translate_title(book.get("description", "")),
+                "description_jp": title_jp,  # Use title as description for now
                 "total_chapters": len(chapter_docs),
-                "sentences_count": total_sentences
+                "sentences_count": processed_sentences,
+                "processed_sentences": processed_sentences,
+                "import_progress": 100.0,
+                "error": error_msg
             }}
         )
         
-        logger.info(f"Completed import for {book_id}: {len(chapter_docs)} chapters, {total_sentences} sentences")
+        logger.info(f"Completed import for {book_id}: {len(chapter_docs)} chapters, {processed_sentences} sentences, {failed_translations} failed translations")
         
     except Exception as e:
-        logger.error(f"Book import failed for {book_id}: {e}")
+        logger.error(f"Book import failed for {book_id}: {e}", exc_info=True)
         await db.books.update_one(
             {"id": book_id},
             {"$set": {"import_status": "failed", "error": str(e)}}
         )
+
 
 @api_router.post("/books/upload")
 async def upload_book(
@@ -572,17 +750,14 @@ async def upload_book(
     if not file.filename.endswith('.txt'):
         raise HTTPException(status_code=400, detail="Only .txt files are supported")
     
-    # Read file content
     content = await file.read()
     try:
         text = content.decode('utf-8')
     except UnicodeDecodeError:
         text = content.decode('latin-1')
     
-    # Generate book ID
     book_id = f"upload-{str(uuid.uuid4())[:8]}"
     
-    # Create book record
     book_doc = {
         "id": book_id,
         "title": title,
@@ -597,13 +772,17 @@ async def upload_book(
         "genre": "literature",
         "import_status": "importing",
         "sentences_count": 0,
+        "total_sentences_estimate": 0,
+        "processed_sentences": 0,
+        "current_chapter": 0,
+        "total_chapters_found": 0,
+        "import_progress": 0.0,
         "source": "upload",
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "error": None
     }
     
     await db.books.insert_one(book_doc)
-    
-    # Process in background
     background_tasks.add_task(process_uploaded_book, book_id, text, title, author)
     
     return {
@@ -612,26 +791,62 @@ async def upload_book(
         "status": "importing"
     }
 
+
 async def process_uploaded_book(book_id: str, text: str, title: str, author: str):
-    """Process uploaded book text"""
+    """Process uploaded book text with same robust handling"""
     try:
-        # Clean and process
+        if book_id in cancelled_imports:
+            return
+        
         clean_text = clean_gutenberg_text(text)
         chapters = split_into_chapters(clean_text, book_id)
         
-        # Translate metadata
-        title_jp = await translate_title(title)
-        author_jp = await translate_author(author)
-        
-        total_sentences = 0
-        chapter_docs = []
-        
+        # Calculate totals
+        total_sentences_estimate = 0
+        chapter_sentences = []
         for chapter in chapters:
             sentences = split_into_sentences(chapter['content'])
+            chapter_sentences.append(sentences)
+            total_sentences_estimate += len(sentences)
+        
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {
+                "total_chapters_found": len(chapters),
+                "total_sentences_estimate": total_sentences_estimate
+            }}
+        )
+        
+        # Translate metadata
+        try:
+            title_jp = await translate_title(title)
+        except:
+            title_jp = title
+        
+        try:
+            author_jp = await translate_author(author)
+        except:
+            author_jp = author
+        
+        processed_sentences = 0
+        chapter_docs = []
+        
+        for chapter_idx, (chapter, sentences) in enumerate(zip(chapters, chapter_sentences)):
+            if book_id in cancelled_imports:
+                return
+            
             if not sentences:
                 continue
             
-            chapter_title_jp = await translate_title(chapter['title'])
+            await db.books.update_one(
+                {"id": book_id},
+                {"$set": {"current_chapter": chapter_idx + 1}}
+            )
+            
+            try:
+                chapter_title_jp = await translate_title(chapter['title'])
+            except:
+                chapter_title_jp = chapter['title']
             
             chapter_doc = {
                 "id": chapter['id'],
@@ -642,8 +857,16 @@ async def process_uploaded_book(book_id: str, text: str, title: str, author: str
                 "sentences_count": len(sentences)
             }
             chapter_docs.append(chapter_doc)
+            await db.chapters.insert_one(chapter_doc)
             
-            translated = await translate_sentences_batch(sentences, batch_size=5)
+            try:
+                translated = await translate_sentences_batch(sentences, batch_size=5)
+            except Exception as e:
+                logger.error(f"Translation failed for uploaded book: {e}")
+                translated = [
+                    {"english": s, "japanese_kanji": s, "japanese_hiragana": "", "japanese_katakana": "", "japanese_romaji": s.lower()}
+                    for s in sentences
+                ]
             
             sentence_docs = []
             for i, trans in enumerate(translated):
@@ -653,18 +876,25 @@ async def process_uploaded_book(book_id: str, text: str, title: str, author: str
                     "order": i + 1,
                     "english": trans["english"],
                     "japanese_kanji": trans["japanese_kanji"],
-                    "japanese_hiragana": trans["japanese_hiragana"],
-                    "japanese_katakana": trans["japanese_katakana"],
-                    "japanese_romaji": trans["japanese_romaji"],
+                    "japanese_hiragana": trans.get("japanese_hiragana", ""),
+                    "japanese_katakana": trans.get("japanese_katakana", ""),
+                    "japanese_romaji": trans.get("japanese_romaji", ""),
                     "words": []
                 })
             
             if sentence_docs:
                 await db.sentences.insert_many(sentence_docs)
-                total_sentences += len(sentence_docs)
-        
-        if chapter_docs:
-            await db.chapters.insert_many(chapter_docs)
+                processed_sentences += len(sentence_docs)
+            
+            progress = (processed_sentences / total_sentences_estimate * 100) if total_sentences_estimate > 0 else 0
+            await db.books.update_one(
+                {"id": book_id},
+                {"$set": {
+                    "sentences_count": processed_sentences,
+                    "processed_sentences": processed_sentences,
+                    "import_progress": progress
+                }}
+            )
         
         await db.books.update_one(
             {"id": book_id},
@@ -673,40 +903,29 @@ async def process_uploaded_book(book_id: str, text: str, title: str, author: str
                 "title_jp": title_jp,
                 "author_jp": author_jp,
                 "total_chapters": len(chapter_docs),
-                "sentences_count": total_sentences
+                "sentences_count": processed_sentences,
+                "import_progress": 100.0
             }}
         )
         
     except Exception as e:
-        logger.error(f"Upload processing failed: {e}")
+        logger.error(f"Upload processing failed: {e}", exc_info=True)
         await db.books.update_one(
             {"id": book_id},
             {"$set": {"import_status": "failed", "error": str(e)}}
         )
 
-@api_router.get("/books/{book_id}/status")
-async def get_book_import_status(book_id: str):
-    """Get import status for a book"""
-    book = await db.books.find_one({"id": book_id}, {"_id": 0})
-    if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
-    
-    return {
-        "book_id": book_id,
-        "status": book.get("import_status", "unknown"),
-        "total_chapters": book.get("total_chapters", 0),
-        "sentences_count": book.get("sentences_count", 0),
-        "error": book.get("error")
-    }
 
 @api_router.delete("/books/{book_id}")
 async def delete_book(book_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete a book and all its content"""
     book = await db.books.find_one({"id": book_id})
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     
-    # Delete all related data
+    # Cancel if importing
+    if book.get("import_status") == "importing":
+        cancelled_imports.add(book_id)
+    
     await db.sentences.delete_many({"chapter_id": {"$regex": f"^{book_id}-"}})
     await db.chapters.delete_many({"book_id": book_id})
     await db.books.delete_one({"id": book_id})
@@ -719,7 +938,6 @@ async def delete_book(book_id: str, current_user: dict = Depends(get_current_use
 
 @api_router.get("/dictionary/{word}", response_model=WordDefinition)
 async def lookup_word(word: str):
-    """Look up a Japanese word using Jisho API"""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -746,7 +964,6 @@ async def lookup_word(word: str):
     except Exception as e:
         logger.warning(f"Jisho API failed: {e}")
     
-    # Fallback
     local_word = await db.dictionary.find_one({"word": word}, {"_id": 0})
     if local_word:
         return WordDefinition(**local_word)
@@ -1026,7 +1243,7 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
 
 @api_router.get("/")
 async def root():
-    return {"message": "Japanese Reading App API", "version": "2.0.0"}
+    return {"message": "Japanese Reading App API", "version": "2.1.0"}
 
 # Include the router in the main app
 app.include_router(api_router)
