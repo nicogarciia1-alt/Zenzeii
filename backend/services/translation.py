@@ -1,6 +1,6 @@
 """
 Translation Service - On-demand lazy translation system
-Translates sentences only when users read them, in batches of 20-30
+OPTIMIZED: AI generates only Japanese text, local conversion for hiragana/katakana/romaji
 """
 import os
 import json
@@ -10,6 +10,7 @@ from typing import List, Dict, Optional, Set
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from dotenv import load_dotenv
+import pykakasi
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -17,29 +18,27 @@ logger = logging.getLogger(__name__)
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
 # Configuration
-TRANSLATION_TIMEOUT = 120  # seconds per batch
+TRANSLATION_TIMEOUT = 90  # seconds per batch
 MAX_RETRIES = 2
-BATCH_SIZE = 10  # sentences per batch - smaller for reliability
+BATCH_SIZE = 15  # Can increase batch size since we're only getting 1 output per sentence
 PRELOAD_AHEAD = 100  # sentences to preload ahead of reader
 
 # Track in-progress translations to avoid duplicates
 translation_in_progress: Set[str] = set()
 
-BATCH_TRANSLATION_PROMPT = """You are a Japanese language expert. Translate the following English sentences into Japanese.
+# Initialize pykakasi for local Japanese text conversion
+kakasi = pykakasi.kakasi()
 
-For EACH sentence, provide exactly 4 translations:
-1. kanji: Natural Japanese using kanji where appropriate
-2. hiragana: The same text in hiragana only (no kanji)
-3. katakana: The same text in katakana only
-4. romaji: Romanized Japanese (Hepburn romanization)
+# OPTIMIZED PROMPT - Only requests Japanese text (kanji+kana), not all 4 forms
+BATCH_TRANSLATION_PROMPT = """You are a Japanese language expert. Translate the following English sentences into natural Japanese.
 
 Rules:
-- Keep translations natural and literary
+- Use kanji where appropriate with natural kana
 - For proper nouns (names, places), use katakana
+- Keep translations natural and literary
 - Maintain the tone and style of the original
-- Number your responses to match the input sentences
 
-Return your response as a valid JSON array where each object has: sentence_num, kanji, hiragana, katakana, romaji
+Return your response as a JSON array with objects containing: sentence_num, japanese
 
 Example input:
 1. "The sun was setting."
@@ -47,12 +46,52 @@ Example input:
 
 Example output:
 [
-  {"sentence_num": 1, "kanji": "太陽が沈んでいた", "hiragana": "たいようがしずんでいた", "katakana": "タイヨウガシズンデイタ", "romaji": "taiyou ga shizunde ita"},
-  {"sentence_num": 2, "kanji": "彼女は優しく微笑んだ", "hiragana": "かのじょはやさしくほほえんだ", "katakana": "カノジョハヤサシクホホエンダ", "romaji": "kanojo wa yasashiku hohoenda"}
+  {"sentence_num": 1, "japanese": "太陽が沈んでいた。"},
+  {"sentence_num": 2, "japanese": "彼女は優しく微笑んだ。"}
 ]
 
 Now translate these sentences:
 """
+
+
+def convert_japanese_text(japanese_text: str) -> Dict[str, str]:
+    """
+    Convert Japanese text (kanji+kana) to hiragana, katakana, and romaji using pykakasi.
+    This is done locally, saving AI tokens.
+    """
+    if not japanese_text:
+        return {
+            "hiragana": "",
+            "katakana": "",
+            "romaji": ""
+        }
+    
+    try:
+        result = kakasi.convert(japanese_text)
+        
+        # Build full strings from tokens
+        hiragana_parts = []
+        katakana_parts = []
+        romaji_parts = []
+        
+        for item in result:
+            hiragana_parts.append(item.get('hira', item.get('orig', '')))
+            katakana_parts.append(item.get('kana', item.get('orig', '')))
+            romaji_parts.append(item.get('hepburn', item.get('orig', '')))
+        
+        return {
+            "hiragana": ''.join(hiragana_parts),
+            "katakana": ''.join(katakana_parts),
+            "romaji": ' '.join(romaji_parts)  # Space between words for romaji
+        }
+    except Exception as e:
+        logger.warning(f"pykakasi conversion error: {e}")
+        # Fallback: return original text
+        return {
+            "hiragana": japanese_text,
+            "katakana": japanese_text,
+            "romaji": japanese_text
+        }
 
 
 async def translate_batch(
@@ -62,7 +101,7 @@ async def translate_batch(
 ) -> Dict[str, Dict]:
     """
     Translate a batch of sentences and save to database.
-    Returns dict mapping sentence_id to translation results.
+    OPTIMIZED: AI generates only Japanese text, local conversion for other forms.
     """
     if not EMERGENT_LLM_KEY:
         logger.error("EMERGENT_LLM_KEY not configured")
@@ -91,9 +130,9 @@ async def translate_batch(
         
         prompt = BATCH_TRANSLATION_PROMPT + numbered_sentences
         
-        logger.info(f"Translating batch of {len(to_translate)} sentences")
+        logger.info(f"Translating batch of {len(to_translate)} sentences (optimized)")
         
-        # Call AI
+        # Call AI - only get Japanese text
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"batch-{hash(tuple(s[0] for s in to_translate))}",
@@ -113,17 +152,22 @@ async def translate_batch(
         
         translations = json.loads(response)
         
-        # Map translations back to sentence IDs
+        # Map translations back to sentence IDs and convert locally
         results = {}
         for trans in translations:
             idx = trans.get("sentence_num", 0) - 1
             if 0 <= idx < len(to_translate):
                 sid = to_translate[idx][0]
+                japanese_text = trans.get("japanese", "")
+                
+                # Local conversion using pykakasi
+                converted = convert_japanese_text(japanese_text)
+                
                 results[sid] = {
-                    "kanji_text": trans.get("kanji", ""),
-                    "hiragana_text": trans.get("hiragana", ""),
-                    "katakana_text": trans.get("katakana", ""),
-                    "romaji_text": trans.get("romaji", ""),
+                    "kanji_text": japanese_text,
+                    "hiragana_text": converted["hiragana"],
+                    "katakana_text": converted["katakana"],
+                    "romaji_text": converted["romaji"],
                     "translation_status": "completed"
                 }
                 

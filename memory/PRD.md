@@ -21,7 +21,7 @@ Build a modern web app for learning Japanese through reading public domain books
 ### Backend (FastAPI + MongoDB)
 - `/app/backend/server.py` - Main API server
 - `/app/backend/services/book_import.py` - Gutenberg book fetching and processing
-- `/app/backend/services/translation.py` - AI translation using emergentintegrations
+- `/app/backend/services/translation.py` - OPTIMIZED: AI translation + local pykakasi conversion
 
 ### Frontend (React + TailwindCSS)
 - `/app/frontend/src/pages/` - AuthPage, HomePage, ReaderPage, VocabularyPage, ProfilePage
@@ -38,7 +38,7 @@ Build a modern web app for learning Japanese through reading public domain books
 - `bookmarks` - User's reading bookmarks
 - `reading_progress` - User's progress per book
 
-## What's Been Implemented (Jan 2026)
+## What's Been Implemented
 
 ### Phase 1: Core MVP ✅
 - JWT authentication (register/login)
@@ -51,11 +51,18 @@ Build a modern web app for learning Japanese through reading public domain books
 
 ### Phase 2: Book Import System ✅
 - Project Gutenberg API integration
-- Background book import with AI translation
+- Instant book import (English text only)
+- Lazy-loading on-demand translation architecture
 - Sentence-level text splitting
 - Pagination for large chapters (50 sentences per page)
 - File upload support for .txt files
-- Import progress tracking and status
+
+### Phase 3: Translation Optimization ✅ (March 2026)
+- AI generates only Japanese text (kanji+kana)
+- Local pykakasi conversion for hiragana/katakana/romaji
+- ~60% reduction in AI tokens per sentence
+- Increased batch size (10 → 15 sentences)
+- All 42 sentences in Chapter 1 translated successfully
 
 ## API Endpoints
 
@@ -69,9 +76,13 @@ Build a modern web app for learning Japanese through reading public domain books
 - GET `/api/books/{id}` - Get book details
 - GET `/api/books/{id}/chapters` - Get chapters
 - GET `/api/chapters/{id}/sentences?skip=0&limit=50` - Get sentences (paginated)
-- POST `/api/books/import` - Start book import
+- POST `/api/books/import` - Start book import (instant)
 - GET `/api/books/available/list` - List predefined books
 - GET `/api/books/search/gutenberg?query=` - Search Gutenberg
+
+### Translation
+- POST `/api/translate/trigger` - Trigger background translation for chapter
+- POST `/api/translate/sentences` - Translate specific sentences
 
 ### Vocabulary
 - GET/POST `/api/vocabulary` - CRUD operations
@@ -84,21 +95,41 @@ Build a modern web app for learning Japanese through reading public domain books
 
 ## Prioritized Backlog
 
-### P0 - Critical (Next Sprint)
-- None
+### P0 - Critical
+- None (lazy-loading architecture complete and tested)
 
 ### P1 - High Priority
-- Word extraction for clickable words in reader
-- Reading statistics dashboard enhancements
-- Export/import vocabulary feature
+- Word-click dictionary popup functionality
+- Vocabulary system frontend (flashcards, notes)
+- Import additional books at scale
 
 ### P2 - Medium Priority
-- Social features (share progress)
-- Leaderboards
-- Reading goals and streaks
+- Profile page with reading statistics
+- Bookmarking feature in reader
+- Export vocabulary to Anki format
 
-## Next Tasks
-1. Import additional books (Pride and Prejudice, Sherlock Holmes, Anna Karenina, Moby Dick)
-2. Enhance word-level click detection in reader
-3. Add vocabulary export to Anki format
-4. Implement reading streak tracking
+### P3 - Future
+- User-uploaded book files
+- Reading goals and streaks
+- Social features (share progress)
+
+## Technical Notes
+
+### Translation Architecture (Lazy-Loading)
+```
+User opens chapter → GET /sentences → Returns cached Japanese OR English fallback
+                  ↓
+         Background task triggered
+                  ↓
+         Check for pending sentences → Batch of 15 sent to GPT-5.2
+                  ↓
+         AI returns Japanese text → pykakasi converts locally
+                  ↓
+         All forms saved to DB → Frontend polls & updates UI
+```
+
+### Cost Optimization
+- Old: AI generates 4 variants (kanji, hiragana, katakana, romaji) = ~200 output tokens
+- New: AI generates 1 variant (Japanese) = ~50 output tokens
+- pykakasi converts locally (instant, free)
+- **Savings: ~60% reduction in API costs**
