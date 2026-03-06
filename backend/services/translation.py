@@ -1,12 +1,13 @@
 """
-Translation Service - Handles translating English text to Japanese using LLM
-With timeout protection, retries, and error handling
+Translation Service - On-demand lazy translation system
+Translates sentences only when users read them, in batches of 20-30
 """
 import os
 import json
 import asyncio
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from dotenv import load_dotenv
 
@@ -16,227 +17,274 @@ logger = logging.getLogger(__name__)
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
 # Configuration
-TRANSLATION_TIMEOUT = 60  # seconds per batch
-MAX_RETRIES = 3
-RETRY_DELAY = 2  # seconds between retries
+TRANSLATION_TIMEOUT = 120  # seconds per batch
+MAX_RETRIES = 2
+BATCH_SIZE = 10  # sentences per batch - smaller for reliability
+PRELOAD_AHEAD = 100  # sentences to preload ahead of reader
 
-# Translation prompt template
-TRANSLATION_SYSTEM_PROMPT = """You are a Japanese language expert specializing in literary translation. Your task is to translate English sentences into Japanese with multiple script representations.
+# Track in-progress translations to avoid duplicates
+translation_in_progress: Set[str] = set()
 
-For each English sentence, provide:
-1. japanese_kanji: Natural Japanese using kanji where appropriate
-2. japanese_hiragana: Same text in hiragana only
-3. japanese_katakana: Same text in katakana only  
-4. japanese_romaji: Romanized Japanese (Hepburn romanization)
+BATCH_TRANSLATION_PROMPT = """You are a Japanese language expert. Translate the following English sentences into Japanese.
 
-Guidelines:
-- Maintain the literary style and tone of the original
-- Use natural, fluent Japanese
+For EACH sentence, provide exactly 4 translations:
+1. kanji: Natural Japanese using kanji where appropriate
+2. hiragana: The same text in hiragana only (no kanji)
+3. katakana: The same text in katakana only
+4. romaji: Romanized Japanese (Hepburn romanization)
+
+Rules:
+- Keep translations natural and literary
 - For proper nouns (names, places), use katakana
-- Keep translations accurate but readable
+- Maintain the tone and style of the original
+- Number your responses to match the input sentences
 
-IMPORTANT: Return ONLY valid JSON array, no markdown, no code blocks, no extra text."""
+Return your response as a valid JSON array where each object has: sentence_num, kanji, hiragana, katakana, romaji
 
-TRANSLATION_USER_TEMPLATE = """Translate these English sentences to Japanese. Return a JSON array with objects containing: english, japanese_kanji, japanese_hiragana, japanese_katakana, japanese_romaji
+Example input:
+1. "The sun was setting."
+2. "She smiled softly."
 
-Sentences to translate:
-{sentences}
+Example output:
+[
+  {"sentence_num": 1, "kanji": "太陽が沈んでいた", "hiragana": "たいようがしずんでいた", "katakana": "タイヨウガシズンデイタ", "romaji": "taiyou ga shizunde ita"},
+  {"sentence_num": 2, "kanji": "彼女は優しく微笑んだ", "hiragana": "かのじょはやさしくほほえんだ", "katakana": "カノジョハヤサシクホホエンダ", "romaji": "kanojo wa yasashiku hohoenda"}
+]
 
-Return ONLY the JSON array, nothing else."""
+Now translate these sentences:
+"""
 
 
-async def translate_sentences_batch(
-    sentences: List[str], 
-    batch_size: int = 5,
-    progress_callback: Optional[callable] = None
-) -> List[Dict]:
-    """Translate a batch of sentences to Japanese using LLM with retry logic"""
+async def translate_batch(
+    db: AsyncIOMotorDatabase,
+    sentence_ids: List[str],
+    english_texts: List[str]
+) -> Dict[str, Dict]:
+    """
+    Translate a batch of sentences and save to database.
+    Returns dict mapping sentence_id to translation results.
+    """
     if not EMERGENT_LLM_KEY:
         logger.error("EMERGENT_LLM_KEY not configured")
-        return create_placeholder_translations(sentences)
+        return {}
     
-    translated = []
-    total = len(sentences)
+    if not sentence_ids or not english_texts:
+        return {}
     
-    # Process in smaller batches to avoid token limits
-    for i in range(0, len(sentences), batch_size):
-        batch = sentences[i:i + batch_size]
-        batch_num = i // batch_size + 1
-        total_batches = (len(sentences) + batch_size - 1) // batch_size
+    # Filter out sentences already being translated
+    to_translate = []
+    for sid, text in zip(sentence_ids, english_texts):
+        if sid not in translation_in_progress:
+            to_translate.append((sid, text))
+            translation_in_progress.add(sid)
+    
+    if not to_translate:
+        logger.debug("All sentences already being translated")
+        return {}
+    
+    try:
+        # Build prompt
+        numbered_sentences = "\n".join([
+            f"{i+1}. \"{text}\"" 
+            for i, (_, text) in enumerate(to_translate)
+        ])
         
-        logger.info(f"Translating batch {batch_num}/{total_batches} ({len(batch)} sentences)")
+        prompt = BATCH_TRANSLATION_PROMPT + numbered_sentences
         
-        # Try with retries
-        batch_result = None
-        last_error = None
+        logger.info(f"Translating batch of {len(to_translate)} sentences")
         
-        for attempt in range(MAX_RETRIES):
-            try:
-                batch_result = await asyncio.wait_for(
-                    translate_batch_with_timeout(batch),
-                    timeout=TRANSLATION_TIMEOUT
+        # Call AI
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"batch-{hash(tuple(s[0] for s in to_translate))}",
+            system_message="You are a professional Japanese translator. Return only valid JSON."
+        ).with_model("openai", "gpt-5.2")
+        
+        response = await asyncio.wait_for(
+            chat.send_message(UserMessage(text=prompt)),
+            timeout=TRANSLATION_TIMEOUT
+        )
+        
+        # Parse response
+        response = response.strip()
+        if response.startswith("```"):
+            lines = response.split("\n")
+            response = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+        
+        translations = json.loads(response)
+        
+        # Map translations back to sentence IDs
+        results = {}
+        for trans in translations:
+            idx = trans.get("sentence_num", 0) - 1
+            if 0 <= idx < len(to_translate):
+                sid = to_translate[idx][0]
+                results[sid] = {
+                    "kanji_text": trans.get("kanji", ""),
+                    "hiragana_text": trans.get("hiragana", ""),
+                    "katakana_text": trans.get("katakana", ""),
+                    "romaji_text": trans.get("romaji", ""),
+                    "translation_status": "completed"
+                }
+                
+                # Save to database
+                await db.sentences.update_one(
+                    {"id": sid},
+                    {"$set": results[sid]}
                 )
-                break  # Success, exit retry loop
-                
-            except asyncio.TimeoutError:
-                last_error = f"Timeout after {TRANSLATION_TIMEOUT}s"
-                logger.warning(f"Translation timeout (attempt {attempt + 1}/{MAX_RETRIES}): {last_error}")
-                
-            except Exception as e:
-                last_error = str(e)
-                # Check for budget exceeded error
-                if "budget" in last_error.lower() or "exceeded" in last_error.lower():
-                    logger.error(f"API budget exceeded: {last_error}")
-                    # Return placeholders immediately, no retry
-                    return create_placeholder_translations(batch)
-                logger.warning(f"Translation error (attempt {attempt + 1}/{MAX_RETRIES}): {last_error}")
-            
-            # Wait before retry (except on last attempt)
-            if attempt < MAX_RETRIES - 1:
-                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
         
-        # If all retries failed, use placeholders for this batch
-        if batch_result is None:
-            logger.error(f"All {MAX_RETRIES} attempts failed for batch {batch_num}: {last_error}")
-            batch_result = create_placeholder_translations(batch)
+        logger.info(f"Successfully translated {len(results)}/{len(to_translate)} sentences")
+        return results
         
-        translated.extend(batch_result)
-        
-        # Report progress if callback provided
-        if progress_callback:
-            try:
-                await progress_callback(len(translated), total)
-            except Exception as e:
-                logger.warning(f"Progress callback error: {e}")
-        
-        # Small delay between batches to avoid rate limiting
-        if i + batch_size < len(sentences):
-            await asyncio.sleep(0.5)
-    
-    return translated
+    except asyncio.TimeoutError:
+        logger.error(f"Translation batch timed out after {TRANSLATION_TIMEOUT}s")
+        return {}
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse translation response: {e}")
+        return {}
+    except Exception as e:
+        error_str = str(e)
+        if "budget" in error_str.lower() or "exceeded" in error_str.lower():
+            logger.error(f"API budget exceeded: {e}")
+        else:
+            logger.error(f"Translation error: {e}")
+        return {}
+    finally:
+        # Remove from in-progress set
+        for sid, _ in to_translate:
+            translation_in_progress.discard(sid)
 
 
-async def translate_batch_with_timeout(sentences: List[str]) -> List[Dict]:
-    """Translate a small batch of sentences with timeout handling"""
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"translation-{id(sentences)}-{asyncio.get_event_loop().time()}",
-        system_message=TRANSLATION_SYSTEM_PROMPT
-    ).with_model("openai", "gpt-5.2")
+async def get_sentences_needing_translation(
+    db: AsyncIOMotorDatabase,
+    chapter_id: str,
+    start_order: int = 1,
+    limit: int = PRELOAD_AHEAD
+) -> List[Dict]:
+    """
+    Get sentences that need translation from a chapter.
+    Returns sentences where kanji_text is null.
+    """
+    sentences = await db.sentences.find(
+        {
+            "chapter_id": chapter_id,
+            "order": {"$gte": start_order},
+            "$or": [
+                {"kanji_text": None},
+                {"kanji_text": {"$exists": False}},
+                {"translation_status": {"$ne": "completed"}}
+            ]
+        },
+        {"_id": 0, "id": 1, "english": 1, "order": 1}
+    ).sort("order", 1).limit(limit).to_list(limit)
     
-    # Format sentences for prompt
-    sentences_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(sentences)])
-    
-    user_message = UserMessage(
-        text=TRANSLATION_USER_TEMPLATE.format(sentences=sentences_text)
+    return sentences
+
+
+async def trigger_chapter_translation(
+    db: AsyncIOMotorDatabase,
+    chapter_id: str,
+    reader_position: int = 1
+):
+    """
+    Trigger background translation for a chapter starting from reader position.
+    This preloads translations ahead of where the user is reading.
+    """
+    # Get sentences needing translation
+    sentences = await get_sentences_needing_translation(
+        db, chapter_id, reader_position, PRELOAD_AHEAD
     )
     
-    response = await chat.send_message(user_message)
+    if not sentences:
+        logger.debug(f"No sentences need translation in chapter {chapter_id}")
+        return
     
-    # Parse JSON response
-    response = response.strip()
-    if response.startswith("```"):
-        lines = response.split("\n")
-        response = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
+    logger.info(f"Queueing {len(sentences)} sentences for translation in chapter {chapter_id}")
     
-    translations = json.loads(response)
+    # Process in batches
+    for i in range(0, len(sentences), BATCH_SIZE):
+        batch = sentences[i:i + BATCH_SIZE]
+        sentence_ids = [s["id"] for s in batch]
+        english_texts = [s["english"] for s in batch]
+        
+        # Run translation (fire and forget for background)
+        asyncio.create_task(translate_batch(db, sentence_ids, english_texts))
+        
+        # Small delay between batches
+        await asyncio.sleep(0.1)
+
+
+async def ensure_sentences_translated(
+    db: AsyncIOMotorDatabase,
+    sentence_ids: List[str]
+) -> Dict[str, Dict]:
+    """
+    Ensure specific sentences are translated.
+    Returns translations for requested sentences (from cache or new).
+    """
+    if not sentence_ids:
+        return {}
     
-    # Validate and ensure we have all fields
-    result = []
-    for i, trans in enumerate(translations):
-        if i < len(sentences):
-            result.append({
-                "english": sentences[i],
-                "japanese_kanji": trans.get("japanese_kanji", sentences[i]),
-                "japanese_hiragana": trans.get("japanese_hiragana", ""),
-                "japanese_katakana": trans.get("japanese_katakana", ""),
-                "japanese_romaji": trans.get("japanese_romaji", "")
-            })
+    # Check which sentences need translation
+    sentences = await db.sentences.find(
+        {
+            "id": {"$in": sentence_ids},
+            "$or": [
+                {"kanji_text": None},
+                {"kanji_text": {"$exists": False}},
+                {"translation_status": {"$ne": "completed"}}
+            ]
+        },
+        {"_id": 0}
+    ).to_list(len(sentence_ids))
     
-    # If we got fewer translations than sentences, add placeholders
-    while len(result) < len(sentences):
-        idx = len(result)
-        result.append(create_placeholder_translation(sentences[idx]))
+    if not sentences:
+        return {}
     
-    return result
+    # Translate missing ones
+    ids = [s["id"] for s in sentences]
+    texts = [s["english"] for s in sentences]
+    
+    return await translate_batch(db, ids, texts)
 
 
-def create_placeholder_translation(sentence: str) -> Dict:
-    """Create a placeholder translation when API fails"""
-    return {
-        "english": sentence,
-        "japanese_kanji": f"[翻訳保留] {sentence}",  # [Translation pending]
-        "japanese_hiragana": "",
-        "japanese_katakana": "",
-        "japanese_romaji": sentence.lower(),
-        "translation_failed": True
-    }
-
-
-def create_placeholder_translations(sentences: List[str]) -> List[Dict]:
-    """Create placeholder translations for a list of sentences"""
-    return [create_placeholder_translation(s) for s in sentences]
-
-
-async def translate_title(title: str) -> str:
-    """Translate a book/chapter title to Japanese with timeout"""
+async def translate_title_simple(title: str) -> str:
+    """Simple title translation with fallback"""
     if not EMERGENT_LLM_KEY:
         return title
     
-    for attempt in range(MAX_RETRIES):
-        try:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"title-{id(title)}-{attempt}",
-                system_message="You are a translator. Translate the given English title to Japanese. Return ONLY the Japanese text, nothing else."
-            ).with_model("openai", "gpt-5.2")
-            
-            user_message = UserMessage(text=f"Translate to Japanese: {title}")
-            response = await asyncio.wait_for(
-                chat.send_message(user_message),
-                timeout=30
-            )
-            return response.strip()
-            
-        except asyncio.TimeoutError:
-            logger.warning(f"Title translation timeout (attempt {attempt + 1}/{MAX_RETRIES})")
-        except Exception as e:
-            logger.warning(f"Title translation error (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"title-{hash(title)}",
+            system_message="Translate to Japanese. Return only the Japanese text."
+        ).with_model("openai", "gpt-5.2")
         
-        if attempt < MAX_RETRIES - 1:
-            await asyncio.sleep(RETRY_DELAY)
-    
-    logger.error(f"Failed to translate title after {MAX_RETRIES} attempts: {title}")
-    return title
+        response = await asyncio.wait_for(
+            chat.send_message(UserMessage(text=f"Translate: {title}")),
+            timeout=30
+        )
+        return response.strip()
+    except:
+        return title
 
 
-async def translate_author(author: str) -> str:
-    """Translate/transliterate author name to Japanese (katakana) with timeout"""
+async def translate_author_simple(author: str) -> str:
+    """Simple author name to katakana with fallback"""
     if not EMERGENT_LLM_KEY:
         return author
     
-    for attempt in range(MAX_RETRIES):
-        try:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"author-{id(author)}-{attempt}",
-                system_message="You are a translator. Convert the given Western name to Japanese katakana. Return ONLY the katakana, nothing else."
-            ).with_model("openai", "gpt-5.2")
-            
-            user_message = UserMessage(text=f"Convert to katakana: {author}")
-            response = await asyncio.wait_for(
-                chat.send_message(user_message),
-                timeout=30
-            )
-            return response.strip()
-            
-        except asyncio.TimeoutError:
-            logger.warning(f"Author translation timeout (attempt {attempt + 1}/{MAX_RETRIES})")
-        except Exception as e:
-            logger.warning(f"Author translation error (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"author-{hash(author)}",
+            system_message="Convert name to katakana. Return only the katakana."
+        ).with_model("openai", "gpt-5.2")
         
-        if attempt < MAX_RETRIES - 1:
-            await asyncio.sleep(RETRY_DELAY)
-    
-    logger.error(f"Failed to translate author after {MAX_RETRIES} attempts: {author}")
-    return author
+        response = await asyncio.wait_for(
+            chat.send_message(UserMessage(text=f"Convert: {author}")),
+            timeout=30
+        )
+        return response.strip()
+    except:
+        return author

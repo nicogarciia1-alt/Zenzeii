@@ -12,12 +12,12 @@ export const getSentences = (chapterId, skip = 0, limit = 50) =>
 export const getSentencesCount = (chapterId) => 
   axios.get(`${API}/chapters/${chapterId}/sentences/count`);
 export const deleteBook = (bookId) => axios.delete(`${API}/books/${bookId}`);
+export const getBookStatus = (bookId) => axios.get(`${API}/books/${bookId}/status`);
 
-// Book Import API
+// Book Import API - Now instant!
 export const getAvailableBooks = () => axios.get(`${API}/books/available/list`);
 export const searchGutenberg = (query) => axios.get(`${API}/books/search/gutenberg`, { params: { query } });
 export const importBook = (data) => axios.post(`${API}/books/import`, data);
-export const cancelBookImport = (bookId) => axios.post(`${API}/books/${bookId}/cancel`);
 export const uploadBook = (file, title, author) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -25,7 +25,12 @@ export const uploadBook = (file, title, author) => {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
 };
-export const getBookImportStatus = (bookId) => axios.get(`${API}/books/${bookId}/status`);
+
+// Translation API - On-demand lazy loading
+export const triggerTranslation = (chapterId, startPosition = 1) => 
+  axios.post(`${API}/translate/trigger`, { chapter_id: chapterId, start_position: startPosition });
+export const translateSentences = (sentenceIds) => 
+  axios.post(`${API}/translate/sentences`, sentenceIds);
 
 // Dictionary API
 export const lookupWord = (word) => axios.get(`${API}/dictionary/${encodeURIComponent(word)}`);

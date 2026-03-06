@@ -44,7 +44,8 @@ import {
   createBookmark,
   getBookmarks,
   deleteBookmark,
-  updateProgress
+  updateProgress,
+  triggerTranslation
 } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -61,6 +62,7 @@ export const ReaderPage = () => {
   const [currentChapter, setCurrentChapter] = useState(null);
   const [sentences, setSentences] = useState([]);
   const [totalSentences, setTotalSentences] = useState(0);
+  const [translatedCount, setTranslatedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [savedWords, setSavedWords] = useState([]);
@@ -113,6 +115,33 @@ export const ReaderPage = () => {
     return () => observer.disconnect();
   }, [hasMore, loadingMore, sentences.length]);
 
+  // Poll for translation updates when in Japanese mode
+  useEffect(() => {
+    if (scriptMode === 'english' || !currentChapter) return;
+    
+    // Check if any sentences need translation
+    const needsTranslation = sentences.some(s => s.translation_status !== 'completed');
+    if (!needsTranslation) return;
+
+    const interval = setInterval(async () => {
+      try {
+        // Reload sentences to get updated translations
+        const res = await getSentences(currentChapter.id, 0, sentences.length || SENTENCES_PER_PAGE);
+        setSentences(res.data);
+        
+        // Check if all translated now
+        const stillPending = res.data.some(s => s.translation_status !== 'completed');
+        if (!stillPending) {
+          clearInterval(interval);
+        }
+      } catch (e) {
+        console.error('Failed to refresh sentences:', e);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [scriptMode, currentChapter, sentences.length]);
+
   const fetchBookData = async () => {
     setLoading(true);
     try {
@@ -137,14 +166,20 @@ export const ReaderPage = () => {
 
   const loadChapterSentences = async (chapId, reset = false) => {
     try {
-      // Get total count first
+      // Get count info
       const countRes = await getSentencesCount(chapId);
       setTotalSentences(countRes.data.count);
+      setTranslatedCount(countRes.data.translated || 0);
       
-      // Load first batch
+      // Load sentences
       const res = await getSentences(chapId, 0, SENTENCES_PER_PAGE);
       setSentences(res.data);
       setHasMore(res.data.length < countRes.data.count);
+      
+      // Trigger background translation for upcoming sentences
+      triggerTranslation(chapId, 1).catch(e => {
+        console.log('Translation trigger:', e.message);
+      });
       
       // Update reading progress
       if (res.data.length > 0) {
@@ -157,7 +192,7 @@ export const ReaderPage = () => {
       }
     } catch (error) {
       console.error('Failed to fetch sentences:', error);
-      toast.error('Failed to load chapter content');
+      toast.error('Failed to load chapter');
     }
   };
 
@@ -170,7 +205,10 @@ export const ReaderPage = () => {
       setSentences(prev => [...prev, ...res.data]);
       setHasMore(sentences.length + res.data.length < totalSentences);
       
-      // Update progress
+      // Trigger translation for next batch
+      const nextPosition = sentences.length + res.data.length;
+      triggerTranslation(currentChapter.id, nextPosition).catch(() => {});
+      
       if (res.data.length > 0) {
         await updateProgress({
           book_id: bookId,
@@ -180,7 +218,7 @@ export const ReaderPage = () => {
         });
       }
     } catch (error) {
-      console.error('Failed to load more sentences:', error);
+      console.error('Failed to load more:', error);
     } finally {
       setLoadingMore(false);
     }
@@ -224,23 +262,21 @@ export const ReaderPage = () => {
 
   const goToNextChapter = () => {
     if (!currentChapter) return;
-    const currentIndex = chapters.findIndex(c => c.id === currentChapter.id);
-    if (currentIndex < chapters.length - 1) {
-      handleChapterChange(chapters[currentIndex + 1].id);
+    const idx = chapters.findIndex(c => c.id === currentChapter.id);
+    if (idx < chapters.length - 1) {
+      handleChapterChange(chapters[idx + 1].id);
     }
   };
 
   const goToPrevChapter = () => {
     if (!currentChapter) return;
-    const currentIndex = chapters.findIndex(c => c.id === currentChapter.id);
-    if (currentIndex > 0) {
-      handleChapterChange(chapters[currentIndex - 1].id);
+    const idx = chapters.findIndex(c => c.id === currentChapter.id);
+    if (idx > 0) {
+      handleChapterChange(chapters[idx - 1].id);
     }
   };
 
-  const isBookmarked = (sentenceId) => {
-    return bookmarks.some(b => b.sentence_id === sentenceId);
-  };
+  const isBookmarked = (sentenceId) => bookmarks.some(b => b.sentence_id === sentenceId);
 
   const toggleBookmark = async (sentenceId) => {
     const existing = bookmarks.find(b => b.sentence_id === sentenceId);
@@ -263,18 +299,21 @@ export const ReaderPage = () => {
   const getSentenceText = (sentence) => {
     switch (scriptMode) {
       case 'kanji':
-        return sentence.japanese_kanji;
+        return sentence.japanese_kanji || sentence.english;
       case 'hiragana':
-        return sentence.japanese_hiragana;
+        return sentence.japanese_hiragana || sentence.english;
       case 'katakana':
-        return sentence.japanese_katakana;
+        return sentence.japanese_katakana || sentence.english;
       case 'romaji':
-        return sentence.japanese_romaji;
+        return sentence.japanese_romaji || sentence.english;
       case 'english':
-        return sentence.english;
       default:
-        return sentence.japanese_kanji;
+        return sentence.english;
     }
+  };
+
+  const isTranslationPending = (sentence) => {
+    return sentence.translation_status !== 'completed' && scriptMode !== 'english';
   };
 
   const fontSizeClass = {
@@ -307,7 +346,6 @@ export const ReaderPage = () => {
       {/* Top Bar */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-          {/* Left */}
           <div className="flex items-center gap-2">
             <Link to="/">
               <Button variant="ghost" size="icon" data-testid="reader-home-btn">
@@ -321,7 +359,6 @@ export const ReaderPage = () => {
             </div>
           </div>
 
-          {/* Center - Chapter Select */}
           <Select value={currentChapter?.id || ''} onValueChange={handleChapterChange}>
             <SelectTrigger className="w-48" data-testid="chapter-select">
               <SelectValue placeholder="Select chapter" />
@@ -335,13 +372,11 @@ export const ReaderPage = () => {
             </SelectContent>
           </Select>
 
-          {/* Right */}
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={toggleTheme} data-testid="reader-theme-toggle">
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
-            {/* Table of Contents */}
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" data-testid="reader-toc-btn">
@@ -371,7 +406,6 @@ export const ReaderPage = () => {
               </SheetContent>
             </Sheet>
 
-            {/* Settings */}
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" data-testid="reader-settings-btn">
@@ -455,11 +489,12 @@ export const ReaderPage = () => {
             {currentChapter?.title_jp && currentChapter?.title && (
               <p className="text-lg text-muted-foreground mt-1">{currentChapter.title}</p>
             )}
-            {totalSentences > 0 && (
-              <p className="text-xs text-muted-foreground mt-2">
-                {sentences.length} / {totalSentences} sentences loaded
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground mt-2">
+              {sentences.length} / {totalSentences} sentences
+              {scriptMode !== 'english' && translatedCount < totalSentences && (
+                <span className="ml-2 text-primary">• Translating...</span>
+              )}
+            </p>
           </div>
 
           {/* Sentences */}
@@ -467,7 +502,7 @@ export const ReaderPage = () => {
             {sentences.map((sentence) => (
               <div
                 key={sentence.id}
-                className="reader-sentence group relative"
+                className={`reader-sentence group relative ${isTranslationPending(sentence) ? 'opacity-70' : ''}`}
                 data-testid={`sentence-${sentence.id}`}
               >
                 <div className={`${scriptMode !== 'english' && scriptMode !== 'romaji' ? 'jp-text' : ''}`}>
@@ -476,12 +511,10 @@ export const ReaderPage = () => {
                       className="reader-word cursor-pointer hover:bg-primary/10 hover:text-primary rounded px-0.5 transition-colors"
                       onClick={(e) => {
                         const text = getSentenceText(sentence);
-                        // Get clicked word (simplified - click anywhere triggers lookup)
                         const selection = window.getSelection();
                         if (selection && selection.toString().trim()) {
                           handleWordClick(selection.toString().trim(), e);
                         } else {
-                          // Look up first word/phrase
                           const firstWord = text.split(/[\s、。！？]/)[0];
                           if (firstWord) handleWordClick(firstWord, e);
                         }
@@ -494,7 +527,6 @@ export const ReaderPage = () => {
                   )}
                 </div>
 
-                {/* Bookmark button */}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -514,7 +546,6 @@ export const ReaderPage = () => {
               </div>
             ))}
             
-            {/* Load more sentinel */}
             {hasMore && (
               <div ref={sentinelRef} className="py-8 text-center">
                 {loadingMore ? (
@@ -522,7 +553,7 @@ export const ReaderPage = () => {
                 ) : (
                   <Button variant="ghost" onClick={loadMoreSentences}>
                     <ChevronDown className="h-4 w-4 mr-2" />
-                    Load more sentences
+                    Load more
                   </Button>
                 )}
               </div>
@@ -531,26 +562,14 @@ export const ReaderPage = () => {
 
           {/* Chapter Navigation */}
           <div className="flex items-center justify-between mt-12 pt-8 border-t border-border">
-            <Button
-              variant="outline"
-              onClick={goToPrevChapter}
-              disabled={!hasPrev}
-              data-testid="prev-chapter-btn"
-            >
+            <Button variant="outline" onClick={goToPrevChapter} disabled={!hasPrev} data-testid="prev-chapter-btn">
               <ChevronLeft className="h-4 w-4 mr-2" />
               Previous
             </Button>
-
             <span className="text-sm text-muted-foreground">
               Chapter {currentChapterIndex + 1} of {chapters.length}
             </span>
-
-            <Button
-              variant="outline"
-              onClick={goToNextChapter}
-              disabled={!hasNext}
-              data-testid="next-chapter-btn"
-            >
+            <Button variant="outline" onClick={goToNextChapter} disabled={!hasNext} data-testid="next-chapter-btn">
               Next
               <ChevronRight className="h-4 w-4 ml-2" />
             </Button>

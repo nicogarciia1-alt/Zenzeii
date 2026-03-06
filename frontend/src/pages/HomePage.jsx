@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Library, Plus, Search, Upload, Loader2, Check, Download, X, AlertCircle } from 'lucide-react';
+import { Clock, Library, Plus, Search, Upload, Loader2, Check, Download, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -13,17 +12,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -36,8 +24,7 @@ import {
   importBook, 
   searchGutenberg,
   uploadBook,
-  getBookImportStatus,
-  cancelBookImport
+  getBookStatus
 } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -49,7 +36,7 @@ export const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [importingBooks, setImportingBooks] = useState({});  // Changed to object for progress tracking
+  const [importingBooks, setImportingBooks] = useState(new Set());
   const [showImportDialog, setShowImportDialog] = useState(false);
   
   // Upload state
@@ -62,52 +49,32 @@ export const HomePage = () => {
     fetchData();
   }, []);
 
-  // Poll for import status updates
+  // Poll for import status (imports are now fast, so this is brief)
   useEffect(() => {
-    const importingIds = Object.keys(importingBooks);
-    if (importingIds.length === 0) return;
+    if (importingBooks.size === 0) return;
     
     const interval = setInterval(async () => {
-      for (const bookId of importingIds) {
+      for (const bookId of importingBooks) {
         try {
-          const res = await getBookImportStatus(bookId);
-          const status = res.data;
-          
-          // Update progress
-          setImportingBooks(prev => ({
-            ...prev,
-            [bookId]: {
-              ...prev[bookId],
-              progress: status.progress_percent,
-              processedSentences: status.processed_sentences,
-              totalSentences: status.total_sentences,
-              currentChapter: status.current_chapter,
-              totalChapters: status.total_chapters,
-              status: status.status,
-              error: status.error
-            }
-          }));
-          
-          if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
+          const res = await getBookStatus(bookId);
+          if (res.data.status === 'completed' || res.data.status === 'failed') {
             setImportingBooks(prev => {
-              const { [bookId]: removed, ...rest } = prev;
-              return rest;
+              const next = new Set(prev);
+              next.delete(bookId);
+              return next;
             });
-            
-            if (status.status === 'completed') {
-              toast.success(`Book imported successfully!${status.error ? ' (with some translation errors)' : ''}`);
-            } else if (status.status === 'cancelled') {
-              toast.info('Book import cancelled');
+            if (res.data.status === 'completed') {
+              toast.success('Book imported! Ready to read.');
             } else {
-              toast.error(`Import failed: ${status.error || 'Unknown error'}`);
+              toast.error('Import failed');
             }
             fetchData();
           }
         } catch (e) {
-          console.error('Failed to check import status:', e);
+          console.error('Status check failed:', e);
         }
       }
-    }, 3000);  // Poll every 3 seconds
+    }, 2000);
     
     return () => clearInterval(interval);
   }, [importingBooks]);
@@ -123,18 +90,11 @@ export const HomePage = () => {
       setProgress(progressRes.data);
       setAvailableBooks(availableRes.data);
       
-      // Check for books still importing
-      const importing = {};
+      // Check for importing books
+      const importing = new Set();
       for (const book of booksRes.data) {
         if (book.import_status === 'importing') {
-          importing[book.id] = {
-            progress: book.import_progress || 0,
-            processedSentences: book.processed_sentences || 0,
-            totalSentences: book.total_sentences_estimate || 0,
-            currentChapter: book.current_chapter || 0,
-            totalChapters: book.total_chapters_found || 0,
-            status: 'importing'
-          };
+          importing.add(book.id);
         }
       }
       setImportingBooks(importing);
@@ -159,54 +119,40 @@ export const HomePage = () => {
   };
 
   const handleImportPredefined = async (bookKey) => {
-    setImportingBooks(prev => ({
-      ...prev,
-      [bookKey]: { progress: 0, status: 'importing', processedSentences: 0, totalSentences: 0 }
-    }));
+    setImportingBooks(prev => new Set(prev).add(bookKey));
     try {
       await importBook({ book_key: bookKey });
-      toast.success('Import started! This may take a few minutes...');
-      
+      toast.success('Importing... This only takes a few seconds!');
       const availableRes = await getAvailableBooks();
       setAvailableBooks(availableRes.data);
     } catch (error) {
       toast.error('Failed to start import');
       setImportingBooks(prev => {
-        const { [bookKey]: removed, ...rest } = prev;
-        return rest;
+        const next = new Set(prev);
+        next.delete(bookKey);
+        return next;
       });
     }
   };
 
   const handleImportGutenberg = async (result) => {
     const bookId = `gutenberg-${result.gutenberg_id}`;
-    setImportingBooks(prev => ({
-      ...prev,
-      [bookId]: { progress: 0, status: 'importing', processedSentences: 0, totalSentences: 0 }
-    }));
+    setImportingBooks(prev => new Set(prev).add(bookId));
     try {
       await importBook({
         gutenberg_id: result.gutenberg_id,
         title: result.title,
         author: result.author
       });
-      toast.success('Import started! This may take a few minutes...');
+      toast.success('Importing... This only takes a few seconds!');
       setShowImportDialog(false);
     } catch (error) {
       toast.error('Failed to start import');
       setImportingBooks(prev => {
-        const { [bookId]: removed, ...rest } = prev;
-        return rest;
+        const next = new Set(prev);
+        next.delete(bookId);
+        return next;
       });
-    }
-  };
-
-  const handleCancelImport = async (bookId) => {
-    try {
-      await cancelBookImport(bookId);
-      toast.info('Cancelling import...');
-    } catch (error) {
-      toast.error('Failed to cancel import');
     }
   };
 
@@ -219,11 +165,8 @@ export const HomePage = () => {
     setUploading(true);
     try {
       const res = await uploadBook(uploadFile, uploadTitle, uploadAuthor);
-      toast.success('Upload started! Processing may take a few minutes...');
-      setImportingBooks(prev => ({
-        ...prev,
-        [res.data.book_id]: { progress: 0, status: 'importing', processedSentences: 0, totalSentences: 0 }
-      }));
+      toast.success('Uploading... Almost ready!');
+      setImportingBooks(prev => new Set(prev).add(res.data.book_id));
       setUploadFile(null);
       setUploadTitle('');
       setUploadAuthor('');
@@ -235,11 +178,8 @@ export const HomePage = () => {
     }
   };
 
-  const getBookProgress = (bookId) => {
-    return progress.find(p => p.book_id === bookId);
-  };
+  const getBookProgress = (bookId) => progress.find(p => p.book_id === bookId);
 
-  // Filter out books that are still importing for display
   const completedBooks = books.filter(b => b.import_status === 'completed');
   const importingBooksList = books.filter(b => b.import_status === 'importing');
   const booksInProgress = completedBooks.filter(book => getBookProgress(book.id));
@@ -267,7 +207,6 @@ export const HomePage = () => {
             Learn Japanese by reading classic literature with instant translations and vocabulary tools
           </p>
           
-          {/* Import Button */}
           <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
             <DialogTrigger asChild>
               <Button size="lg" className="gap-2" data-testid="import-books-btn">
@@ -277,9 +216,14 @@ export const HomePage = () => {
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[80vh]">
               <DialogHeader>
-                <DialogTitle className="font-serif">Add Books to Library</DialogTitle>
+                <DialogTitle className="font-serif flex items-center gap-2">
+                  Add Books to Library
+                  <Badge variant="secondary" className="gap-1">
+                    <Zap className="h-3 w-3" /> Instant Import
+                  </Badge>
+                </DialogTitle>
                 <DialogDescription>
-                  Import public domain books from Project Gutenberg or upload your own
+                  Books import instantly. Japanese translations are generated as you read.
                 </DialogDescription>
               </DialogHeader>
               
@@ -290,7 +234,6 @@ export const HomePage = () => {
                   <TabsTrigger value="upload">Upload File</TabsTrigger>
                 </TabsList>
                 
-                {/* Predefined Books */}
                 <TabsContent value="predefined">
                   <ScrollArea className="h-[400px] pr-4">
                     <div className="space-y-3">
@@ -308,11 +251,11 @@ export const HomePage = () => {
                             <div>
                               {book.is_imported && book.import_status === 'completed' ? (
                                 <Badge variant="secondary" className="gap-1">
-                                  <Check className="h-3 w-3" /> Imported
+                                  <Check className="h-3 w-3" /> Ready
                                 </Badge>
-                              ) : importingBooks[book.book_key] || book.import_status === 'importing' ? (
+                              ) : importingBooks.has(book.book_key) ? (
                                 <Badge variant="outline" className="gap-1">
-                                  <Loader2 className="h-3 w-3 animate-spin" /> Importing...
+                                  <Loader2 className="h-3 w-3 animate-spin" /> Importing
                                 </Badge>
                               ) : (
                                 <Button
@@ -332,7 +275,6 @@ export const HomePage = () => {
                   </ScrollArea>
                 </TabsContent>
                 
-                {/* Search Gutenberg */}
                 <TabsContent value="search">
                   <div className="space-y-4">
                     <div className="flex gap-2">
@@ -357,16 +299,16 @@ export const HomePage = () => {
                                 <h4 className="font-medium text-sm text-foreground line-clamp-1">{result.title}</h4>
                                 <p className="text-xs text-muted-foreground">{result.author}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  Downloads: {result.download_count.toLocaleString()}
+                                  {result.download_count.toLocaleString()} downloads
                                 </p>
                               </div>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleImportGutenberg(result)}
-                                disabled={!!importingBooks[`gutenberg-${result.gutenberg_id}`]}
+                                disabled={importingBooks.has(`gutenberg-${result.gutenberg_id}`)}
                               >
-                                {importingBooks[`gutenberg-${result.gutenberg_id}`] ? (
+                                {importingBooks.has(`gutenberg-${result.gutenberg_id}`) ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
                                   <Download className="h-4 w-4" />
@@ -377,7 +319,7 @@ export const HomePage = () => {
                         ))}
                         {searchResults.length === 0 && searchQuery && !searching && (
                           <p className="text-center text-muted-foreground py-8">
-                            No results found. Try a different search term.
+                            No results found.
                           </p>
                         )}
                       </div>
@@ -385,7 +327,6 @@ export const HomePage = () => {
                   </div>
                 </TabsContent>
                 
-                {/* Upload */}
                 <TabsContent value="upload">
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
@@ -414,9 +355,6 @@ export const HomePage = () => {
                         onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                         data-testid="upload-file"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Upload a plain text file from Project Gutenberg or other public domain source
-                      </p>
                     </div>
                     <Button
                       className="w-full"
@@ -429,7 +367,7 @@ export const HomePage = () => {
                       ) : (
                         <Upload className="h-4 w-4 mr-2" />
                       )}
-                      Upload and Process
+                      Upload Book
                     </Button>
                   </div>
                 </TabsContent>
@@ -438,87 +376,22 @@ export const HomePage = () => {
           </Dialog>
         </div>
 
-        {/* Importing Books Section with Progress */}
+        {/* Importing Section */}
         {importingBooksList.length > 0 && (
-          <section className="mb-8" data-testid="importing-section">
+          <section className="mb-8">
             <div className="flex items-center gap-2 mb-4">
               <Loader2 className="h-5 w-5 text-primary animate-spin" />
               <h2 className="text-xl font-serif text-foreground">Importing...</h2>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {importingBooksList.map((book) => {
-                const importProgress = importingBooks[book.id] || {
-                  progress: book.import_progress || 0,
-                  processedSentences: book.processed_sentences || 0,
-                  totalSentences: book.total_sentences_estimate || 0,
-                  currentChapter: book.current_chapter || 0,
-                  totalChapters: book.total_chapters_found || 0
-                };
-                
-                return (
-                  <Card key={book.id} className="border-border">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h4 className="font-medium text-foreground">{book.title}</h4>
-                          <p className="text-sm text-muted-foreground">{book.author}</p>
-                        </div>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                              data-testid={`cancel-import-${book.id}`}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Cancel Import?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will stop the import process. You can restart it later.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Continue Importing</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleCancelImport(book.id)}>
-                                Cancel Import
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                      
-                      {/* Progress Bar */}
-                      <div className="space-y-2">
-                        <Progress value={importProgress.progress} className="h-2" />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>
-                            {importProgress.totalSentences > 0 
-                              ? `${importProgress.processedSentences.toLocaleString()} / ${importProgress.totalSentences.toLocaleString()} sentences`
-                              : 'Preparing...'}
-                          </span>
-                          <span>{Math.round(importProgress.progress)}%</span>
-                        </div>
-                        {importProgress.totalChapters > 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            Chapter {importProgress.currentChapter} of {importProgress.totalChapters}
-                          </p>
-                        )}
-                      </div>
-                      
-                      {importProgress.error && (
-                        <div className="mt-2 flex items-center gap-1 text-xs text-warning">
-                          <AlertCircle className="h-3 w-3" />
-                          <span>{importProgress.error}</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {importingBooksList.map((book) => (
+                <Card key={book.id} className="border-border animate-pulse">
+                  <CardContent className="p-4 text-center">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-primary" />
+                    <p className="text-sm font-medium text-foreground line-clamp-1">{book.title}</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </section>
         )}
@@ -534,7 +407,7 @@ export const HomePage = () => {
           </div>
         )}
 
-        {/* Continue Reading Section */}
+        {/* Continue Reading */}
         {booksInProgress.length > 0 && (
           <section className="mb-12" data-testid="continue-reading-section">
             <div className="flex items-center gap-2 mb-6">
@@ -543,17 +416,13 @@ export const HomePage = () => {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
               {booksInProgress.map(book => (
-                <BookCard
-                  key={book.id}
-                  book={book}
-                  progress={getBookProgress(book.id)}
-                />
+                <BookCard key={book.id} book={book} progress={getBookProgress(book.id)} />
               ))}
             </div>
           </section>
         )}
 
-        {/* All Books Section */}
+        {/* Book Library */}
         {otherBooks.length > 0 && (
           <section data-testid="book-library-section">
             <div className="flex items-center gap-2 mb-6">
@@ -570,13 +439,13 @@ export const HomePage = () => {
           </section>
         )}
 
-        {/* Quick Stats */}
+        {/* Stats */}
         {completedBooks.length > 0 && (
           <div className="mt-12 p-6 bg-card rounded-xl border border-border">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
               <div>
                 <p className="text-3xl font-serif text-primary">{completedBooks.length}</p>
-                <p className="text-sm text-muted-foreground">Books Available</p>
+                <p className="text-sm text-muted-foreground">Books</p>
               </div>
               <div>
                 <p className="text-3xl font-serif text-primary">{booksInProgress.length}</p>
@@ -586,7 +455,7 @@ export const HomePage = () => {
                 <p className="text-3xl font-serif text-primary">
                   {completedBooks.reduce((sum, b) => sum + b.total_chapters, 0)}
                 </p>
-                <p className="text-sm text-muted-foreground">Total Chapters</p>
+                <p className="text-sm text-muted-foreground">Chapters</p>
               </div>
               <div>
                 <p className="text-3xl font-serif text-primary">
