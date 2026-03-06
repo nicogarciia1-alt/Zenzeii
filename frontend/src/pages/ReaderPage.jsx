@@ -79,6 +79,7 @@ export const ReaderPage = () => {
   const [fontSize, setFontSize] = useState(readerSettings.fontSize || 'lg');
   const [lineHeight, setLineHeight] = useState(readerSettings.lineHeight || 'relaxed');
   const [scriptMode, setScriptMode] = useState(readerSettings.scriptMode || 'kanji');
+  const [secondaryLayer, setSecondaryLayer] = useState(readerSettings.secondaryLayer || 'none');
 
   useEffect(() => {
     fetchBookData();
@@ -316,6 +317,49 @@ export const ReaderPage = () => {
     return sentence.translation_status !== 'completed' && scriptMode !== 'english';
   };
 
+  const getSecondaryText = (sentence) => {
+    if (secondaryLayer === 'none') return null;
+    
+    switch (secondaryLayer) {
+      case 'furigana':
+        // Show hiragana as furigana reading
+        return sentence.japanese_hiragana || null;
+      case 'kanji':
+        // Show kanji version
+        return sentence.japanese_kanji || null;
+      case 'english':
+        // Show English translation
+        return sentence.english || null;
+      default:
+        return null;
+    }
+  };
+
+  // Determine available secondary layer options based on main script mode
+  const getSecondaryOptions = () => {
+    const options = [{ value: 'none', label: 'None' }];
+    
+    if (scriptMode === 'kanji') {
+      options.push({ value: 'furigana', label: 'Furigana (Hiragana)' });
+      options.push({ value: 'english', label: 'English' });
+    } else if (scriptMode === 'hiragana') {
+      options.push({ value: 'kanji', label: 'Kanji' });
+      options.push({ value: 'english', label: 'English' });
+    } else if (scriptMode === 'katakana') {
+      options.push({ value: 'kanji', label: 'Kanji' });
+      options.push({ value: 'furigana', label: 'Furigana (Hiragana)' });
+      options.push({ value: 'english', label: 'English' });
+    } else if (scriptMode === 'romaji') {
+      options.push({ value: 'kanji', label: 'Kanji' });
+      options.push({ value: 'english', label: 'English' });
+    } else if (scriptMode === 'english') {
+      options.push({ value: 'kanji', label: 'Japanese (Kanji)' });
+      options.push({ value: 'furigana', label: 'Japanese (Hiragana)' });
+    }
+    
+    return options;
+  };
+
   const fontSizeClass = {
     sm: 'text-base',
     base: 'text-lg',
@@ -459,6 +503,26 @@ export const ReaderPage = () => {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <span className="text-xs text-muted-foreground">Secondary Layer</span>
+                    <p className="text-xs text-muted-foreground/70">Show additional text below each sentence</p>
+                    <Select value={secondaryLayer} onValueChange={(v) => {
+                      setSecondaryLayer(v);
+                      updateReaderSettings({ secondaryLayer: v });
+                    }}>
+                      <SelectTrigger data-testid="secondary-layer-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getSecondaryOptions().map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </SheetContent>
             </Sheet>
@@ -489,62 +553,88 @@ export const ReaderPage = () => {
             {currentChapter?.title_jp && currentChapter?.title && (
               <p className="text-lg text-muted-foreground mt-1">{currentChapter.title}</p>
             )}
-            <p className="text-xs text-muted-foreground mt-2">
-              {sentences.length} / {totalSentences} sentences
+            <div className="flex items-center justify-center gap-4 mt-3 text-xs text-muted-foreground">
+              <span>Page {Math.ceil(sentences.length / SENTENCES_PER_PAGE)} of {Math.ceil(totalSentences / SENTENCES_PER_PAGE)}</span>
+              <span>•</span>
+              <span>{sentences.length} / {totalSentences} sentences</span>
               {scriptMode !== 'english' && translatedCount < totalSentences && (
-                <span className="ml-2 text-primary">• Translating...</span>
+                <>
+                  <span>•</span>
+                  <span className="text-primary animate-pulse">Translating {translatedCount}/{totalSentences}</span>
+                </>
               )}
-            </p>
+            </div>
           </div>
 
           {/* Sentences */}
-          <div className={`reader-content space-y-4 ${fontSizeClass} ${lineHeightClass}`} data-testid="reader-content">
-            {sentences.map((sentence) => (
-              <div
-                key={sentence.id}
-                className={`reader-sentence group relative ${isTranslationPending(sentence) ? 'opacity-70' : ''}`}
-                data-testid={`sentence-${sentence.id}`}
-              >
-                <div className={`${scriptMode !== 'english' && scriptMode !== 'romaji' ? 'jp-text' : ''}`}>
-                  {scriptMode !== 'english' ? (
-                    <span
-                      className="reader-word cursor-pointer hover:bg-primary/10 hover:text-primary rounded px-0.5 transition-colors"
-                      onClick={(e) => {
-                        const text = getSentenceText(sentence);
-                        const selection = window.getSelection();
-                        if (selection && selection.toString().trim()) {
-                          handleWordClick(selection.toString().trim(), e);
-                        } else {
-                          const firstWord = text.split(/[\s、。！？]/)[0];
-                          if (firstWord) handleWordClick(firstWord, e);
-                        }
+          <div className={`reader-content space-y-6 ${fontSizeClass} ${lineHeightClass}`} data-testid="reader-content">
+            {sentences.map((sentence) => {
+              const secondaryText = getSecondaryText(sentence);
+              const showSecondary = secondaryLayer !== 'none' && secondaryText && sentence.translation_status === 'completed';
+              
+              return (
+                <div
+                  key={sentence.id}
+                  className={`reader-sentence group relative ${isTranslationPending(sentence) ? 'opacity-70' : ''}`}
+                  data-testid={`sentence-${sentence.id}`}
+                >
+                  {/* Main text */}
+                  <div className={`${scriptMode !== 'english' && scriptMode !== 'romaji' ? 'jp-text' : ''}`}>
+                    {scriptMode !== 'english' ? (
+                      <span
+                        className="reader-word cursor-pointer hover:bg-primary/10 hover:text-primary rounded px-0.5 transition-colors"
+                        onClick={(e) => {
+                          const text = getSentenceText(sentence);
+                          const selection = window.getSelection();
+                          if (selection && selection.toString().trim()) {
+                            handleWordClick(selection.toString().trim(), e);
+                          } else {
+                            const firstWord = text.split(/[\s、。！？]/)[0];
+                            if (firstWord) handleWordClick(firstWord, e);
+                          }
+                        }}
+                      >
+                        {getSentenceText(sentence)}
+                      </span>
+                    ) : (
+                      <span>{getSentenceText(sentence)}</span>
+                    )}
+                  </div>
+
+                  {/* Secondary layer - smaller, lighter text */}
+                  {showSecondary && (
+                    <div 
+                      className={`mt-1 text-muted-foreground/70 ${
+                        secondaryLayer === 'english' ? '' : 'jp-text'
+                      }`}
+                      style={{ 
+                        fontSize: '0.75em',
+                        lineHeight: '1.4'
                       }}
                     >
-                      {getSentenceText(sentence)}
-                    </span>
-                  ) : (
-                    <span>{getSentenceText(sentence)}</span>
+                      {secondaryText}
+                    </div>
                   )}
-                </div>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleBookmark(sentence.id);
-                  }}
-                  data-testid={`bookmark-btn-${sentence.id}`}
-                >
-                  {isBookmarked(sentence.id) ? (
-                    <BookmarkCheck className="h-4 w-4 text-primary" />
-                  ) : (
-                    <Bookmark className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            ))}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleBookmark(sentence.id);
+                    }}
+                    data-testid={`bookmark-btn-${sentence.id}`}
+                  >
+                    {isBookmarked(sentence.id) ? (
+                      <BookmarkCheck className="h-4 w-4 text-primary" />
+                    ) : (
+                      <Bookmark className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
             
             {hasMore && (
               <div ref={sentinelRef} className="py-8 text-center">
