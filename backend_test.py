@@ -351,6 +351,117 @@ class JapaneseReadingAPITester:
 
         return True
 
+    def test_book_import_functionality(self):
+        """Test new book import features with progress tracking and cancellation"""
+        print("\n📥 Testing Book Import System...")
+        
+        # Test available books list
+        success, available_response = self.run_test(
+            "Get Available Books List",
+            "GET",
+            "books/available/list",
+            200,
+            auth_required=False
+        )
+        
+        if not success or not available_response:
+            return False
+            
+        available_books = available_response if isinstance(available_response, list) else []
+        if len(available_books) == 0:
+            self.log_result("Available Books", False, "No available books found")
+            return False
+        
+        self.log_result("Available Books", True, f"Found {len(available_books)} predefined books")
+        
+        # Test Gutenberg search
+        success, search_response = self.run_test(
+            "Search Gutenberg Books",
+            "GET",
+            "books/search/gutenberg?query=alice",
+            200,
+            auth_required=False
+        )
+        
+        if success and search_response:
+            results = search_response if isinstance(search_response, list) else []
+            self.log_result("Gutenberg Search", True, f"Found {len(results)} search results")
+        
+        # Test starting import for alice-in-wonderland
+        alice_book = None
+        for book in available_books:
+            if 'alice' in book.get('book_key', '').lower():
+                alice_book = book
+                break
+        
+        if alice_book:
+            import_success, import_response = self.run_test(
+                "Start Book Import",
+                "POST",
+                "books/import",
+                200,
+                data={"book_key": alice_book['book_key']},
+                auth_required=False
+            )
+            
+            if import_success and import_response:
+                book_id = import_response.get('book_id')
+                if book_id:
+                    # Test import status endpoint
+                    import time
+                    time.sleep(2)  # Wait a moment for import to start
+                    
+                    status_success, status_response = self.run_test(
+                        "Get Import Status",
+                        "GET",
+                        f"books/{book_id}/status",
+                        200,
+                        auth_required=False
+                    )
+                    
+                    if status_success and status_response:
+                        # Verify status response contains expected fields
+                        required_fields = ['book_id', 'status', 'total_sentences', 'processed_sentences', 
+                                         'progress_percent', 'current_chapter', 'total_chapters']
+                        missing_fields = [field for field in required_fields if field not in status_response]
+                        
+                        if not missing_fields:
+                            self.log_result("Import Status Fields", True, 
+                                          f"Progress: {status_response.get('progress_percent', 0)}%, "
+                                          f"Status: {status_response.get('status', 'unknown')}")
+                        else:
+                            self.log_result("Import Status Fields", False, 
+                                          f"Missing fields: {missing_fields}")
+                    
+                    # Test cancel import functionality
+                    cancel_success, cancel_response = self.run_test(
+                        "Cancel Book Import",
+                        "POST",
+                        f"books/{book_id}/cancel",
+                        200,
+                        auth_required=False
+                    )
+                    
+                    if cancel_success:
+                        # Verify status changed to cancelled
+                        time.sleep(1)
+                        status_success, final_status = self.run_test(
+                            "Verify Import Cancelled",
+                            "GET",
+                            f"books/{book_id}/status", 
+                            200,
+                            auth_required=False
+                        )
+                        
+                        if status_success and final_status:
+                            if final_status.get('status') == 'cancelled':
+                                self.log_result("Import Cancellation", True, "Import successfully cancelled")
+                            else:
+                                self.log_result("Import Cancellation", False, 
+                                              f"Expected 'cancelled' status, got '{final_status.get('status')}'")
+        
+        return True
+
     def run_all_tests(self):
         """Run all tests in sequence"""
         print("🧪 Starting Japanese Reading App API Tests")
@@ -364,6 +475,7 @@ class JapaneseReadingAPITester:
             self.test_user_login,
             self.test_auth_me_endpoint,
             self.test_books_endpoints,
+            self.test_book_import_functionality,  # New import system tests
             self.test_dictionary_lookup,
             self.test_vocabulary_management,
             self.test_profile_and_stats
