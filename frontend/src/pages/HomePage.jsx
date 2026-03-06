@@ -49,7 +49,7 @@ export const HomePage = () => {
     fetchData();
   }, []);
 
-  // Poll for import status (imports are now fast, so this is brief)
+  // Poll for import/preparing status
   useEffect(() => {
     if (importingBooks.size === 0) return;
     
@@ -57,6 +57,7 @@ export const HomePage = () => {
       for (const bookId of importingBooks) {
         try {
           const res = await getBookStatus(bookId);
+          // Only remove from tracking when fully completed or failed
           if (res.data.status === 'completed' || res.data.status === 'failed') {
             setImportingBooks(prev => {
               const next = new Set(prev);
@@ -64,17 +65,20 @@ export const HomePage = () => {
               return next;
             });
             if (res.data.status === 'completed') {
-              toast.success('Book imported! Ready to read.');
+              toast.success('Book ready! Japanese translations prepared.');
             } else {
               toast.error('Import failed');
             }
+            fetchData();
+          } else {
+            // Refresh to update UI for "preparing" status
             fetchData();
           }
         } catch (e) {
           console.error('Status check failed:', e);
         }
       }
-    }, 2000);
+    }, 3000);  // Check every 3 seconds
     
     return () => clearInterval(interval);
   }, [importingBooks]);
@@ -90,10 +94,10 @@ export const HomePage = () => {
       setProgress(progressRes.data);
       setAvailableBooks(availableRes.data);
       
-      // Check for importing books
+      // Check for importing or preparing books
       const importing = new Set();
       for (const book of booksRes.data) {
-        if (book.import_status === 'importing') {
+        if (book.import_status === 'importing' || book.import_status === 'preparing') {
           importing.add(book.id);
         }
       }
@@ -182,6 +186,7 @@ export const HomePage = () => {
 
   const completedBooks = books.filter(b => b.import_status === 'completed');
   const importingBooksList = books.filter(b => b.import_status === 'importing');
+  const preparingBooksList = books.filter(b => b.import_status === 'preparing');
   const booksInProgress = completedBooks.filter(book => getBookProgress(book.id));
   const otherBooks = completedBooks.filter(book => !getBookProgress(book.id));
 
@@ -376,18 +381,44 @@ export const HomePage = () => {
           </Dialog>
         </div>
 
+        {/* Preparing Section - Books being translated */}
+        {preparingBooksList.length > 0 && (
+          <section className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Loader2 className="h-5 w-5 text-primary animate-spin" />
+              <h2 className="text-xl font-serif text-foreground">Preparing books...</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Translating initial chapters. This takes about 30-60 seconds.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {preparingBooksList.map((book) => (
+                <Card key={book.id} className="border-border bg-card/50">
+                  <CardContent className="p-4 text-center">
+                    <div className="relative mb-3">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground line-clamp-1">{book.title}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Translating Japanese...</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Importing Section */}
         {importingBooksList.length > 0 && (
           <section className="mb-8">
             <div className="flex items-center gap-2 mb-4">
               <Loader2 className="h-5 w-5 text-primary animate-spin" />
-              <h2 className="text-xl font-serif text-foreground">Importing...</h2>
+              <h2 className="text-xl font-serif text-foreground">Downloading...</h2>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {importingBooksList.map((book) => (
                 <Card key={book.id} className="border-border animate-pulse">
                   <CardContent className="p-4 text-center">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-primary" />
+                    <Download className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-sm font-medium text-foreground line-clamp-1">{book.title}</p>
                   </CardContent>
                 </Card>
@@ -397,7 +428,7 @@ export const HomePage = () => {
         )}
 
         {/* Empty State */}
-        {completedBooks.length === 0 && importingBooksList.length === 0 && (
+        {completedBooks.length === 0 && importingBooksList.length === 0 && preparingBooksList.length === 0 && (
           <div className="text-center py-16 space-y-4" data-testid="empty-library">
             <Library className="h-16 w-16 mx-auto text-muted-foreground" />
             <h2 className="text-xl font-serif text-foreground">Your library is empty</h2>

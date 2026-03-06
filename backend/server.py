@@ -26,11 +26,8 @@ from services.book_import import (
     get_book_cover
 )
 from services.translation import (
-    trigger_chapter_translation,
-    ensure_sentences_translated,
     translate_title_simple,
-    translate_author_simple,
-    BATCH_SIZE
+    translate_author_simple
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -357,12 +354,11 @@ async def get_chapter(chapter_id: str):
 async def get_sentences(
     chapter_id: str,
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
-    background_tasks: BackgroundTasks = None
+    limit: int = Query(50, ge=1, le=200)
 ):
     """
-    Get sentences with pagination.
-    Automatically triggers background translation for untranslated sentences.
+    Get sentences with pagination - INSTANT response from cache/database.
+    Flags chapter for background worker to translate if needed.
     """
     sentences = await db.sentences.find(
         {"chapter_id": chapter_id},
@@ -372,10 +368,12 @@ async def get_sentences(
     # Transform for frontend
     result = [transform_sentence_for_frontend(s) for s in sentences]
     
-    # Trigger background translation for this chapter
-    if background_tasks and sentences:
-        start_pos = sentences[0].get("order", 1)
-        background_tasks.add_task(trigger_chapter_translation, db, chapter_id, start_pos)
+    # Flag this chapter for translation by the background worker (non-blocking)
+    # The worker will pick this up and translate pending sentences
+    await db.chapters.update_one(
+        {"id": chapter_id},
+        {"$set": {"translation_requested": True, "last_accessed": datetime.now(timezone.utc).isoformat()}}
+    )
     
     return result
 
@@ -397,12 +395,9 @@ async def get_sentences_count(chapter_id: str):
 # ========================
 
 @api_router.post("/translate/trigger")
-async def trigger_translation(
-    request: TranslateRequest,
-    background_tasks: BackgroundTasks
-):
+async def trigger_translation(request: TranslateRequest):
     """
-    Manually trigger translation for a chapter from a specific position.
+    Flag a chapter for translation by the background worker.
     Called by frontend when user starts reading.
     """
     # Verify chapter exists
@@ -410,12 +405,10 @@ async def trigger_translation(
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
     
-    # Trigger background translation
-    background_tasks.add_task(
-        trigger_chapter_translation, 
-        db, 
-        request.chapter_id, 
-        request.start_position
+    # Flag for worker to pick up
+    await db.chapters.update_one(
+        {"id": request.chapter_id},
+        {"$set": {"translation_requested": True, "last_accessed": datetime.now(timezone.utc).isoformat()}}
     )
     
     return {"message": "Translation triggered", "chapter_id": request.chapter_id}
@@ -509,17 +502,18 @@ async def process_book_import_fast(
     difficulty: str
 ):
     """
-    Fast book import - only stores English text.
-    Japanese translations will be generated on-demand when users read.
+    Fast book import - downloads text and queues for background translation.
+    The background worker handles all translation work.
+    Book shows as "preparing" until initial translations are done by worker.
     """
     try:
-        logger.info(f"Starting fast import for {book_id}")
+        logger.info(f"Starting book import for {book_id}")
         
-        # Create initial book record
+        # Create initial book record with "preparing" status
         book_doc = {
             "id": book_id,
             "title": title,
-            "title_jp": title,  # Will be translated later or on first load
+            "title_jp": title,
             "author": author,
             "author_jp": author,
             "cover_image": get_book_cover(book_id),
@@ -528,7 +522,7 @@ async def process_book_import_fast(
             "total_chapters": 0,
             "difficulty": difficulty,
             "genre": genre,
-            "import_status": "importing",
+            "import_status": "preparing",  # Worker will change to "completed"
             "sentences_count": 0,
             "gutenberg_id": gutenberg_id,
             "created_at": datetime.now(timezone.utc).isoformat()
@@ -569,7 +563,7 @@ async def process_book_import_fast(
                 "book_id": book_id,
                 "chapter_number": chapter['chapter_number'],
                 "title": chapter['title'],
-                "title_jp": chapter['title'],  # Translated on-demand
+                "title_jp": chapter['title'],
                 "sentences_count": len(sentences)
             }
             await db.chapters.update_one(
@@ -587,7 +581,6 @@ async def process_book_import_fast(
                     "book_id": book_id,
                     "order": i + 1,
                     "english": sentence_text,
-                    # Japanese fields start as NULL
                     "kanji_text": None,
                     "hiragana_text": None,
                     "katakana_text": None,
@@ -598,12 +591,11 @@ async def process_book_import_fast(
             
             # Bulk insert sentences
             if sentence_docs:
-                # Delete existing sentences for this chapter first
                 await db.sentences.delete_many({"chapter_id": chapter['id']})
                 await db.sentences.insert_many(sentence_docs)
                 total_sentences += len(sentence_docs)
         
-        # Try to translate title and author (non-blocking)
+        # Try to translate title and author (quick, non-blocking)
         try:
             title_jp = await asyncio.wait_for(translate_title_simple(title), timeout=15)
             author_jp = await asyncio.wait_for(translate_author_simple(author), timeout=15)
@@ -611,11 +603,10 @@ async def process_book_import_fast(
             title_jp = title
             author_jp = author
         
-        # Update book as completed
+        # Update book metadata - leave as "preparing" for worker to handle
         await db.books.update_one(
             {"id": book_id},
             {"$set": {
-                "import_status": "completed",
                 "title_jp": title_jp,
                 "author_jp": author_jp,
                 "total_chapters": len(chapters),
@@ -623,7 +614,8 @@ async def process_book_import_fast(
             }}
         )
         
-        logger.info(f"Fast import complete: {book_id} - {len(chapters)} chapters, {total_sentences} sentences")
+        logger.info(f"Book text imported: {book_id} - {len(chapters)} chapters, {total_sentences} sentences")
+        logger.info(f"Background worker will handle translations")
         
     except Exception as e:
         logger.error(f"Import failed for {book_id}: {e}", exc_info=True)
