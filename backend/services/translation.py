@@ -84,6 +84,11 @@ async def translate_sentences_batch(
                 
             except Exception as e:
                 last_error = str(e)
+                # Check for budget exceeded error
+                if "budget" in last_error.lower() or "exceeded" in last_error.lower():
+                    logger.error(f"API budget exceeded: {last_error}")
+                    # Return placeholders immediately, no retry
+                    return create_placeholder_translations(batch)
                 logger.warning(f"Translation error (attempt {attempt + 1}/{MAX_RETRIES}): {last_error}")
             
             # Wait before retry (except on last attempt)
