@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="15" skipped="0" tests="22" time="596.503" timestamp="2026-03-06T10:05:55.329330+00:00" hostname="agent-env-beaaaeff-ec17-4d72-9555-08e2e65762c1"><testcase classname="backend.tests.test_lazy_translation.TestAPIHealth" name="test_api_root_returns_200" time="0.250" /><testcase classname="backend.tests.test_lazy_translation.TestBookImportInstant" name="test_alice_book_exists_with_english_only" time="0.198" /><testcase classname="backend.tests.test_lazy_translation.TestBookImportInstant" name="test_book_has_japanese_title_and_author" time="0.083" /><testcase classname="backend.tests.test_lazy_translation.TestBookImportInstant" name="test_available_books_list" time="0.081" /><testcase classname="backend.tests.test_lazy_translation.TestChapterSentences" name="test_chapter_exists" time="0.110" /><testcase classname="backend.tests.test_lazy_translation.TestChapterSentences" name="test_sentences_count_endpoint" time="0.115" /><testcase classname="backend.tests.test_lazy_translation.TestChapterSentences" name="test_get_sentences_returns_correct_structure" time="0.087" /><testcase classname="backend.tests.test_lazy_translation.TestTranslationLazyLoading" name="test_english_fallback_for_pending_translations" time="60.133"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:129: in test_english_fallback_for_pending_translations
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestTranslationLazyLoading" name="test_translation_status_values" time="60.172"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:155: in test_translation_status_values
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestTranslationLazyLoading" name="test_translated_sentences_have_all_script_modes" time="60.134"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:166: in test_translated_sentences_have_all_script_modes
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestTranslationTrigger" name="test_trigger_translation_endpoint" time="60.181"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:194: in test_trigger_translation_endpoint
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestTranslationTrigger" name="test_trigger_translation_invalid_chapter" time="60.149"><failure message="assert 502 == 404&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:207: in test_trigger_translation_invalid_chapter
+    assert response.status_code == 404
+E   assert 502 == 404
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestTranslationCaching" name="test_cached_translations_persist" time="60.154"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:217: in test_cached_translations_persist
+    assert response1.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestChapterNavigation" name="test_get_all_chapters" time="60.159"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:239: in test_get_all_chapters
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestChapterNavigation" name="test_chapter_has_required_fields" time="60.156"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:254: in test_chapter_has_required_fields
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestUserAuthentication" name="test_user_registration" time="60.157"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:279: in test_user_registration
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestUserAuthentication" name="test_user_login_with_wrong_credentials" time="53.352"><failure message="assert 502 == 401&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:297: in test_user_login_with_wrong_credentials
+    assert response.status_code == 401
+E   assert 502 == 401
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestDictionaryLookup" name="test_lookup_japanese_word" time="0.249"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:306: in test_lookup_japanese_word
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestDictionaryLookup" name="test_lookup_english_word" time="0.076"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:316: in test_lookup_english_word
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestSpecificSentenceTranslation" name="test_translate_specific_sentences" time="0.076"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:326: in test_translate_specific_sentences
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestPagination" name="test_sentences_pagination" time="0.081"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:350: in test_sentences_pagination
+    assert response1.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_lazy_translation.TestBookStatus" name="test_book_status_endpoint" time="0.080"><failure message="assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_lazy_translation.py:371: in test_book_status_endpoint
+    assert response.status_code == 200
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase></testsuite></testsuites>
