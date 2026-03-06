@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Library, Plus, Search, Upload, Loader2, Check, Download, Zap } from 'lucide-react';
+import { Clock, Library, Plus, Search, Upload, Loader2, Check, Download, Zap, X, Star, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,6 +15,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import Layout from '@/components/layout/Layout';
 import BookCard from '@/components/books/BookCard';
 import { 
@@ -24,7 +31,9 @@ import {
   importBook, 
   searchGutenberg,
   uploadBook,
-  getBookStatus
+  getBookStatus,
+  cancelImport,
+  prioritizeImport
 } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -38,6 +47,7 @@ export const HomePage = () => {
   const [searching, setSearching] = useState(false);
   const [importingBooks, setImportingBooks] = useState(new Set());
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [selectedSource, setSelectedSource] = useState('all');
   
   // Upload state
   const [uploadFile, setUploadFile] = useState(null);
@@ -122,20 +132,48 @@ export const HomePage = () => {
     }
   };
 
-  const handleImportPredefined = async (bookKey) => {
+  const handleImportPredefined = async (bookKey, source = 'gutenberg') => {
     setImportingBooks(prev => new Set(prev).add(bookKey));
     try {
-      await importBook({ book_key: bookKey });
-      toast.success('Importing... This only takes a few seconds!');
+      await importBook({ book_key: bookKey, source });
+      toast.success('Importing... Translations will be prepared in background.');
       const availableRes = await getAvailableBooks();
       setAvailableBooks(availableRes.data);
     } catch (error) {
-      toast.error('Failed to start import');
+      if (error.response?.status === 429) {
+        toast.error('Import limit reached (3 books/hour). Please try again later.');
+      } else {
+        toast.error('Failed to start import');
+      }
       setImportingBooks(prev => {
         const next = new Set(prev);
         next.delete(bookKey);
         return next;
       });
+    }
+  };
+
+  const handleCancelImport = async (bookId) => {
+    try {
+      await cancelImport(bookId);
+      toast.success('Import cancelled');
+      setImportingBooks(prev => {
+        const next = new Set(prev);
+        next.delete(bookId);
+        return next;
+      });
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to cancel import');
+    }
+  };
+
+  const handlePrioritize = async (bookId) => {
+    try {
+      await prioritizeImport(bookId);
+      toast.success('Book prioritized for faster translation');
+    } catch (error) {
+      toast.error('Failed to prioritize');
     }
   };
 
@@ -228,29 +266,52 @@ export const HomePage = () => {
                   </Badge>
                 </DialogTitle>
                 <DialogDescription>
-                  Books import instantly. Japanese translations are generated as you read.
+                  Choose a source and import books. Translations are generated in the background.
                 </DialogDescription>
               </DialogHeader>
               
               <Tabs defaultValue="predefined" className="mt-4">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="predefined">Quick Import</TabsTrigger>
-                  <TabsTrigger value="search">Search Gutenberg</TabsTrigger>
+                  <TabsTrigger value="search">Search</TabsTrigger>
                   <TabsTrigger value="upload">Upload File</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="predefined">
-                  <ScrollArea className="h-[400px] pr-4">
+                  {/* Source selector */}
+                  <div className="flex items-center gap-2 mb-4">
+                    <Globe className="h-4 w-4 text-muted-foreground" />
+                    <Select value={selectedSource} onValueChange={setSelectedSource}>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Select source" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Sources</SelectItem>
+                        <SelectItem value="gutenberg">Project Gutenberg (English)</SelectItem>
+                        <SelectItem value="aozora">青空文庫 Aozora (Japanese)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <ScrollArea className="h-[350px] pr-4">
                     <div className="space-y-3">
-                      {availableBooks.map((book) => (
-                        <Card key={book.book_key} className="border-border">
+                      {availableBooks
+                        .filter(book => selectedSource === 'all' || book.source === selectedSource)
+                        .map((book) => (
+                        <Card key={book.book_key} className={`border-border ${book.language === 'ja' ? 'border-l-4 border-l-orange-500' : 'border-l-4 border-l-blue-500'}`}>
                           <CardContent className="p-4 flex items-center justify-between">
-                            <div>
-                              <h4 className="font-medium text-foreground">{book.title}</h4>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium text-foreground">{book.title}</h4>
+                                {book.title_en && <span className="text-xs text-muted-foreground">({book.title_en})</span>}
+                              </div>
                               <p className="text-sm text-muted-foreground">{book.author}</p>
                               <div className="flex gap-2 mt-1">
                                 <Badge variant="secondary" className="text-xs">{book.genre}</Badge>
                                 <Badge variant="outline" className="text-xs">{book.difficulty}</Badge>
+                                <Badge variant={book.language === 'ja' ? 'default' : 'secondary'} className="text-xs">
+                                  {book.language === 'ja' ? '日本語' : 'English'}
+                                </Badge>
                               </div>
                             </div>
                             <div>
@@ -265,7 +326,7 @@ export const HomePage = () => {
                               ) : (
                                 <Button
                                   size="sm"
-                                  onClick={() => handleImportPredefined(book.book_key)}
+                                  onClick={() => handleImportPredefined(book.book_key, book.source)}
                                   data-testid={`import-btn-${book.book_key}`}
                                 >
                                   <Download className="h-4 w-4 mr-1" />
@@ -393,13 +454,34 @@ export const HomePage = () => {
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {preparingBooksList.map((book) => (
-                <Card key={book.id} className="border-border bg-card/50">
+                <Card key={book.id} className="border-border bg-card/50 relative group">
                   <CardContent className="p-4 text-center">
                     <div className="relative mb-3">
                       <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
                     </div>
                     <p className="text-sm font-medium text-foreground line-clamp-1">{book.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Translating Japanese...</p>
+                    <p className="text-xs text-muted-foreground mt-1">Translating...</p>
+                    
+                    {/* Action buttons */}
+                    <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => handlePrioritize(book.id)}
+                      >
+                        <Star className="h-3 w-3 mr-1" />
+                        Prioritize
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="text-xs px-2"
+                        onClick={() => handleCancelImport(book.id)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -416,10 +498,20 @@ export const HomePage = () => {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {importingBooksList.map((book) => (
-                <Card key={book.id} className="border-border animate-pulse">
+                <Card key={book.id} className="border-border animate-pulse relative group">
                   <CardContent className="p-4 text-center">
                     <Download className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-sm font-medium text-foreground line-clamp-1">{book.title}</p>
+                    
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="mt-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleCancelImport(book.id)}
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Cancel
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -470,29 +562,23 @@ export const HomePage = () => {
           </section>
         )}
 
-        {/* Stats */}
+        {/* Stats - Real metrics only */}
         {completedBooks.length > 0 && (
           <div className="mt-12 p-6 bg-card rounded-xl border border-border">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            <div className="grid grid-cols-3 gap-6 text-center">
               <div>
                 <p className="text-3xl font-serif text-primary">{completedBooks.length}</p>
-                <p className="text-sm text-muted-foreground">Books</p>
+                <p className="text-sm text-muted-foreground">Books in Library</p>
               </div>
               <div>
                 <p className="text-3xl font-serif text-primary">{booksInProgress.length}</p>
-                <p className="text-sm text-muted-foreground">In Progress</p>
+                <p className="text-sm text-muted-foreground">Currently Reading</p>
               </div>
               <div>
                 <p className="text-3xl font-serif text-primary">
                   {completedBooks.reduce((sum, b) => sum + b.total_chapters, 0)}
                 </p>
-                <p className="text-sm text-muted-foreground">Chapters</p>
-              </div>
-              <div>
-                <p className="text-3xl font-serif text-primary">
-                  {completedBooks.reduce((sum, b) => sum + (b.sentences_count || 0), 0).toLocaleString()}
-                </p>
-                <p className="text-sm text-muted-foreground">Sentences</p>
+                <p className="text-sm text-muted-foreground">Total Chapters</p>
               </div>
             </div>
           </div>

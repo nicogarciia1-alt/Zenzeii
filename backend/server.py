@@ -18,17 +18,28 @@ import asyncio
 # Import services
 from services.book_import import (
     fetch_gutenberg_text,
+    fetch_aozora_text,
     clean_gutenberg_text,
+    clean_aozora_text,
     split_into_chapters,
     split_into_sentences,
     search_gutenberg,
+    search_aozora,
     GUTENBERG_BOOKS,
-    get_book_cover
+    AOZORA_BOOKS,
+    BOOK_SOURCES,
+    get_book_cover,
+    detect_language,
+    get_all_available_books
 )
 from services.translation import (
     translate_title_simple,
     translate_author_simple
 )
+
+# Import rate limiting constants
+IMPORT_LIMIT_PER_HOUR = 3
+IMPORT_LIMIT_WINDOW_HOURS = 1
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -204,6 +215,8 @@ class ImportBookRequest(BaseModel):
     gutenberg_id: Optional[int] = None
     title: Optional[str] = None
     author: Optional[str] = None
+    source: Optional[str] = "gutenberg"  # gutenberg, aozora, etc.
+    priority: Optional[int] = 0  # Higher = more priority
 
 class GutenbergSearchResult(BaseModel):
     gutenberg_id: int
@@ -211,6 +224,15 @@ class GutenbergSearchResult(BaseModel):
     author: str
     languages: List[str]
     download_count: int
+
+class CancelImportRequest(BaseModel):
+    book_id: str
+
+class PrioritizeImportRequest(BaseModel):
+    book_id: str
+
+class BookSourcesResponse(BaseModel):
+    sources: List[Dict[str, str]]
 
 class TranslateRequest(BaseModel):
     chapter_id: str
@@ -326,6 +348,75 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 # BOOKS ENDPOINTS
 # ========================
 
+# Note: Specific routes must come BEFORE parameterized routes
+
+@api_router.get("/books/sources")
+async def get_book_sources():
+    """Get all available book sources"""
+    sources = []
+    for key, info in BOOK_SOURCES.items():
+        sources.append({
+            "id": key,
+            "name": info["name"],
+            "description": info["description"],
+            "language": info["language"]
+        })
+    return {"sources": sources}
+
+@api_router.get("/books/available/list")
+async def get_available_books(source: Optional[str] = None):
+    """Get all available books, optionally filtered by source"""
+    available = []
+    
+    # Gutenberg books (English)
+    if source is None or source == "gutenberg":
+        for key, info in GUTENBERG_BOOKS.items():
+            existing = await db.books.find_one({"id": key})
+            available.append({
+                "book_key": key,
+                "title": info["title"],
+                "author": info["author"],
+                "gutenberg_id": info.get("gutenberg_id"),
+                "genre": info["genre"],
+                "difficulty": info["difficulty"],
+                "source": "gutenberg",
+                "language": "en",
+                "is_imported": existing is not None,
+                "import_status": existing.get("import_status", "not_started") if existing else "not_started"
+            })
+    
+    # Aozora books (Japanese)
+    if source is None or source == "aozora":
+        for key, info in AOZORA_BOOKS.items():
+            existing = await db.books.find_one({"id": key})
+            available.append({
+                "book_key": key,
+                "title": info["title"],
+                "title_en": info.get("title_en"),
+                "author": info["author"],
+                "author_en": info.get("author_en"),
+                "aozora_id": info.get("aozora_id"),
+                "genre": info["genre"],
+                "difficulty": info["difficulty"],
+                "source": "aozora",
+                "language": "ja",
+                "is_imported": existing is not None,
+                "import_status": existing.get("import_status", "not_started") if existing else "not_started"
+            })
+    
+    return available
+
+@api_router.get("/books/search/gutenberg", response_model=List[GutenbergSearchResult])
+async def search_gutenberg_books(query: str = Query(..., min_length=2)):
+    results = await search_gutenberg(query)
+    return results
+
+@api_router.get("/books/search/aozora")
+async def search_aozora_books(query: str = Query(..., min_length=1)):
+    """Search Aozora Bunko books"""
+    results = await search_aozora(query)
+    return results
+
 @api_router.get("/books", response_model=List[BookResponse])
 async def get_books():
     books = await db.books.find({}, {"_id": 0}).to_list(100)
@@ -416,16 +507,27 @@ async def trigger_translation(request: TranslateRequest):
 @api_router.post("/translate/sentences")
 async def translate_specific_sentences(sentence_ids: List[str]):
     """
-    Request immediate translation for specific sentences.
-    Used when user is about to view sentences that aren't translated yet.
+    Request translation for specific sentences.
+    Flags chapters for background worker.
     """
     if len(sentence_ids) > 50:
         raise HTTPException(status_code=400, detail="Max 50 sentences per request")
     
-    # Get translations (from cache or generate new)
-    await ensure_sentences_translated(db, sentence_ids)
+    # Get chapter IDs for these sentences
+    sentence_docs = await db.sentences.find(
+        {"id": {"$in": sentence_ids}},
+        {"_id": 0, "chapter_id": 1}
+    ).to_list(len(sentence_ids))
     
-    # Return updated sentences
+    # Flag chapters for translation by worker
+    chapter_ids = set(s["chapter_id"] for s in sentence_docs)
+    for cid in chapter_ids:
+        await db.chapters.update_one(
+            {"id": cid},
+            {"$set": {"translation_requested": True}}
+        )
+    
+    # Return current state
     sentences = await db.sentences.find(
         {"id": {"$in": sentence_ids}},
         {"_id": 0}
@@ -434,82 +536,157 @@ async def translate_specific_sentences(sentence_ids: List[str]):
     return [transform_sentence_for_frontend(s) for s in sentences]
 
 # ========================
-# BOOK IMPORT - INSTANT (English only)
+# BOOK IMPORT - Multi-source support
 # ========================
 
-@api_router.get("/books/available/list")
-async def get_available_books():
-    available = []
-    for key, info in GUTENBERG_BOOKS.items():
-        existing = await db.books.find_one({"id": key})
-        available.append({
-            "book_key": key,
-            "title": info["title"],
-            "author": info["author"],
-            "gutenberg_id": info["gutenberg_id"],
-            "genre": info["genre"],
-            "difficulty": info["difficulty"],
-            "is_imported": existing is not None,
-            "import_status": existing.get("import_status", "not_started") if existing else "not_started"
-        })
-    return available
+async def check_import_limit(user_id: str) -> bool:
+    """Check if user has exceeded hourly import limit"""
+    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=IMPORT_LIMIT_WINDOW_HOURS)).isoformat()
+    recent_imports = await db.import_history.count_documents({
+        "user_id": user_id,
+        "timestamp": {"$gte": one_hour_ago}
+    })
+    return recent_imports < IMPORT_LIMIT_PER_HOUR
 
-@api_router.get("/books/search/gutenberg", response_model=List[GutenbergSearchResult])
-async def search_gutenberg_books(query: str = Query(..., min_length=2)):
-    results = await search_gutenberg(query)
-    return results
+async def record_import(user_id: str, book_id: str):
+    """Record an import for rate limiting"""
+    await db.import_history.insert_one({
+        "user_id": user_id,
+        "book_id": book_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
 
 @api_router.post("/books/import")
-async def import_book(request: ImportBookRequest, background_tasks: BackgroundTasks):
+async def import_book(
+    request: ImportBookRequest, 
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
+):
     """
-    Import a book from Project Gutenberg.
-    INSTANT: Only stores English text. Translations happen on-demand when reading.
+    Import a book from various sources.
+    Enforces rate limit of 3 books per hour per user.
     """
-    if request.book_key and request.book_key in GUTENBERG_BOOKS:
-        book_info = GUTENBERG_BOOKS[request.book_key]
-        book_id = request.book_key
-        gutenberg_id = book_info["gutenberg_id"]
-        title = book_info["title"]
-        author = book_info["author"]
-        genre = book_info.get("genre", "literature")
-        difficulty = book_info.get("difficulty", "intermediate")
-    elif request.gutenberg_id:
-        book_id = f"gutenberg-{request.gutenberg_id}"
-        gutenberg_id = request.gutenberg_id
-        title = request.title or f"Book {request.gutenberg_id}"
-        author = request.author or "Unknown"
-        genre = "literature"
-        difficulty = "intermediate"
+    # Check import limit
+    if not await check_import_limit(current_user["id"]):
+        raise HTTPException(
+            status_code=429, 
+            detail="You have reached the hourly import limit (3 books). Please try again later."
+        )
+    
+    source = request.source or "gutenberg"
+    
+    if source == "gutenberg":
+        if request.book_key and request.book_key in GUTENBERG_BOOKS:
+            book_info = GUTENBERG_BOOKS[request.book_key]
+            book_id = request.book_key
+            gutenberg_id = book_info["gutenberg_id"]
+            title = book_info["title"]
+            author = book_info["author"]
+            genre = book_info.get("genre", "literature")
+            difficulty = book_info.get("difficulty", "intermediate")
+            language = "en"
+        elif request.gutenberg_id:
+            book_id = f"gutenberg-{request.gutenberg_id}"
+            gutenberg_id = request.gutenberg_id
+            title = request.title or f"Book {request.gutenberg_id}"
+            author = request.author or "Unknown"
+            genre = "literature"
+            difficulty = "intermediate"
+            language = "en"
+        else:
+            raise HTTPException(status_code=400, detail="Must provide book_key or gutenberg_id")
+        
+        existing = await db.books.find_one({"id": book_id})
+        if existing and existing.get("import_status") == "completed":
+            return {"message": "Book already imported", "book_id": book_id, "status": "completed"}
+        
+        await record_import(current_user["id"], book_id)
+        background_tasks.add_task(
+            process_book_import_gutenberg, 
+            book_id, gutenberg_id, title, author, genre, difficulty, language,
+            request.priority or 0
+        )
+        
+    elif source == "aozora":
+        if request.book_key and request.book_key in AOZORA_BOOKS:
+            book_info = AOZORA_BOOKS[request.book_key]
+            book_id = request.book_key
+            aozora_id = book_info["aozora_id"]
+            card_no = book_info["card_no"]
+            title = book_info["title"]
+            author = book_info["author"]
+            genre = book_info.get("genre", "literature")
+            difficulty = book_info.get("difficulty", "intermediate")
+            language = "ja"
+        else:
+            raise HTTPException(status_code=400, detail="Must provide valid book_key for Aozora")
+        
+        existing = await db.books.find_one({"id": book_id})
+        if existing and existing.get("import_status") == "completed":
+            return {"message": "Book already imported", "book_id": book_id, "status": "completed"}
+        
+        await record_import(current_user["id"], book_id)
+        background_tasks.add_task(
+            process_book_import_aozora, 
+            book_id, aozora_id, card_no, title, author, genre, difficulty, language,
+            request.priority or 0
+        )
     else:
-        raise HTTPException(status_code=400, detail="Must provide book_key or gutenberg_id")
-    
-    existing = await db.books.find_one({"id": book_id})
-    if existing and existing.get("import_status") == "completed":
-        return {"message": "Book already imported", "book_id": book_id, "status": "completed"}
-    
-    # Start import in background
-    background_tasks.add_task(process_book_import_fast, book_id, gutenberg_id, title, author, genre, difficulty)
+        raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
     
     return {"message": "Book import started", "book_id": book_id, "status": "importing"}
 
+@api_router.post("/books/cancel")
+async def cancel_import(request: CancelImportRequest, current_user: dict = Depends(get_current_user)):
+    """Cancel a book import and clean up partial data"""
+    book = await db.books.find_one({"id": request.book_id})
+    
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    if book.get("import_status") == "completed":
+        raise HTTPException(status_code=400, detail="Cannot cancel a completed import")
+    
+    await db.books.update_one({"id": request.book_id}, {"$set": {"import_status": "cancelled"}})
+    await db.chapters.delete_many({"book_id": request.book_id})
+    await db.sentences.delete_many({"book_id": request.book_id})
+    await db.books.delete_one({"id": request.book_id})
+    
+    return {"message": "Import cancelled", "book_id": request.book_id}
 
-async def process_book_import_fast(
+@api_router.post("/books/prioritize")
+async def prioritize_import(request: PrioritizeImportRequest, current_user: dict = Depends(get_current_user)):
+    """Prioritize a book in the translation queue"""
+    book = await db.books.find_one({"id": request.book_id})
+    
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    if book.get("import_status") == "completed":
+        raise HTTPException(status_code=400, detail="Book is already completed")
+    
+    await db.books.update_one(
+        {"id": request.book_id},
+        {"$set": {"priority": 100, "prioritized_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Book prioritized", "book_id": request.book_id}
+
+
+async def process_book_import_gutenberg(
     book_id: str, 
     gutenberg_id: int, 
     title: str, 
     author: str,
     genre: str,
-    difficulty: str
+    difficulty: str,
+    language: str = "en",
+    priority: int = 0
 ):
-    """
-    Fast book import - downloads text and queues for background translation.
-    The background worker handles all translation work.
-    Book shows as "preparing" until initial translations are done by worker.
-    """
+    """Import book from Project Gutenberg (English source)"""
     try:
-        logger.info(f"Starting book import for {book_id}")
+        logger.info(f"Starting Gutenberg import for {book_id}")
         
-        # Create initial book record with "preparing" status
         book_doc = {
             "id": book_id,
             "title": title,
@@ -518,23 +695,20 @@ async def process_book_import_fast(
             "author_jp": author,
             "cover_image": get_book_cover(book_id),
             "description": f"A classic work by {author}",
-            "description_jp": "",
             "total_chapters": 0,
             "difficulty": difficulty,
             "genre": genre,
-            "import_status": "preparing",  # Worker will change to "completed"
+            "import_status": "preparing",
             "sentences_count": 0,
+            "source": "gutenberg",
+            "book_language": language,  # Source language
             "gutenberg_id": gutenberg_id,
+            "priority": priority,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         
-        await db.books.update_one(
-            {"id": book_id},
-            {"$set": book_doc},
-            upsert=True
-        )
+        await db.books.update_one({"id": book_id}, {"$set": book_doc}, upsert=True)
         
-        # Fetch book text
         raw_text = await fetch_gutenberg_text(gutenberg_id)
         if not raw_text:
             await db.books.update_one(
@@ -543,21 +717,17 @@ async def process_book_import_fast(
             )
             return
         
-        # Clean and split
         clean_text = clean_gutenberg_text(raw_text)
         chapters = split_into_chapters(clean_text, book_id)
         
         logger.info(f"Found {len(chapters)} chapters")
         
-        # Process each chapter
         total_sentences = 0
-        
         for chapter in chapters:
             sentences = split_into_sentences(chapter['content'])
             if not sentences:
                 continue
             
-            # Create chapter
             chapter_doc = {
                 "id": chapter['id'],
                 "book_id": book_id,
@@ -566,13 +736,9 @@ async def process_book_import_fast(
                 "title_jp": chapter['title'],
                 "sentences_count": len(sentences)
             }
-            await db.chapters.update_one(
-                {"id": chapter['id']},
-                {"$set": chapter_doc},
-                upsert=True
-            )
+            await db.chapters.update_one({"id": chapter['id']}, {"$set": chapter_doc}, upsert=True)
             
-            # Create sentences with ONLY English text
+            # For English books: store English as primary, Japanese fields are null
             sentence_docs = []
             for i, sentence_text in enumerate(sentences):
                 sentence_docs.append({
@@ -586,24 +752,21 @@ async def process_book_import_fast(
                     "katakana_text": None,
                     "romaji_text": None,
                     "translation_status": "pending",
-                    "words": []
+                    "source_language": "en"
                 })
             
-            # Bulk insert sentences
             if sentence_docs:
                 await db.sentences.delete_many({"chapter_id": chapter['id']})
                 await db.sentences.insert_many(sentence_docs)
                 total_sentences += len(sentence_docs)
         
-        # Try to translate title and author (quick, non-blocking)
         try:
             title_jp = await asyncio.wait_for(translate_title_simple(title), timeout=15)
             author_jp = await asyncio.wait_for(translate_author_simple(author), timeout=15)
-        except:
+        except Exception:
             title_jp = title
             author_jp = author
         
-        # Update book metadata - leave as "preparing" for worker to handle
         await db.books.update_one(
             {"id": book_id},
             {"$set": {
@@ -614,11 +777,124 @@ async def process_book_import_fast(
             }}
         )
         
-        logger.info(f"Book text imported: {book_id} - {len(chapters)} chapters, {total_sentences} sentences")
-        logger.info(f"Background worker will handle translations")
+        logger.info(f"Gutenberg import complete: {book_id} - {len(chapters)} chapters, {total_sentences} sentences")
         
     except Exception as e:
         logger.error(f"Import failed for {book_id}: {e}", exc_info=True)
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {"import_status": "failed", "error": str(e)}}
+        )
+
+
+async def process_book_import_aozora(
+    book_id: str, 
+    aozora_id: str,
+    card_no: str,
+    title: str, 
+    author: str,
+    genre: str,
+    difficulty: str,
+    language: str = "ja",
+    priority: int = 0
+):
+    """Import book from Aozora Bunko (Japanese source)"""
+    try:
+        logger.info(f"Starting Aozora import for {book_id}")
+        
+        # Get English title/author from book info
+        book_info = AOZORA_BOOKS.get(book_id, {})
+        title_en = book_info.get("title_en", title)
+        author_en = book_info.get("author_en", author)
+        
+        book_doc = {
+            "id": book_id,
+            "title": title,  # Japanese title
+            "title_jp": title,
+            "title_en": title_en,
+            "author": author,  # Japanese author
+            "author_jp": author,
+            "author_en": author_en,
+            "cover_image": get_book_cover(book_id),
+            "description": f"{author}による作品",
+            "total_chapters": 0,
+            "difficulty": difficulty,
+            "genre": genre,
+            "import_status": "preparing",
+            "sentences_count": 0,
+            "source": "aozora",
+            "book_language": language,  # Source language is Japanese
+            "aozora_id": aozora_id,
+            "priority": priority,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.books.update_one({"id": book_id}, {"$set": book_doc}, upsert=True)
+        
+        raw_text = await fetch_aozora_text(aozora_id, card_no)
+        if not raw_text:
+            await db.books.update_one(
+                {"id": book_id},
+                {"$set": {"import_status": "failed", "error": "Could not fetch from Aozora Bunko"}}
+            )
+            return
+        
+        clean_text = clean_aozora_text(raw_text)
+        chapters = split_into_chapters(clean_text, book_id)
+        
+        logger.info(f"Found {len(chapters)} chapters")
+        
+        total_sentences = 0
+        for chapter in chapters:
+            sentences = split_into_sentences(chapter['content'])
+            if not sentences:
+                continue
+            
+            chapter_doc = {
+                "id": chapter['id'],
+                "book_id": book_id,
+                "chapter_number": chapter['chapter_number'],
+                "title": chapter['title'],
+                "title_jp": chapter['title'],
+                "sentences_count": len(sentences)
+            }
+            await db.chapters.update_one({"id": chapter['id']}, {"$set": chapter_doc}, upsert=True)
+            
+            # For Japanese books: Japanese is primary, English needs translation
+            sentence_docs = []
+            for i, sentence_text in enumerate(sentences):
+                sentence_docs.append({
+                    "id": f"{chapter['id']}-s{i+1}",
+                    "chapter_id": chapter['id'],
+                    "book_id": book_id,
+                    "order": i + 1,
+                    "japanese_original": sentence_text,  # Japanese is the source
+                    "kanji_text": sentence_text,
+                    "hiragana_text": None,  # Will be generated locally
+                    "katakana_text": None,
+                    "romaji_text": None,
+                    "english": None,  # Needs translation
+                    "translation_status": "pending",
+                    "source_language": "ja"
+                })
+            
+            if sentence_docs:
+                await db.sentences.delete_many({"chapter_id": chapter['id']})
+                await db.sentences.insert_many(sentence_docs)
+                total_sentences += len(sentence_docs)
+        
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {
+                "total_chapters": len(chapters),
+                "sentences_count": total_sentences
+            }}
+        )
+        
+        logger.info(f"Aozora import complete: {book_id} - {len(chapters)} chapters, {total_sentences} sentences")
+        
+    except Exception as e:
+        logger.error(f"Aozora import failed for {book_id}: {e}", exc_info=True)
         await db.books.update_one(
             {"id": book_id},
             {"$set": {"import_status": "failed", "error": str(e)}}

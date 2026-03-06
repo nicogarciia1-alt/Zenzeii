@@ -14,10 +14,15 @@ export const getSentencesCount = (chapterId) =>
 export const deleteBook = (bookId) => axios.delete(`${API}/books/${bookId}`);
 export const getBookStatus = (bookId) => axios.get(`${API}/books/${bookId}/status`);
 
-// Book Import API - Now instant!
-export const getAvailableBooks = () => axios.get(`${API}/books/available/list`);
+// Book Sources and Import API
+export const getBookSources = () => axios.get(`${API}/books/sources`);
+export const getAvailableBooks = (source = null) => 
+  axios.get(`${API}/books/available/list`, { params: source ? { source } : {} });
 export const searchGutenberg = (query) => axios.get(`${API}/books/search/gutenberg`, { params: { query } });
+export const searchAozora = (query) => axios.get(`${API}/books/search/aozora`, { params: { query } });
 export const importBook = (data) => axios.post(`${API}/books/import`, data);
+export const cancelImport = (bookId) => axios.post(`${API}/books/cancel`, { book_id: bookId });
+export const prioritizeImport = (bookId) => axios.post(`${API}/books/prioritize`, { book_id: bookId });
 export const uploadBook = (file, title, author) => {
   const formData = new FormData();
   formData.append('file', file);
