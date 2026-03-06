@@ -279,21 +279,44 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 # ========================
 
 def transform_sentence_for_frontend(sentence: dict) -> dict:
-    """Transform database sentence to frontend format with fallbacks"""
+    """
+    Transform database sentence to frontend format with fallbacks.
+    Handles both English-source and Japanese-source books.
+    """
+    source_lang = sentence.get("source_language", "en")
     english = sentence.get("english", "")
-    return {
-        "id": sentence.get("id"),
-        "chapter_id": sentence.get("chapter_id"),
-        "order": sentence.get("order", 0),
-        "english": english,
-        # Use Japanese translations or fallback to English
-        "japanese_kanji": sentence.get("kanji_text") or english,
-        "japanese_hiragana": sentence.get("hiragana_text") or "",
-        "japanese_katakana": sentence.get("katakana_text") or "",
-        "japanese_romaji": sentence.get("romaji_text") or english.lower(),
-        "translation_status": sentence.get("translation_status", "pending"),
-        "words": sentence.get("words", [])
-    }
+    kanji = sentence.get("kanji_text", "")
+    
+    if source_lang == "ja":
+        # Japanese source: kanji is primary, English may be missing
+        return {
+            "id": sentence.get("id"),
+            "chapter_id": sentence.get("chapter_id"),
+            "order": sentence.get("order", 0),
+            "english": english or "(English translation pending)",
+            "japanese_kanji": kanji,  # This is the original text
+            "japanese_hiragana": sentence.get("hiragana_text") or "",
+            "japanese_katakana": sentence.get("katakana_text") or "",
+            "japanese_romaji": sentence.get("romaji_text") or "",
+            "translation_status": sentence.get("translation_status", "pending"),
+            "source_language": "ja",
+            "words": sentence.get("words", [])
+        }
+    else:
+        # English source: English is primary, Japanese may be pending
+        return {
+            "id": sentence.get("id"),
+            "chapter_id": sentence.get("chapter_id"),
+            "order": sentence.get("order", 0),
+            "english": english,
+            "japanese_kanji": kanji or english,  # Fallback to English if no translation
+            "japanese_hiragana": sentence.get("hiragana_text") or "",
+            "japanese_katakana": sentence.get("katakana_text") or "",
+            "japanese_romaji": sentence.get("romaji_text") or english.lower() if english else "",
+            "translation_status": sentence.get("translation_status", "pending"),
+            "source_language": "en",
+            "words": sentence.get("words", [])
+        }
 
 # ========================
 # AUTH ENDPOINTS
@@ -940,17 +963,18 @@ async def process_book_import_aozora(
                 await db.sentences.insert_many(sentence_docs)
                 total_sentences += len(sentence_docs)
         
-        # Mark as preparing for translation worker
+        # Japanese books are IMMEDIATELY readable - mark as completed
+        # English translation will happen in background but book is usable now
         await db.books.update_one(
             {"id": book_id},
             {"$set": {
-                "import_status": "preparing",
+                "import_status": "completed",  # Japanese text is ready to read
                 "total_chapters": len(chapters),
                 "sentences_count": total_sentences
             }}
         )
         
-        logger.info(f"Aozora import complete: {book_id} - {len(chapters)} chapters, {total_sentences} sentences")
+        logger.info(f"Aozora import complete: {book_id} - {len(chapters)} chapters, {total_sentences} sentences (ready to read)")
         
     except Exception as e:
         logger.error(f"Aozora import failed for {book_id}: {e}", exc_info=True)
