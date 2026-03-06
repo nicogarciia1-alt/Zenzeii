@@ -89,11 +89,11 @@ GUTENBERG_BOOKS = {
     }
 }
 
-# Aozora Bunko popular books
+# Aozora Bunko popular books - with correct file paths
 AOZORA_BOOKS = {
     "kokoro": {
         "aozora_id": "000148",
-        "card_no": "773",
+        "file_path": "files/773_14560.html",
         "title": "こころ",
         "title_en": "Kokoro",
         "author": "夏目漱石",
@@ -105,7 +105,7 @@ AOZORA_BOOKS = {
     },
     "rashomon": {
         "aozora_id": "000879",
-        "card_no": "127",
+        "file_path": "files/127_15260.html",
         "title": "羅生門",
         "title_en": "Rashomon",
         "author": "芥川龍之介",
@@ -117,7 +117,7 @@ AOZORA_BOOKS = {
     },
     "botchan": {
         "aozora_id": "000148",
-        "card_no": "752",
+        "file_path": "files/752_14964.html",
         "title": "坊っちゃん",
         "title_en": "Botchan",
         "author": "夏目漱石",
@@ -129,7 +129,7 @@ AOZORA_BOOKS = {
     },
     "ningen-shikkaku": {
         "aozora_id": "000035",
-        "card_no": "301",
+        "file_path": "files/301_14912.html",
         "title": "人間失格",
         "title_en": "No Longer Human",
         "author": "太宰治",
@@ -141,7 +141,7 @@ AOZORA_BOOKS = {
     },
     "snow-country": {
         "aozora_id": "001475",
-        "card_no": "2342",
+        "file_path": "files/52435_49812.html",
         "title": "雪国",
         "title_en": "Snow Country",
         "author": "川端康成",
@@ -203,63 +203,92 @@ async def fetch_gutenberg_text(gutenberg_id: int) -> Optional[str]:
     return None
 
 
-async def fetch_aozora_text(aozora_id: str, card_no: str) -> Optional[str]:
-    """Fetch book text from Aozora Bunko"""
-    # Aozora Bunko URL format: https://www.aozora.gr.jp/cards/{author_id}/files/{card_no}_{ruby_type}.html
-    urls = [
-        f"https://www.aozora.gr.jp/cards/{aozora_id}/files/{card_no}_ruby_24939.zip",
-        f"https://www.aozora.gr.jp/cards/{aozora_id}/files/{card_no}_ruby.html",
-    ]
+async def fetch_aozora_text(aozora_id: str, file_path: str) -> Optional[str]:
+    """
+    Fetch book text from Aozora Bunko.
+    Aozora uses HTML files with Japanese text in Shift-JIS encoding.
+    """
+    base_url = f"https://www.aozora.gr.jp/cards/{aozora_id}/{file_path}"
+    
+    logger.info(f"Fetching Aozora text from: {base_url}")
     
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-        for url in urls:
+        try:
+            response = await client.get(base_url)
+            
+            if response.status_code != 200:
+                logger.warning(f"Aozora returned status {response.status_code} for {base_url}")
+                return None
+            
+            # Aozora files are Shift-JIS encoded - must decode from bytes
             try:
-                response = await client.get(url)
-                if response.status_code == 200:
-                    # For HTML files, extract text content
-                    if url.endswith('.html'):
-                        text = extract_aozora_text_from_html(response.text)
-                    else:
-                        text = response.text
-                    
-                    if text:
-                        logger.info(f"Successfully fetched Aozora book from {url}")
-                        return text
-            except Exception as e:
-                logger.warning(f"Failed to fetch from Aozora {url}: {e}")
-                continue
-    
-    # If direct fetch fails, try the card page and extract text links
-    try:
-        card_url = f"https://www.aozora.gr.jp/cards/{aozora_id}/card{card_no}.html"
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            response = await client.get(card_url)
-            if response.status_code == 200:
-                # Parse card page to find text file link
-                text_link = extract_text_link_from_aozora_card(response.text, aozora_id)
-                if text_link:
-                    text_response = await client.get(text_link)
-                    if text_response.status_code == 200:
-                        return extract_aozora_text_from_html(text_response.text)
-    except Exception as e:
-        logger.warning(f"Failed to fetch Aozora card page: {e}")
-    
-    logger.error(f"Failed to fetch Aozora book {aozora_id}/{card_no}")
-    return None
+                text = response.content.decode('shift-jis')
+            except UnicodeDecodeError:
+                try:
+                    text = response.content.decode('euc-jp')
+                except UnicodeDecodeError:
+                    text = response.content.decode('utf-8', errors='replace')
+            
+            # Extract main text from HTML
+            extracted = extract_aozora_text_from_html(text)
+            
+            if extracted and len(extracted) > 100:
+                logger.info(f"Successfully fetched Aozora book: {len(extracted)} characters")
+                return extracted
+            else:
+                logger.warning(f"Extracted text too short or empty from {base_url}")
+                return None
+                
+        except httpx.TimeoutException:
+            logger.error(f"Timeout fetching from Aozora: {base_url}")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching Aozora text: {e}")
+            return None
 
 
 def extract_aozora_text_from_html(html: str) -> Optional[str]:
-    """Extract plain text from Aozora Bunko HTML format"""
+    """
+    Extract plain text from Aozora Bunko HTML format.
+    Removes HTML tags, ruby annotations, and Aozora-specific markup.
+    """
     import re
     
-    # Remove HTML tags but keep the text
-    # Aozora uses special ruby notation for furigana
-    text = re.sub(r'<ruby>([^<]+)<rp>（</rp><rt>([^<]+)</rt><rp>）</rp></ruby>', r'\1', html)
-    text = re.sub(r'<[^>]+>', '', text)
-    text = re.sub(r'［＃[^］]+］', '', text)  # Remove Aozora annotations
-    text = re.sub(r'\s+', ' ', text).strip()
+    if not html:
+        return None
     
-    return text if len(text) > 100 else None
+    # Find the main text body - usually inside <div class="main_text">
+    main_text_match = re.search(r'<div class="main_text">(.*?)</div>', html, re.DOTALL)
+    if main_text_match:
+        html = main_text_match.group(1)
+    
+    # Remove ruby annotations but keep the base text
+    # <ruby><rb>漢字</rb><rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby> -> 漢字
+    html = re.sub(r'<ruby>.*?<rb>([^<]+)</rb>.*?</ruby>', r'\1', html, flags=re.DOTALL)
+    html = re.sub(r'<ruby>([^<]+)<rp>[（(]</rp><rt>[^<]+</rt><rp>[）)]</rp></ruby>', r'\1', html)
+    
+    # Remove Aozora-specific annotations in brackets
+    html = re.sub(r'［＃[^］]*］', '', html)
+    html = re.sub(r'《[^》]*》', '', html)  # Furigana in angle brackets
+    html = re.sub(r'｜', '', html)  # Ruby base markers
+    
+    # Remove all remaining HTML tags
+    html = re.sub(r'<br\s*/?>', '\n', html)
+    html = re.sub(r'<[^>]+>', '', html)
+    
+    # Clean up entities
+    html = html.replace('&nbsp;', ' ')
+    html = html.replace('&lt;', '<')
+    html = html.replace('&gt;', '>')
+    html = html.replace('&amp;', '&')
+    html = html.replace('&quot;', '"')
+    
+    # Clean up whitespace
+    text = re.sub(r'[ \t]+', ' ', html)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = text.strip()
+    
+    return text if len(text) > 50 else None
 
 
 def extract_text_link_from_aozora_card(html: str, author_id: str) -> Optional[str]:

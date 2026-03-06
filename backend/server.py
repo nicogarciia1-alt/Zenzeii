@@ -28,6 +28,7 @@ from services.book_import import (
     GUTENBERG_BOOKS,
     AOZORA_BOOKS,
     BOOK_SOURCES,
+    BOOK_COVERS,
     get_book_cover,
     detect_language,
     get_all_available_books
@@ -355,6 +356,31 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 
 # Note: Specific routes must come BEFORE parameterized routes
 
+def safe_book_response(book: dict) -> dict:
+    """
+    Safely transform a book document to response format.
+    Handles missing fields gracefully to prevent crashes.
+    """
+    return {
+        "id": book.get("id", ""),
+        "title": book.get("title", "Unknown"),
+        "title_jp": book.get("title_jp"),
+        "title_en": book.get("title_en"),
+        "author": book.get("author", "Unknown"),
+        "author_jp": book.get("author_jp"),
+        "author_en": book.get("author_en"),
+        "cover_image": book.get("cover_image", BOOK_COVERS.get("default")),
+        "description": book.get("description", ""),
+        "description_jp": book.get("description_jp", ""),
+        "total_chapters": book.get("total_chapters", 0),
+        "difficulty": book.get("difficulty", "intermediate"),
+        "genre": book.get("genre", "literature"),
+        "import_status": book.get("import_status", "completed"),
+        "sentences_count": book.get("sentences_count", 0),
+        "book_language": book.get("book_language", "en"),
+        "source": book.get("source", "gutenberg")
+    }
+
 @api_router.get("/books/sources")
 async def get_book_sources():
     """Get all available book sources"""
@@ -422,17 +448,32 @@ async def search_aozora_books(query: str = Query(..., min_length=1)):
     results = await search_aozora(query)
     return results
 
-@api_router.get("/books", response_model=List[BookResponse])
+@api_router.get("/books")
 async def get_books():
-    books = await db.books.find({}, {"_id": 0}).to_list(100)
-    return books
+    """
+    Get all imported books.
+    Uses safe transform to handle missing fields and prevent crashes.
+    Only returns books with valid import_status (excludes 'failed').
+    """
+    try:
+        books = await db.books.find(
+            {"import_status": {"$nin": ["failed", "cancelled"]}},
+            {"_id": 0}
+        ).to_list(100)
+        
+        # Safe transform each book
+        return [safe_book_response(b) for b in books]
+    except Exception as e:
+        logger.error(f"Error fetching books: {e}")
+        return []
 
-@api_router.get("/books/{book_id}", response_model=BookResponse)
+@api_router.get("/books/{book_id}")
 async def get_book(book_id: str):
+    """Get a single book by ID with safe transform"""
     book = await db.books.find_one({"id": book_id}, {"_id": 0})
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    return book
+    return safe_book_response(book)
 
 @api_router.get("/books/{book_id}/chapters", response_model=List[ChapterResponse])
 async def get_chapters(book_id: str):
@@ -617,7 +658,7 @@ async def import_book(
             book_info = AOZORA_BOOKS[request.book_key]
             book_id = request.book_key
             aozora_id = book_info["aozora_id"]
-            card_no = book_info["card_no"]
+            file_path = book_info["file_path"]
             title = book_info["title"]
             author = book_info["author"]
             genre = book_info.get("genre", "literature")
@@ -633,7 +674,7 @@ async def import_book(
         await record_import(current_user["id"], book_id)
         background_tasks.add_task(
             process_book_import_aozora, 
-            book_id, aozora_id, card_no, title, author, genre, difficulty, language,
+            book_id, aozora_id, file_path, title, author, genre, difficulty, language,
             request.priority or 0
         )
     else:
@@ -795,7 +836,7 @@ async def process_book_import_gutenberg(
 async def process_book_import_aozora(
     book_id: str, 
     aozora_id: str,
-    card_no: str,
+    file_path: str,
     title: str, 
     author: str,
     genre: str,
@@ -822,10 +863,11 @@ async def process_book_import_aozora(
             "author_en": author_en,
             "cover_image": get_book_cover(book_id),
             "description": f"{author}による作品",
+            "description_jp": f"{title}は{author}による日本文学の名作です。",
             "total_chapters": 0,
             "difficulty": difficulty,
             "genre": genre,
-            "import_status": "preparing",
+            "import_status": "importing",
             "sentences_count": 0,
             "source": "aozora",
             "book_language": language,  # Source language is Japanese
@@ -836,8 +878,10 @@ async def process_book_import_aozora(
         
         await db.books.update_one({"id": book_id}, {"$set": book_doc}, upsert=True)
         
-        raw_text = await fetch_aozora_text(aozora_id, card_no)
+        # Fetch text using new file_path format
+        raw_text = await fetch_aozora_text(aozora_id, file_path)
         if not raw_text:
+            logger.error(f"Failed to fetch Aozora text for {book_id}")
             await db.books.update_one(
                 {"id": book_id},
                 {"$set": {"import_status": "failed", "error": "Could not fetch from Aozora Bunko"}}
@@ -845,9 +889,17 @@ async def process_book_import_aozora(
             return
         
         clean_text = clean_aozora_text(raw_text)
+        if not clean_text or len(clean_text) < 100:
+            logger.error(f"Aozora text too short or empty for {book_id}")
+            await db.books.update_one(
+                {"id": book_id},
+                {"$set": {"import_status": "failed", "error": "Text extraction failed"}}
+            )
+            return
+        
         chapters = split_into_chapters(clean_text, book_id)
         
-        logger.info(f"Found {len(chapters)} chapters")
+        logger.info(f"Found {len(chapters)} chapters for {book_id}")
         
         total_sentences = 0
         for chapter in chapters:
@@ -875,10 +927,10 @@ async def process_book_import_aozora(
                     "order": i + 1,
                     "japanese_original": sentence_text,  # Japanese is the source
                     "kanji_text": sentence_text,
-                    "hiragana_text": None,  # Will be generated locally
+                    "english": None,  # Needs translation
+                    "hiragana_text": None,  # Will be generated locally by worker
                     "katakana_text": None,
                     "romaji_text": None,
-                    "english": None,  # Needs translation
                     "translation_status": "pending",
                     "source_language": "ja"
                 })
@@ -888,9 +940,11 @@ async def process_book_import_aozora(
                 await db.sentences.insert_many(sentence_docs)
                 total_sentences += len(sentence_docs)
         
+        # Mark as preparing for translation worker
         await db.books.update_one(
             {"id": book_id},
             {"$set": {
+                "import_status": "preparing",
                 "total_chapters": len(chapters),
                 "sentences_count": total_sentences
             }}
