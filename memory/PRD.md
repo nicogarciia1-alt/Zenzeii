@@ -19,6 +19,10 @@
 - Import rate limit: 3 books/hour/user
 - Cancel import with cleanup
 - Prioritize import queue position
+- **Chapter Parsing:**
+  - Correctly skips Table of Contents entries
+  - Chapters numbered from 1
+  - Preserves original chapter titles (e.g., "Chapter I: Down the Rabbit-Hole")
 
 ### Translation Architecture
 - Background worker process (translation_worker.py)
@@ -28,6 +32,13 @@
 - Translation direction based on source language:
   - English books → Japanese (kanji, hiragana, katakana, romaji)
   - Japanese books → English
+
+### Reader Experience
+- **Full paragraph display** - Natural reading flow, not sentence fragments
+- **Original text priority** - Always shows readable content, translations in background
+- **Script toggle** - Switch between 漢字, ひらがな, カタカナ, Romaji, EN instantly
+- **Chapter navigation** - Previous/Next buttons, chapter dropdown selector
+- **Live translation status** - Shows "Translating X/Y" while processing
 
 ### Database Schema
 - `books`: id, title, title_jp, author, book_language, source, import_status
@@ -52,6 +63,12 @@ sudo supervisorctl restart backend
 cd /app/backend && nohup python translation_worker.py &
 ```
 
+## Bug Fixes (March 7, 2026)
+1. **Chapter Numbering Bug** - Fixed TOC entries being counted as chapters
+2. **Sentence Fragmentation** - Changed to paragraph-based splitting
+3. **Translation Worker** - Now runs as background process
+4. **Content Display** - Reader shows full chapter content with proper flow
+
 ## File Structure
 ```
 /app/
@@ -59,7 +76,7 @@ cd /app/backend && nohup python translation_worker.py &
 │   ├── server.py              # FastAPI endpoints
 │   ├── translation_worker.py  # Background translation
 │   ├── services/
-│   │   ├── book_import.py     # Multi-source import
+│   │   ├── book_import.py     # Multi-source import, chapter parsing
 │   │   └── translation.py     # AI translation + pykakasi
 └── frontend/
     ├── src/
@@ -68,3 +85,12 @@ cd /app/backend && nohup python translation_worker.py &
     │   │   └── ReaderPage.jsx # Reader with secondary layer
     │   └── lib/api.js         # API client functions
 ```
+
+## Upcoming Tasks
+- P1: Implement remaining book sources (Manga Toshokan Z, Shonen Jump+, Japan Foundation)
+- P1: Complete "Cancel Import" and "Prioritize Import" worker communication
+- P1: Update translation_worker.py for JA → EN translation direction
+- P2: Implement hourly import limit with persistent storage
+- P2: Dictionary popup word click functionality
+- P2: Vocabulary flashcard system
+- P2: User profile with statistics
