@@ -69,8 +69,11 @@ cd /app/backend && nohup python translation_worker.py &
 ## Bug Fixes (March 7, 2026)
 1. **Chapter Numbering Bug** - Fixed TOC entries being counted as chapters
 2. **Sentence Fragmentation** - Changed to paragraph-based splitting
-3. **Translation Worker** - Now runs as background process
+3. **Translation Worker** - Now runs as background process via lifespan context
 4. **Content Display** - Reader shows full chapter content with proper flow
+5. **Aozora HTML Extraction** - Fixed nested div extraction stopping at first close tag
+6. **Japanese Book Reader** - Fixed to show original Japanese text immediately
+7. **transform_sentence_for_frontend** - Fixed to use japanese_original field for JA source books
 
 ## File Structure
 ```
