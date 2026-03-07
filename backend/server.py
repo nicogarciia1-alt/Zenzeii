@@ -349,16 +349,21 @@ def transform_sentence_for_frontend(sentence: dict) -> dict:
     """
     source_lang = sentence.get("source_language", "en")
     english = sentence.get("english", "")
+    # For Japanese source books, japanese_original contains the actual text
+    # kanji_text may be empty or contain processing artifacts
     kanji = sentence.get("kanji_text", "")
+    japanese_original = sentence.get("japanese_original", "")
     
     if source_lang == "ja":
-        # Japanese source: kanji is primary, English may be missing
+        # Japanese source: japanese_original is the primary text
+        # Use it directly, falling back to kanji_text only if needed
+        primary_japanese = japanese_original or kanji
         return {
             "id": sentence.get("id"),
             "chapter_id": sentence.get("chapter_id"),
             "order": sentence.get("order", 0),
             "english": english or "(English translation pending)",
-            "japanese_kanji": kanji,  # This is the original text
+            "japanese_kanji": primary_japanese,  # This is the original text
             "japanese_hiragana": sentence.get("hiragana_text") or "",
             "japanese_katakana": sentence.get("katakana_text") or "",
             "japanese_romaji": sentence.get("romaji_text") or "",
@@ -1030,7 +1035,8 @@ async def process_book_import_aozora(
             )
             return
         
-        chapters = split_into_chapters(clean_text, book_id)
+        # Japanese books use 'ja' for chapter splitting patterns
+        chapters = split_into_chapters(clean_text, book_id, source_language='ja')
         
         logger.info(f"Found {len(chapters)} chapters for {book_id}")
         

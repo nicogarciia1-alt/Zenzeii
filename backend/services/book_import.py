@@ -257,38 +257,61 @@ def extract_aozora_text_from_html(html: str) -> Optional[str]:
     if not html:
         return None
     
-    # Find the main text body - usually inside <div class="main_text">
-    main_text_match = re.search(r'<div class="main_text">(.*?)</div>', html, re.DOTALL)
-    if main_text_match:
-        html = main_text_match.group(1)
+    # Find the main text body - look for <div class="main_text"> and extract until the bibliographic info
+    # The main_text div contains nested divs, so we can't use simple regex
+    start_marker = '<div class="main_text">'
+    end_markers = ['<div class="bibliographical_information">', '<div class="after_text">', '</body>']
+    
+    start_pos = html.find(start_marker)
+    if start_pos == -1:
+        # Try alternative: just get body content
+        body_match = re.search(r'<body[^>]*>(.*?)</body>', html, re.DOTALL | re.IGNORECASE)
+        if body_match:
+            html = body_match.group(1)
+    else:
+        # Find the end position
+        end_pos = len(html)
+        for marker in end_markers:
+            pos = html.find(marker, start_pos)
+            if pos != -1 and pos < end_pos:
+                end_pos = pos
+        
+        html = html[start_pos:end_pos]
     
     # Remove ruby annotations but keep the base text
-    # <ruby><rb>漢字</rb><rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby> -> 漢字
-    html = re.sub(r'<ruby>.*?<rb>([^<]+)</rb>.*?</ruby>', r'\1', html, flags=re.DOTALL)
+    # Pattern 1: <ruby><rb>漢字</rb><rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>
+    html = re.sub(r'<ruby><rb>([^<]+)</rb><rp>[（(]</rp><rt>[^<]+</rt><rp>[）)]</rp></ruby>', r'\1', html)
+    # Pattern 2: <ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>
     html = re.sub(r'<ruby>([^<]+)<rp>[（(]</rp><rt>[^<]+</rt><rp>[）)]</rp></ruby>', r'\1', html)
+    # Pattern 3: General ruby cleanup
+    html = re.sub(r'<ruby[^>]*>.*?<rb>([^<]+)</rb>.*?</ruby>', r'\1', html, flags=re.DOTALL)
+    html = re.sub(r'<ruby[^>]*>([^<]+)<rt>.*?</ruby>', r'\1', html, flags=re.DOTALL)
     
     # Remove Aozora-specific annotations in brackets
     html = re.sub(r'［＃[^］]*］', '', html)
     html = re.sub(r'《[^》]*》', '', html)  # Furigana in angle brackets
     html = re.sub(r'｜', '', html)  # Ruby base markers
     
-    # Remove all remaining HTML tags
-    html = re.sub(r'<br\s*/?>', '\n', html)
+    # Convert br tags to newlines
+    html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+    
+    # Remove all remaining HTML tags but preserve structure
     html = re.sub(r'<[^>]+>', '', html)
     
-    # Clean up entities
+    # Clean up HTML entities
     html = html.replace('&nbsp;', ' ')
     html = html.replace('&lt;', '<')
     html = html.replace('&gt;', '>')
     html = html.replace('&amp;', '&')
     html = html.replace('&quot;', '"')
+    html = html.replace('&#12288;', '　')  # Full-width space
     
-    # Clean up whitespace
+    # Clean up whitespace while preserving Japanese paragraph structure
     text = re.sub(r'[ \t]+', ' ', html)
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = text.strip()
     
-    return text if len(text) > 50 else None
+    return text if len(text) > 100 else None
 
 
 def extract_text_link_from_aozora_card(html: str, author_id: str) -> Optional[str]:
@@ -410,22 +433,34 @@ def clean_aozora_text(text: str) -> str:
     return cleaned.strip()
 
 
-def split_into_chapters(text: str, book_id: str) -> List[Dict]:
+def split_into_chapters(text: str, book_id: str, source_language: str = 'en') -> List[Dict]:
     """
     Split book text into chapters.
     Preserves chapter titles from the source text.
     Skips table of contents entries (short lines).
     """
-    # Patterns that detect chapter headers
+    # Patterns that detect chapter headers based on language
     # Group 1: chapter number, Group 2: optional subtitle
-    chapter_patterns = [
-        (r'^CHAPTER\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Chapter"),
-        (r'^Chapter\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Chapter"),
-        (r'^BOOK\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Book"),
-        (r'^Part\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Part"),
-        (r'^第([一二三四五六七八九十百千]+)章\s*(.*)$', "第"),  # Japanese
-        (r'^([一二三四五六七八九十]+)[、．.\s]+(.*)$', ""),    # Japanese numbered
-    ]
+    if source_language == 'ja':
+        # Japanese book patterns - more flexible for Japanese numbering
+        chapter_patterns = [
+            # Major sections: 上、中、下 (Part 1, 2, 3)
+            (r'^(上|中|下|序)[\s　]+(.+)$', ""),
+            # Japanese numbered chapters: 第一章、第二章
+            (r'^第([一二三四五六七八九十百千]+)章[\s　]*(.*)$', "第"),
+            # Simple Japanese numbers at start of line (一、二、三)
+            (r'^([一二三四五六七八九十]+)[\s　]*$', ""),
+            # Japanese numbers with content after
+            (r'^([一二三四五六七八九十]+)[\s、．.\s]+(.*)$', ""),
+        ]
+    else:
+        # English book patterns
+        chapter_patterns = [
+            (r'^CHAPTER\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Chapter"),
+            (r'^Chapter\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Chapter"),
+            (r'^BOOK\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Book"),
+            (r'^Part\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Part"),
+        ]
     
     lines = text.split('\n')
     chapters = []
