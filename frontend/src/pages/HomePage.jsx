@@ -119,6 +119,11 @@ export const HomePage = () => {
     }
   };
 
+  const handleBookDelete = (bookId) => {
+    // Remove the book from local state immediately
+    setBooks(prev => prev.filter(b => b.id !== bookId));
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -539,7 +544,7 @@ export const HomePage = () => {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
               {booksInProgress.map(book => (
-                <BookCard key={book.id} book={book} progress={getBookProgress(book.id)} />
+                <BookCard key={book.id} book={book} progress={getBookProgress(book.id)} onDelete={handleBookDelete} />
               ))}
             </div>
           </section>
@@ -556,7 +561,7 @@ export const HomePage = () => {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
               {otherBooks.map(book => (
-                <BookCard key={book.id} book={book} />
+                <BookCard key={book.id} book={book} onDelete={handleBookDelete} />
               ))}
             </div>
           </section>

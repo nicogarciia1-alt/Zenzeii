@@ -4,8 +4,11 @@ from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from contextlib import asynccontextmanager
 import os
 import logging
+import subprocess
+import signal
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
@@ -56,8 +59,53 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production'
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
-# Create the main app
-app = FastAPI(title="Japanese Reading App API")
+# Global variable to track worker process
+worker_process = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager to start/stop the translation worker.
+    The worker runs as a subprocess alongside the main server.
+    """
+    global worker_process
+    
+    # Startup: Launch translation worker
+    try:
+        worker_script = ROOT_DIR / 'translation_worker.py'
+        if worker_script.exists():
+            logger.info("Starting translation worker...")
+            worker_process = subprocess.Popen(
+                ['/root/.venv/bin/python', str(worker_script)],
+                cwd=str(ROOT_DIR),
+                stdout=open('/var/log/supervisor/worker.out.log', 'a'),
+                stderr=open('/var/log/supervisor/worker.err.log', 'a'),
+                start_new_session=True
+            )
+            logger.info(f"Translation worker started (PID: {worker_process.pid})")
+        else:
+            logger.warning(f"Translation worker script not found: {worker_script}")
+    except Exception as e:
+        logger.error(f"Failed to start translation worker: {e}")
+    
+    yield  # App is running
+    
+    # Shutdown: Stop translation worker
+    if worker_process:
+        try:
+            logger.info("Stopping translation worker...")
+            os.killpg(os.getpgid(worker_process.pid), signal.SIGTERM)
+            worker_process.wait(timeout=5)
+            logger.info("Translation worker stopped")
+        except Exception as e:
+            logger.warning(f"Error stopping worker: {e}")
+            try:
+                worker_process.kill()
+            except:
+                pass
+
+# Create the main app with lifespan
+app = FastAPI(title="Japanese Reading App API", lifespan=lifespan)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -1426,6 +1474,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Note: shutdown handled by lifespan context manager
