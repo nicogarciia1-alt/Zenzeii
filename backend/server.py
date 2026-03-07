@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, File, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -68,6 +69,18 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Global exception handler to prevent crashes
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error": str(exc)[:200]}
+    )
+
+# Translation availability flag
+TRANSLATION_ENABLED = bool(os.environ.get('EMERGENT_LLM_KEY'))
 
 # ========================
 # MODELS
@@ -225,11 +238,14 @@ class ImportBookRequest(BaseModel):
     priority: Optional[int] = 0  # Higher = more priority
 
 class GutenbergSearchResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     gutenberg_id: int
     title: str
     author: str
-    languages: List[str]
-    download_count: int
+    language: Optional[str] = "en"
+    languages: Optional[List[str]] = None
+    download_count: int = 0
+    source: Optional[str] = "gutenberg"
 
 class CancelImportRequest(BaseModel):
     book_id: str
@@ -374,6 +390,36 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(**current_user)
 
 # ========================
+# SYSTEM STATUS ENDPOINT
+# ========================
+
+@api_router.get("/status")
+async def get_system_status():
+    """System health check - shows translation availability and stats"""
+    try:
+        book_count = await db.books.count_documents({"import_status": "completed"})
+        sentence_count = await db.sentences.count_documents({})
+        translated_count = await db.sentences.count_documents({"translation_status": "completed"})
+        
+        return {
+            "status": "healthy",
+            "version": "1.0.0-beta",
+            "translation_enabled": TRANSLATION_ENABLED,
+            "database": "connected",
+            "stats": {
+                "books": book_count,
+                "sentences": sentence_count,
+                "translated": translated_count
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "error": str(e),
+            "translation_enabled": TRANSLATION_ENABLED
+        }
+
+# ========================
 # BOOKS ENDPOINTS
 # ========================
 
@@ -460,16 +506,25 @@ async def get_available_books(source: Optional[str] = None):
     
     return available
 
-@api_router.get("/books/search/gutenberg", response_model=List[GutenbergSearchResult])
+@api_router.get("/books/search/gutenberg")
 async def search_gutenberg_books(query: str = Query(..., min_length=2)):
-    results = await search_gutenberg(query)
-    return results
+    """Search Project Gutenberg - returns results without strict validation"""
+    try:
+        results = await search_gutenberg(query)
+        return results
+    except Exception as e:
+        logger.error(f"Gutenberg search error: {e}")
+        return []
 
 @api_router.get("/books/search/aozora")
 async def search_aozora_books(query: str = Query(..., min_length=1)):
     """Search Aozora Bunko books"""
-    results = await search_aozora(query)
-    return results
+    try:
+        results = await search_aozora(query)
+        return results
+    except Exception as e:
+        logger.error(f"Aozora search error: {e}")
+        return []
 
 @api_router.get("/books")
 async def get_books():
@@ -830,15 +885,22 @@ async def process_book_import_gutenberg(
                 total_sentences += len(sentence_docs)
         
         try:
-            title_jp = await asyncio.wait_for(translate_title_simple(title), timeout=15)
-            author_jp = await asyncio.wait_for(translate_author_simple(author), timeout=15)
+            if TRANSLATION_ENABLED:
+                title_jp = await asyncio.wait_for(translate_title_simple(title), timeout=15)
+                author_jp = await asyncio.wait_for(translate_author_simple(author), timeout=15)
+            else:
+                title_jp = title
+                author_jp = author
         except Exception:
             title_jp = title
             author_jp = author
         
+        # Mark as completed immediately - English text is readable
+        # Japanese translations will happen in background
         await db.books.update_one(
             {"id": book_id},
             {"$set": {
+                "import_status": "completed",
                 "title_jp": title_jp,
                 "author_jp": author_jp,
                 "total_chapters": len(chapters),
@@ -846,7 +908,7 @@ async def process_book_import_gutenberg(
             }}
         )
         
-        logger.info(f"Gutenberg import complete: {book_id} - {len(chapters)} chapters, {total_sentences} sentences")
+        logger.info(f"Gutenberg import complete: {book_id} - {len(chapters)} chapters, {total_sentences} sentences (ready to read)")
         
     except Exception as e:
         logger.error(f"Import failed for {book_id}: {e}", exc_info=True)
