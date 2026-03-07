@@ -411,48 +411,90 @@ def clean_aozora_text(text: str) -> str:
 
 
 def split_into_chapters(text: str, book_id: str) -> List[Dict]:
-    """Split book text into chapters"""
+    """
+    Split book text into chapters.
+    Preserves chapter titles from the source text.
+    Skips table of contents entries (short lines).
+    """
+    # Patterns that detect chapter headers
+    # Group 1: chapter number, Group 2: optional subtitle
     chapter_patterns = [
-        r'^CHAPTER\s+([IVXLCDM]+|\d+)[.\s]*(.*)$',
-        r'^Chapter\s+([IVXLCDM]+|\d+)[.\s]*(.*)$',
-        r'^BOOK\s+([IVXLCDM]+|\d+)[.\s]*(.*)$',
-        r'^Part\s+([IVXLCDM]+|\d+)[.\s]*(.*)$',
-        r'^第([一二三四五六七八九十百千]+)章\s*(.*)$',  # Japanese chapter format
-        r'^([一二三四五六七八九十]+)[、．.\s]+(.*)$',    # Japanese numbered sections
+        (r'^CHAPTER\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Chapter"),
+        (r'^Chapter\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Chapter"),
+        (r'^BOOK\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Book"),
+        (r'^Part\s+([IVXLCDM]+|\d+)[.\s]*(.*)$', "Part"),
+        (r'^第([一二三四五六七八九十百千]+)章\s*(.*)$', "第"),  # Japanese
+        (r'^([一二三四五六七八九十]+)[、．.\s]+(.*)$', ""),    # Japanese numbered
     ]
     
     lines = text.split('\n')
     chapters = []
     current_chapter = None
     chapter_number = 0
+    seen_chapter_nums = set()  # Track which chapter numbers we've seen
     
     for i, line in enumerate(lines):
         line = line.strip()
         is_chapter_start = False
         chapter_title = ""
+        chapter_num_str = ""
         
-        for pattern in chapter_patterns:
+        for pattern, prefix in chapter_patterns:
             match = re.match(pattern, line, re.IGNORECASE)
             if match:
-                is_chapter_start = True
-                chapter_title = match.group(2).strip() if len(match.groups()) > 1 else line
+                chapter_num_str = match.group(1)
+                subtitle = match.group(2).strip() if len(match.groups()) > 1 else ""
+                
+                # Check if this is a TOC entry (short line) vs actual chapter header
+                # TOC entries are usually followed by other chapter listings
+                # Real chapters are followed by content
+                
+                # Look at next few lines to determine if this is TOC
+                next_lines_content = 0
+                for j in range(i+1, min(i+5, len(lines))):
+                    next_line = lines[j].strip()
+                    if next_line and len(next_line) > 50:  # Substantial content
+                        next_lines_content += 1
+                
+                # If we already saw this chapter number, this is the real one
+                if chapter_num_str in seen_chapter_nums:
+                    is_chapter_start = True
+                    seen_chapter_nums.discard(chapter_num_str)  # Reset to allow reuse
+                elif next_lines_content >= 2:
+                    # Has content after it - it's a real chapter
+                    is_chapter_start = True
+                else:
+                    # Likely a TOC entry - mark as seen but don't create chapter
+                    seen_chapter_nums.add(chapter_num_str)
+                
+                if is_chapter_start:
+                    # Build the title
+                    if prefix:
+                        original_header = f"{prefix} {chapter_num_str}"
+                    else:
+                        original_header = chapter_num_str
+                    
+                    if subtitle:
+                        chapter_title = f"{original_header}: {subtitle}"
+                    else:
+                        chapter_title = original_header
                 break
         
         if is_chapter_start:
-            if current_chapter:
+            if current_chapter and current_chapter['content'].strip():
                 chapters.append(current_chapter)
             
             chapter_number += 1
             current_chapter = {
-                'id': f"{book_id}-ch{chapter_number + 12}",
-                'chapter_number': chapter_number + 12,
-                'title': chapter_title or f"Chapter {chapter_number}",
+                'id': f"{book_id}-ch{chapter_number}",
+                'chapter_number': chapter_number,
+                'title': chapter_title,
                 'content': ""
             }
         elif current_chapter:
             current_chapter['content'] += line + '\n'
     
-    if current_chapter:
+    if current_chapter and current_chapter['content'].strip():
         chapters.append(current_chapter)
     
     # If no chapters found, treat whole text as one chapter
@@ -467,26 +509,59 @@ def split_into_chapters(text: str, book_id: str) -> List[Dict]:
     return chapters
 
 
-def split_into_sentences(text: str) -> List[str]:
-    """Split chapter text into sentences"""
-    # Clean whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
-    
+def split_into_paragraphs(text: str) -> List[str]:
+    """
+    Split chapter text into natural paragraphs.
+    Preserves the reading flow by keeping paragraphs together.
+    """
     if not text:
         return []
     
-    # Sentence splitting - handles both English and Japanese
-    # English patterns
-    text = re.sub(r'([.!?])\s+(?=[A-Z""])', r'\1|||', text)
-    # Japanese patterns (。！？)
-    text = re.sub(r'([。！？])\s*', r'\1|||', text)
+    # Split on double newlines (paragraph breaks)
+    paragraphs = re.split(r'\n\s*\n', text)
     
-    sentences = [s.strip() for s in text.split('|||') if s.strip()]
+    # Clean each paragraph
+    result = []
+    for para in paragraphs:
+        # Clean up whitespace within paragraph
+        cleaned = re.sub(r'\s+', ' ', para).strip()
+        
+        # Skip very short paragraphs (likely artifacts)
+        if len(cleaned) < 20:
+            continue
+        
+        # If paragraph is too long (>2000 chars), split into sentences
+        if len(cleaned) > 2000:
+            sentences = split_long_text_into_sentences(cleaned)
+            result.extend(sentences)
+        else:
+            result.append(cleaned)
     
-    # Filter out very short sentences
-    sentences = [s for s in sentences if len(s) > 10]
+    return result
+
+
+def split_long_text_into_sentences(text: str) -> List[str]:
+    """
+    Split a long text block into individual sentences.
+    Only used for very long paragraphs.
+    """
+    # English sentence patterns
+    text = re.sub(r'([.!?])\s+(?=[A-Z"\'\(])', r'\1|||SPLIT|||', text)
+    # Japanese sentence endings
+    text = re.sub(r'([。！？」])\s*', r'\1|||SPLIT|||', text)
     
-    return sentences
+    sentences = [s.strip() for s in text.split('|||SPLIT|||') if s.strip()]
+    
+    # Filter out very short fragments
+    return [s for s in sentences if len(s) > 30]
+
+
+def split_into_sentences(text: str) -> List[str]:
+    """
+    Split chapter text into readable units (paragraphs preferred).
+    This is the main function called during import.
+    """
+    return split_into_paragraphs(text)
 
 
 def get_book_cover(book_id: str) -> str:
