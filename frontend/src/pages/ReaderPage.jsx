@@ -156,6 +156,14 @@ export const ReaderPage = () => {
       setChapters(chaptersRes.data);
       setSavedWords(vocabRes.data);
       setBookmarks(bookmarksRes.data.filter(b => b.book_id === bookId));
+      
+      // Set default script mode based on book language
+      // Japanese source books should default to showing Japanese (kanji)
+      // English source books can default to kanji to learn Japanese translations
+      const bookLang = bookRes.data.book_language || 'en';
+      if (bookLang === 'ja' && !readerSettings.scriptMode) {
+        setScriptMode('kanji');
+      }
     } catch (error) {
       console.error('Failed to fetch book:', error);
       toast.error('Failed to load book');
@@ -298,22 +306,57 @@ export const ReaderPage = () => {
   };
 
   const getSentenceText = (sentence) => {
+    const isJapaneseSource = sentence.source_language === 'ja';
+    
     switch (scriptMode) {
       case 'kanji':
-        return sentence.japanese_kanji || sentence.english;
+        // For Japanese source: kanji is the original, always available
+        // For English source: kanji is the translation, may be pending
+        return sentence.japanese_kanji || (isJapaneseSource ? '' : sentence.english);
       case 'hiragana':
-        return sentence.japanese_hiragana || sentence.english;
+        return sentence.japanese_hiragana || sentence.japanese_kanji || (isJapaneseSource ? '' : sentence.english);
       case 'katakana':
-        return sentence.japanese_katakana || sentence.english;
+        return sentence.japanese_katakana || sentence.japanese_kanji || (isJapaneseSource ? '' : sentence.english);
       case 'romaji':
-        return sentence.japanese_romaji || sentence.english;
+        return sentence.japanese_romaji || (isJapaneseSource ? '' : sentence.english);
       case 'english':
       default:
+        // For Japanese source: English is the translation
+        // For English source: English is the original
         return sentence.english;
     }
   };
 
+  // Check if sentence has readable content (used for rendering)
+  const hasReadableContent = (sentence) => {
+    const isJapaneseSource = sentence.source_language === 'ja';
+    
+    if (scriptMode === 'english') {
+      return !!sentence.english && sentence.english !== '(English translation pending)';
+    }
+    
+    // For Japanese modes, Japanese source books always have content
+    if (isJapaneseSource) {
+      return !!(sentence.japanese_kanji || sentence.japanese_hiragana);
+    }
+    
+    // For English source, check if translation exists
+    return !!(sentence.japanese_kanji || sentence.english);
+  };
+
   const isTranslationPending = (sentence) => {
+    const isJapaneseSource = sentence.source_language === 'ja';
+    
+    if (isJapaneseSource) {
+      // For Japanese books: only pending if viewing English and no English translation
+      if (scriptMode === 'english') {
+        return !sentence.english || sentence.english === '(English translation pending)';
+      }
+      // Japanese modes always have content for Japanese source
+      return false;
+    }
+    
+    // For English source books: pending if viewing Japanese but no Japanese text
     return sentence.translation_status !== 'completed' && scriptMode !== 'english';
   };
 
@@ -557,10 +600,15 @@ export const ReaderPage = () => {
               <span>Page {Math.ceil(sentences.length / SENTENCES_PER_PAGE)} of {Math.ceil(totalSentences / SENTENCES_PER_PAGE)}</span>
               <span>•</span>
               <span>{sentences.length} / {totalSentences} sentences</span>
-              {scriptMode !== 'english' && translatedCount < totalSentences && (
+              {translatedCount < totalSentences && (
                 <>
                   <span>•</span>
-                  <span className="text-primary animate-pulse">Translating {translatedCount}/{totalSentences}</span>
+                  <span className="text-primary animate-pulse">
+                    {book?.book_language === 'ja' 
+                      ? `EN translation ${translatedCount}/${totalSentences}`
+                      : `JP translation ${translatedCount}/${totalSentences}`
+                    }
+                  </span>
                 </>
               )}
             </div>
