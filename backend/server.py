@@ -6,6 +6,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from contextlib import asynccontextmanager
 import os
+import sys
 import logging
 import subprocess
 import signal
@@ -75,26 +76,27 @@ async def lifespan(app: FastAPI):
         worker_script = ROOT_DIR / 'translation_worker.py'
         if worker_script.exists():
             logger.info("Starting translation worker...")
+            log_dir = ROOT_DIR / 'logs'
+            log_dir.mkdir(exist_ok=True)
             worker_process = subprocess.Popen(
-                ['/root/.venv/bin/python', str(worker_script)],
+                [sys.executable, str(worker_script)],
                 cwd=str(ROOT_DIR),
-                stdout=open('/var/log/supervisor/worker.out.log', 'a'),
-                stderr=open('/var/log/supervisor/worker.err.log', 'a'),
-                start_new_session=True
+                stdout=open(log_dir / 'worker.out.log', 'a'),
+                stderr=open(log_dir / 'worker.err.log', 'a'),
             )
             logger.info(f"Translation worker started (PID: {worker_process.pid})")
         else:
             logger.warning(f"Translation worker script not found: {worker_script}")
     except Exception as e:
         logger.error(f"Failed to start translation worker: {e}")
-    
+
     yield  # App is running
-    
+
     # Shutdown: Stop translation worker
     if worker_process:
         try:
             logger.info("Stopping translation worker...")
-            os.killpg(os.getpgid(worker_process.pid), signal.SIGTERM)
+            worker_process.terminate()
             worker_process.wait(timeout=5)
             logger.info("Translation worker stopped")
         except Exception as e:
@@ -105,7 +107,7 @@ async def lifespan(app: FastAPI):
                 pass
 
 # Create the main app with lifespan
-app = FastAPI(title="Japanese Reading App API", lifespan=lifespan)
+app = FastAPI(title="Zenzeii API", lifespan=lifespan)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -711,6 +713,20 @@ async def translate_specific_sentences(sentence_ids: List[str]):
     ).to_list(len(sentence_ids))
     
     return [transform_sentence_for_frontend(s) for s in sentences]
+
+
+@api_router.get("/translate/text")
+async def translate_text(q: str = Query(..., description="English text to translate")):
+    """
+    Translate English text to Japanese.
+    Returns Japanese (kanji), hiragana, and romaji.
+    """
+    from services.translation import translate_to_japanese
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Query text cannot be empty")
+    result = translate_to_japanese(q.strip())
+    return result
+
 
 # ========================
 # BOOK IMPORT - Multi-source support

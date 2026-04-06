@@ -25,7 +25,7 @@ export const Navbar = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group" data-testid="nav-logo">
             <span className="text-2xl font-serif text-primary">読</span>
-            <span className="text-lg font-medium text-foreground hidden sm:inline">YomuMaster</span>
+            <span className="text-lg font-medium text-foreground hidden sm:inline">Zenzeii</span>
           </Link>
 
           {/* Navigation Links */}

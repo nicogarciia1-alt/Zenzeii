@@ -17,7 +17,7 @@ import time
 from datetime import datetime
 
 # Get backend URL from environment
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://jp-books-learn.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000')
 if BASE_URL.endswith('/'):
     BASE_URL = BASE_URL.rstrip('/')
 

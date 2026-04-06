@@ -48,7 +48,7 @@ export const AuthPage = () => {
           <div className="flex items-center justify-center gap-3 mb-4">
             <span className="text-5xl font-serif text-primary">読</span>
           </div>
-          <h1 className="text-2xl font-serif text-foreground">YomuMaster</h1>
+          <h1 className="text-2xl font-serif text-foreground">Zenzeii</h1>
           <p className="text-muted-foreground mt-2">Learn Japanese through reading</p>
         </div>
 

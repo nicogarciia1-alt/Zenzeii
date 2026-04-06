@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from services.translation import translate_batch_for_worker, convert_japanese_text
+from services.translation import translate_batch_for_worker
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -46,35 +46,25 @@ async def get_translation_jobs(db):
     2. Chapters with pending sentences that users have accessed
     """
     jobs = []
-    
-    # Priority 1: Books still preparing (need initial translations)
-    preparing_books = await db.books.find(
-        {"import_status": "preparing"},
-        {"_id": 0, "id": 1, "title": 1}
-    ).to_list(5)
-    
-    for book in preparing_books:
-        # Count how many sentences are translated
-        translated = await db.sentences.count_documents({
+
+    # Priority 1 & 2: Any book with untranslated sentences (preparing or completed)
+    all_books = await db.books.find(
+        {"import_status": {"$in": ["preparing", "completed"]}},
+        {"_id": 0, "id": 1, "title": 1, "import_status": 1}
+    ).to_list(20)
+
+    for book in all_books:
+        pending = await db.sentences.count_documents({
             "book_id": book["id"],
-            "translation_status": "completed"
+            "translation_status": {"$ne": "completed"}
         })
-        
-        if translated < 150:  # Need more initial translations
+        if pending > 0:
             jobs.append({
                 "type": "initial_import",
                 "book_id": book["id"],
                 "book_title": book["title"],
-                "priority": 1,
-                "target_count": 150
+                "priority": 1 if book["import_status"] == "preparing" else 2,
             })
-        else:
-            # Initial translations done, mark book as completed
-            await db.books.update_one(
-                {"id": book["id"]},
-                {"$set": {"import_status": "completed"}}
-            )
-            logger.info(f"Book ready: {book['title']} - initial translations complete")
     
     # Priority 2: Chapters that have been accessed (translation_requested flag)
     requested_chapters = await db.chapters.find(
