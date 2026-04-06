@@ -11,6 +11,8 @@ COPY backend/ .
 
 # Railway injects PORT at runtime; default to 8000 for local use
 ENV PORT=8000
+# Flush Python output immediately so Railway logs are visible
+ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
