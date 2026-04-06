@@ -3,11 +3,11 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies first (cached layer)
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY backend/ .
 
 # Railway injects PORT at runtime; default to 8000 for local use
 ENV PORT=8000
