@@ -19,8 +19,14 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-_kakasi = pykakasi.kakasi()
+_kakasi = None  # lazy-initialized on first use to avoid slow startup
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+
+def _get_kakasi():
+    global _kakasi
+    if _kakasi is None:
+        _kakasi = pykakasi.kakasi()
+    return _kakasi
 
 # ── pykakasi: kanji → hiragana / katakana / romaji ───────────────────────────
 
@@ -29,7 +35,7 @@ def _to_readings(japanese: str) -> Dict[str, str]:
     if not japanese:
         return {"japanese": japanese, "hiragana": "", "katakana": "", "romaji": ""}
     try:
-        result = _kakasi.convert(japanese)
+        result = _get_kakasi().convert(japanese)
         hiragana = "".join(item.get("hira", item.get("orig", "")) for item in result)
         katakana = "".join(item.get("kana", item.get("orig", "")) for item in result)
         romaji = " ".join(item.get("hepburn", item.get("orig", "")) for item in result)
