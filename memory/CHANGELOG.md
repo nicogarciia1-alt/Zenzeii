@@ -1,4 +1,4 @@
-# YomuMaster - Crash Recovery & Aozora Fix (March 2026)
+# Zenzeii - Crash Recovery & Aozora Fix (March 2026)
 
 ## Issue Resolved
 - API crashed due to Pydantic validation errors on missing `description_jp` field

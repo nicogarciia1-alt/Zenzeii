@@ -1,4 +1,4 @@
-# YomuMaster - Japanese Reading Learning Platform
+# Zenzeii - Japanese Reading Learning Platform
 
 ## Beta Version 1.0 - Ready for Testing (March 7, 2026)
 

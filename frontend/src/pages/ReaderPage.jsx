@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -11,7 +11,8 @@ import {
   Sun,
   Loader2,
   Home,
-  ChevronDown
+  ChevronDown,
+  Highlighter
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -32,7 +33,10 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import ScriptToggle from '@/components/reader/ScriptToggle';
+import SecondaryScriptToggle from '@/components/reader/SecondaryScriptToggle';
+import HighlightedText from '@/components/reader/HighlightedText';
 import DictionaryPopup from '@/components/reader/DictionaryPopup';
+import { buildVocabIndex } from '@/lib/vocabHighlight';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   getBook,
@@ -80,6 +84,16 @@ export const ReaderPage = () => {
   const [lineHeight, setLineHeight] = useState(readerSettings.lineHeight || 'relaxed');
   const [scriptMode, setScriptMode] = useState(readerSettings.scriptMode || 'kanji');
   const [secondaryLayer, setSecondaryLayer] = useState(readerSettings.secondaryLayer || 'none');
+  const [showSecondaryText, setShowSecondaryText] = useState(true);
+  const [showVocabHighlights, setShowVocabHighlights] = useState(false);
+
+  // Rebuild vocab lookup index only when savedWords changes
+  const vocabIndex = useMemo(() => buildVocabIndex(savedWords), [savedWords]);
+
+  // Update savedWords immediately when a word is saved from the popup
+  const handleWordSaved = useCallback((wordData) => {
+    setSavedWords(prev => [...prev, wordData]);
+  }, []);
 
   useEffect(() => {
     fetchBookData();
@@ -360,6 +374,12 @@ export const ReaderPage = () => {
     return sentence.translation_status !== 'completed' && scriptMode !== 'english';
   };
 
+  const handleSecondaryLayerChange = (v) => {
+    setSecondaryLayer(v);
+    updateReaderSettings({ secondaryLayer: v });
+    if (v !== 'none') setShowSecondaryText(true);
+  };
+
   const getSecondaryText = (sentence) => {
     if (secondaryLayer === 'none') return null;
     
@@ -552,10 +572,7 @@ export const ReaderPage = () => {
                   <div className="space-y-2">
                     <span className="text-xs text-muted-foreground">Secondary Layer</span>
                     <p className="text-xs text-muted-foreground/70">Show additional text below each sentence</p>
-                    <Select value={secondaryLayer} onValueChange={(v) => {
-                      setSecondaryLayer(v);
-                      updateReaderSettings({ secondaryLayer: v });
-                    }}>
+                    <Select value={secondaryLayer} onValueChange={handleSecondaryLayerChange}>
                       <SelectTrigger data-testid="secondary-layer-select">
                         <SelectValue />
                       </SelectTrigger>
@@ -575,14 +592,41 @@ export const ReaderPage = () => {
 
       {/* Script Toggle Bar */}
       <div className="border-b border-border bg-card py-3">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-4 space-y-2">
           <ScriptToggle
             value={scriptMode}
             onChange={(v) => {
               setScriptMode(v);
               updateReaderSettings({ scriptMode: v });
+              // Reset secondary if it's no longer valid for the new primary mode
+              const validValues = getSecondaryOptions().map(o => o.value);
+              if (!validValues.includes(secondaryLayer)) {
+                handleSecondaryLayerChange('none');
+              }
             }}
           />
+          <div className="flex items-center justify-between gap-4">
+            <SecondaryScriptToggle
+              value={secondaryLayer}
+              onChange={handleSecondaryLayerChange}
+              options={getSecondaryOptions()}
+              show={showSecondaryText}
+              onToggleShow={() => setShowSecondaryText(prev => !prev)}
+            />
+            <button
+              onClick={() => setShowVocabHighlights(prev => !prev)}
+              className={[
+                'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium shrink-0 transition-colors border',
+                showVocabHighlights
+                  ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted border-transparent',
+              ].join(' ')}
+              title={showVocabHighlights ? 'Hide vocabulary highlights' : 'Highlight saved vocabulary'}
+            >
+              <Highlighter className="h-3.5 w-3.5" />
+              Vocab
+            </button>
+          </div>
         </div>
       </div>
 
@@ -618,7 +662,7 @@ export const ReaderPage = () => {
           <div className={`reader-content space-y-6 ${fontSizeClass} ${lineHeightClass}`} data-testid="reader-content">
             {sentences.map((sentence) => {
               const secondaryText = getSecondaryText(sentence);
-              const showSecondary = secondaryLayer !== 'none' && secondaryText && sentence.translation_status === 'completed';
+              const showSecondary = secondaryLayer !== 'none' && showSecondaryText && secondaryText && sentence.translation_status === 'completed';
               
               return (
                 <div
@@ -629,21 +673,29 @@ export const ReaderPage = () => {
                   {/* Main text */}
                   <div className={`${scriptMode !== 'english' && scriptMode !== 'romaji' ? 'jp-text' : ''}`}>
                     {scriptMode !== 'english' ? (
-                      <span
-                        className="reader-word cursor-pointer hover:bg-primary/10 hover:text-primary rounded px-0.5 transition-colors"
-                        onClick={(e) => {
-                          const text = getSentenceText(sentence);
-                          const selection = window.getSelection();
-                          if (selection && selection.toString().trim()) {
-                            handleWordClick(selection.toString().trim(), e);
-                          } else {
-                            const firstWord = text.split(/[\s、。！？]/)[0];
-                            if (firstWord) handleWordClick(firstWord, e);
-                          }
-                        }}
-                      >
-                        {getSentenceText(sentence)}
-                      </span>
+                      showVocabHighlights ? (
+                        <HighlightedText
+                          text={getSentenceText(sentence)}
+                          vocabIndex={vocabIndex}
+                          onWordClick={handleWordClick}
+                        />
+                      ) : (
+                        <span
+                          className="reader-word cursor-pointer hover:bg-primary/10 hover:text-primary rounded px-0.5 transition-colors"
+                          onClick={(e) => {
+                            const text = getSentenceText(sentence);
+                            const selection = window.getSelection();
+                            if (selection && selection.toString().trim()) {
+                              handleWordClick(selection.toString().trim(), e);
+                            } else {
+                              const firstWord = text.split(/[\s、。！？]/)[0];
+                              if (firstWord) handleWordClick(firstWord, e);
+                            }
+                          }}
+                        >
+                          {getSentenceText(sentence)}
+                        </span>
+                      )
                     ) : (
                       <span>{getSentenceText(sentence)}</span>
                     )}
@@ -734,6 +786,7 @@ export const ReaderPage = () => {
               position={popupPosition}
               onClose={handleClosePopup}
               savedWords={savedWords}
+              onWordSaved={handleWordSaved}
             />
           )}
         </>

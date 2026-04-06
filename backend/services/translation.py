@@ -1,203 +1,161 @@
 """
-Translation Service - Optimized for background worker architecture
-AI generates only Japanese text, local conversion for hiragana/katakana/romaji
+Translation Service
+Input: English text → Output: Japanese (kanji), hiragana, katakana, romaji
+
+Engine selection (set in .env):
+  OPENAI_API_KEY set  → GPT-4o-mini (batch, high quality)
+  no key              → deep-translator / Google Translate (fallback)
+
+pykakasi is always used locally for hiragana / katakana / romaji conversion.
 """
 import os
 import json
-import asyncio
 import logging
-from typing import List, Dict, Optional
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-from dotenv import load_dotenv
+from typing import List, Dict
+
 import pykakasi
+from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+_kakasi = pykakasi.kakasi()
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
-# Configuration
-TRANSLATION_TIMEOUT = 90  # seconds per batch
+# ── pykakasi: kanji → hiragana / katakana / romaji ───────────────────────────
 
-# Initialize pykakasi for local Japanese text conversion
-kakasi = pykakasi.kakasi()
-
-# Optimized prompt - only requests Japanese text
-BATCH_TRANSLATION_PROMPT = """You are a Japanese language expert. Translate the following English sentences into natural Japanese.
-
-Rules:
-- Use kanji where appropriate with natural kana
-- For proper nouns (names, places), use katakana
-- Keep translations natural and literary
-- Maintain the tone and style of the original
-
-Return your response as a JSON array with objects containing: sentence_num, japanese
-
-Example input:
-1. "The sun was setting."
-2. "She smiled softly."
-
-Example output:
-[
-  {"sentence_num": 1, "japanese": "太陽が沈んでいた。"},
-  {"sentence_num": 2, "japanese": "彼女は優しく微笑んだ。"}
-]
-
-Now translate these sentences:
-"""
-
-
-def convert_japanese_text(japanese_text: str) -> Dict[str, str]:
-    """
-    Convert Japanese text (kanji+kana) to hiragana, katakana, and romaji using pykakasi.
-    """
-    if not japanese_text:
-        return {"hiragana": "", "katakana": "", "romaji": ""}
-    
+def _to_readings(japanese: str) -> Dict[str, str]:
+    """Convert Japanese text to hiragana, katakana, and romaji using pykakasi."""
+    if not japanese:
+        return {"japanese": japanese, "hiragana": "", "katakana": "", "romaji": ""}
     try:
-        result = kakasi.convert(japanese_text)
-        
-        hiragana_parts = []
-        katakana_parts = []
-        romaji_parts = []
-        
-        for item in result:
-            hiragana_parts.append(item.get('hira', item.get('orig', '')))
-            katakana_parts.append(item.get('kana', item.get('orig', '')))
-            romaji_parts.append(item.get('hepburn', item.get('orig', '')))
-        
-        return {
-            "hiragana": ''.join(hiragana_parts),
-            "katakana": ''.join(katakana_parts),
-            "romaji": ' '.join(romaji_parts)
-        }
+        result = _kakasi.convert(japanese)
+        hiragana = "".join(item.get("hira", item.get("orig", "")) for item in result)
+        katakana = "".join(item.get("kana", item.get("orig", "")) for item in result)
+        romaji = " ".join(item.get("hepburn", item.get("orig", "")) for item in result)
+        return {"japanese": japanese, "hiragana": hiragana, "katakana": katakana, "romaji": romaji.strip()}
     except Exception as e:
-        logger.warning(f"pykakasi conversion error: {e}")
-        return {"hiragana": japanese_text, "katakana": japanese_text, "romaji": japanese_text}
+        logger.warning(f"pykakasi error: {e}")
+        return {"japanese": japanese, "hiragana": japanese, "katakana": japanese, "romaji": japanese}
+
+
+# ── OpenAI batch translation ──────────────────────────────────────────────────
+
+_SYSTEM_PROMPT = (
+    "You are a literary Japanese translator. "
+    "Translate each English sentence into natural, literary Japanese using kanji where appropriate. "
+    "For proper nouns (names, places) use katakana. "
+    "Preserve the tone and style of the original. "
+    "Return ONLY a JSON array of objects with keys: n (integer, the sentence number), j (the Japanese translation). "
+    "No explanation, no markdown, no extra keys."
+)
+
+_EXAMPLE = '[{"n":1,"j":"太陽が沈んでいた。"},{"n":2,"j":"彼女は優しく微笑んだ。"}]'
+
+
+async def _translate_batch_openai(texts: List[str]) -> List[str]:
+    """
+    Translate a list of English sentences to Japanese using GPT-4o-mini.
+    Returns a list of Japanese strings in the same order as input.
+    Falls back to empty strings on failure (caller will retry or skip).
+    """
+    from openai import AsyncOpenAI
+
+    numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+    user_msg = f"Translate these {len(texts)} sentences:\n{numbered}\n\nExample output format: {_EXAMPLE}"
+
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.3,
+            max_tokens=2048,
+        )
+        raw = response.choices[0].message.content.strip()
+
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        items = json.loads(raw)
+        # Build index by n, fill gaps with empty string
+        by_n = {item["n"]: item["j"] for item in items}
+        return [by_n.get(i + 1, "") for i in range(len(texts))]
+
+    except Exception as e:
+        logger.error(f"OpenAI translation failed: {e}")
+        return [""] * len(texts)
+
+
+# ── Fallback: deep-translator (Google Translate, no API key) ─────────────────
+
+def _translate_single_google(text: str) -> str:
+    from deep_translator import GoogleTranslator
+    try:
+        return GoogleTranslator(source="en", target="ja").translate(text.strip()) or text
+    except Exception as e:
+        logger.warning(f"Google Translate fallback failed: {e}")
+        return text
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def translate_to_japanese(text: str) -> Dict[str, str]:
+    """
+    Translate a single English string to Japanese (title/author use).
+    Always uses Google Translate (synchronous, no key needed).
+    Returns: { japanese, hiragana, katakana, romaji }
+    """
+    if not text or not text.strip():
+        return {"japanese": "", "hiragana": "", "katakana": "", "romaji": ""}
+    japanese = _translate_single_google(text)
+    return _to_readings(japanese)
 
 
 async def translate_batch_for_worker(
     sentence_ids: List[str],
-    english_texts: List[str]
+    english_texts: List[str],
 ) -> Dict[str, Dict]:
     """
-    Translate a batch of sentences - called by the background worker.
-    Returns dict of {sentence_id: translation_data}
+    Translate a batch of English sentences to Japanese.
+    Uses OpenAI GPT-4o-mini if OPENAI_API_KEY is set, else Google Translate.
+    Returns a dict keyed by sentence_id with DB-ready field names.
     """
-    if not EMERGENT_LLM_KEY:
-        logger.error("EMERGENT_LLM_KEY not configured")
-        return {}
-    
-    if not sentence_ids or not english_texts:
-        return {}
-    
-    to_translate = list(zip(sentence_ids, english_texts))
-    
-    try:
-        # Build prompt
-        numbered_sentences = "\n".join([
-            f"{i+1}. \"{text}\"" 
-            for i, (_, text) in enumerate(to_translate)
-        ])
-        
-        prompt = BATCH_TRANSLATION_PROMPT + numbered_sentences
-        
-        logger.info(f"Translating batch of {len(to_translate)} sentences")
-        
-        # Call AI
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"worker-batch-{hash(tuple(s[0] for s in to_translate))}",
-            system_message="You are a professional Japanese translator. Return only valid JSON."
-        ).with_model("openai", "gpt-5.2")
-        
-        response = await asyncio.wait_for(
-            chat.send_message(UserMessage(text=prompt)),
-            timeout=TRANSLATION_TIMEOUT
-        )
-        
-        # Parse response
-        response = response.strip()
-        if response.startswith("```"):
-            lines = response.split("\n")
-            response = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
-        
-        translations = json.loads(response)
-        
-        # Map translations back to sentence IDs and convert locally
-        results = {}
-        for trans in translations:
-            idx = trans.get("sentence_num", 0) - 1
-            if 0 <= idx < len(to_translate):
-                sid = to_translate[idx][0]
-                japanese_text = trans.get("japanese", "")
-                
-                # Local conversion using pykakasi
-                converted = convert_japanese_text(japanese_text)
-                
-                results[sid] = {
-                    "kanji_text": japanese_text,
-                    "hiragana_text": converted["hiragana"],
-                    "katakana_text": converted["katakana"],
-                    "romaji_text": converted["romaji"],
-                    "translation_status": "completed"
-                }
-        
-        logger.info(f"Successfully translated {len(results)}/{len(to_translate)} sentences")
-        return results
-        
-    except asyncio.TimeoutError:
-        logger.error(f"Translation batch timed out after {TRANSLATION_TIMEOUT}s")
-        return {}
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse translation response: {e}")
-        return {}
-    except Exception as e:
-        error_str = str(e)
-        if "budget" in error_str.lower() or "exceeded" in error_str.lower():
-            logger.error(f"API budget exceeded: {e}")
-        else:
-            logger.error(f"Translation error: {e}")
-        return {}
+    if OPENAI_API_KEY:
+        japanese_list = await _translate_batch_openai(english_texts)
+    else:
+        # Synchronous fallback — one call per sentence
+        japanese_list = [_translate_single_google(t) for t in english_texts]
 
+    result = {}
+    for sid, english, japanese in zip(sentence_ids, english_texts, japanese_list):
+        if not japanese:
+            # Translation failed — leave pending so the worker retries
+            result[sid] = {"translation_status": "pending"}
+            continue
+        readings = _to_readings(japanese)
+        result[sid] = {
+            "kanji_text": readings["japanese"],
+            "hiragana_text": readings["hiragana"],
+            "katakana_text": readings["katakana"],
+            "romaji_text": readings["romaji"],
+            "translation_status": "completed",
+        }
+    return result
+
+
+# ── Async wrappers for server.py (book import: title/author) ─────────────────
 
 async def translate_title_simple(title: str) -> str:
-    """Simple title translation with fallback"""
-    if not EMERGENT_LLM_KEY:
-        return title
-    
-    try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"title-{hash(title)}",
-            system_message="Translate to Japanese. Return only the Japanese text."
-        ).with_model("openai", "gpt-5.2")
-        
-        response = await asyncio.wait_for(
-            chat.send_message(UserMessage(text=f"Translate: {title}")),
-            timeout=30
-        )
-        return response.strip()
-    except:
-        return title
+    return translate_to_japanese(title)["japanese"]
 
 
 async def translate_author_simple(author: str) -> str:
-    """Simple author name to katakana with fallback"""
-    if not EMERGENT_LLM_KEY:
-        return author
-    
-    try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"author-{hash(author)}",
-            system_message="Convert name to katakana. Return only the katakana."
-        ).with_model("openai", "gpt-5.2")
-        
-        response = await asyncio.wait_for(
-            chat.send_message(UserMessage(text=f"Convert: {author}")),
-            timeout=30
-        )
-        return response.strip()
-    except:
-        return author
+    return translate_to_japanese(author)["japanese"]

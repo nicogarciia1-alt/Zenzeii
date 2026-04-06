@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { saveWord } from '@/lib/api';
 import { toast } from 'sonner';
 
-export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [] }) => {
+export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], onWordSaved }) => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(
     savedWords.some(w => w.word === wordData?.word)
@@ -28,6 +28,7 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [] }
       });
       setSaved(true);
       toast.success('Word saved to vocabulary!');
+      onWordSaved && onWordSaved(wordData);
     } catch (error) {
       if (error.response?.status === 400) {
         toast.info('Word already in your vocabulary');
