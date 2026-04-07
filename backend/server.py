@@ -109,6 +109,20 @@ async def lifespan(app: FastAPI):
 # Create the main app with lifespan
 app = FastAPI(title="Zenzeii API", lifespan=lifespan)
 
+# CORS must be added before routes
+_cors_origins = [o.strip() for o in os.environ.get(
+    'CORS_ORIGINS',
+    'https://zenzeii-ci1x.vercel.app,http://localhost:3000'
+).split(',') if o.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/health", include_in_schema=False)
 async def health():
     return {"status": "ok"}
@@ -1491,13 +1505,5 @@ async def root():
     return {"message": "Japanese Reading App API", "version": "3.0.0"}
 
 app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', 'https://zenzeii-ci1x.vercel.app,http://localhost:3000').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Note: shutdown handled by lifespan context manager
