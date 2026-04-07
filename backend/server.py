@@ -129,6 +129,10 @@ app.add_middleware(
 async def health():
     return {"status": "ok"}
 
+@app.get("/ping")
+async def ping():
+    return {"ping": "pong"}
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
