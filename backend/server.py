@@ -9,7 +9,6 @@ import os
 import sys
 import logging
 import subprocess
-import signal
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
@@ -50,15 +49,14 @@ IMPORT_LIMIT_WINDOW_HOURS = 1
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'zenzeii')]
-
 # JWT Config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+
+# MongoDB — initialized inside lifespan (requires running event loop in Python 3.12+)
+client = None
+db = None
 
 # Global variable to track worker process
 worker_process = None
@@ -66,23 +64,28 @@ worker_process = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Lifespan context manager to start/stop the translation worker.
-    The worker runs as a subprocess alongside the main server.
+    Lifespan context manager: initializes MongoDB and starts the translation worker.
+    Motor client is created here (inside async context) to avoid Python 3.12 event loop issues.
     """
-    global worker_process
-    
+    global client, db, worker_process
+
+    # Init MongoDB inside async context (required for Motor on Python 3.12+)
+    mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+    db_name = os.environ.get('DB_NAME', 'zenzeii')
+    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+    db = client[db_name]
+    logger.info(f"MongoDB client created for DB: {db_name}")
+
     # Startup: Launch translation worker
     try:
         worker_script = ROOT_DIR / 'translation_worker.py'
         if worker_script.exists():
             logger.info("Starting translation worker...")
-            log_dir = ROOT_DIR / 'logs'
-            log_dir.mkdir(exist_ok=True)
             worker_process = subprocess.Popen(
                 [sys.executable, str(worker_script)],
                 cwd=str(ROOT_DIR),
-                stdout=open(log_dir / 'worker.out.log', 'a'),
-                stderr=open(log_dir / 'worker.err.log', 'a'),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             logger.info(f"Translation worker started (PID: {worker_process.pid})")
         else:
@@ -105,6 +108,10 @@ async def lifespan(app: FastAPI):
                 worker_process.kill()
             except:
                 pass
+
+    # Close MongoDB connection
+    if client:
+        client.close()
 
 # Create the main app with lifespan
 app = FastAPI(title="Zenzeii API", lifespan=lifespan)
