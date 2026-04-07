@@ -109,16 +109,11 @@ async def lifespan(app: FastAPI):
 # Create the main app with lifespan
 app = FastAPI(title="Zenzeii API", lifespan=lifespan)
 
-# CORS must be added before routes
-_cors_origins = [o.strip() for o in os.environ.get(
-    'CORS_ORIGINS',
-    'https://zenzeii-ci1x.vercel.app,http://localhost:3000'
-).split(',') if o.strip()]
-
+# CORS - temporarily open to all origins to confirm CORS is/isn't the issue
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
