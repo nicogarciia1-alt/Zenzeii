@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@300;400;500;700&family=Merriweather:wght@300;400;700&family=Inter:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@300;400;500;700&family=Merriweather:wght@300;400;700&family=Inter:wght@300;400;500;700&family=Shippori+Mincho:wght@400;500;700&family=Zen+Old+Mincho:wght@400;700&family=Klee+One:wght@400;600&family=M+PLUS+Rounded+1c:wght@300;400;500;700&family=Sawarabi+Mincho&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -86,9 +86,62 @@
 
 /* Japanese text specific styles */
 .jp-text {
-  font-family: 'Noto Serif JP', serif;
+  font-family: var(--jp-font-family, 'Noto Serif JP', serif);
   line-height: 1.8;
   letter-spacing: 0.05em;
+}
+
+/* Reader aesthetic themes — override CSS variables on the reader root element */
+.reader-theme-washi {
+  --background: 43 48% 92%;
+  --foreground: 21 33% 18%;
+  --card: 43 38% 88%;
+  --card-foreground: 21 33% 18%;
+  --popover: 43 38% 88%;
+  --popover-foreground: 21 33% 18%;
+  --muted: 43 25% 84%;
+  --muted-foreground: 30 20% 40%;
+  --border: 38 28% 78%;
+  --input: 38 28% 78%;
+}
+
+.reader-theme-sumi {
+  --background: 38 10% 10%;
+  --foreground: 38 20% 87%;
+  --card: 38 10% 13%;
+  --card-foreground: 38 20% 87%;
+  --popover: 38 10% 13%;
+  --popover-foreground: 38 20% 87%;
+  --muted: 38 8% 18%;
+  --muted-foreground: 38 10% 58%;
+  --border: 38 8% 22%;
+  --input: 38 8% 22%;
+}
+
+.reader-theme-sakura {
+  --background: 346 75% 97%;
+  --foreground: 335 41% 21%;
+  --card: 346 55% 94%;
+  --card-foreground: 335 41% 21%;
+  --popover: 346 55% 94%;
+  --popover-foreground: 335 41% 21%;
+  --muted: 346 40% 90%;
+  --muted-foreground: 335 25% 45%;
+  --border: 346 35% 85%;
+  --input: 346 35% 85%;
+}
+
+.reader-theme-take {
+  --background: 100 25% 94%;
+  --foreground: 145 33% 18%;
+  --card: 100 20% 90%;
+  --card-foreground: 145 33% 18%;
+  --popover: 100 20% 90%;
+  --popover-foreground: 145 33% 18%;
+  --muted: 100 18% 86%;
+  --muted-foreground: 120 15% 42%;
+  --border: 100 20% 80%;
+  --input: 100 20% 80%;
 }
 
 .jp-reading {
