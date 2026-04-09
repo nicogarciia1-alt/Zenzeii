@@ -33,8 +33,9 @@ const difficultyColors = {
 export const BookCard = ({ book, progress, onDelete }) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [coverError, setCoverError] = useState(false);
-  const showGeneratedCover = !book.cover_image || coverError;
+  // Always show the generated cover — the backend supplies random Unsplash
+  // stock photos that have no relation to the books.
+  const showGeneratedCover = true;
   const progressPercent = progress ? Math.round((progress.words_read / 500) * 100) : 0;
   const isImporting = book.import_status === 'importing';
   
@@ -92,7 +93,6 @@ export const BookCard = ({ book, progress, onDelete }) => {
                 alt={book.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 loading="lazy"
-                onError={() => setCoverError(true)}
               />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
