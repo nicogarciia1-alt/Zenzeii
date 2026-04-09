@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { deleteBook } from '@/lib/api';
 import { toast } from 'sonner';
+import GeneratedBookCover from './GeneratedBookCover';
 
 const difficultyColors = {
   beginner: 'bg-success/20 text-success border-success/30',
@@ -32,6 +33,8 @@ const difficultyColors = {
 export const BookCard = ({ book, progress, onDelete }) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [coverError, setCoverError] = useState(false);
+  const showGeneratedCover = !book.cover_image || coverError;
   const progressPercent = progress ? Math.round((progress.words_read / 500) * 100) : 0;
   const isImporting = book.import_status === 'importing';
   
@@ -79,13 +82,20 @@ export const BookCard = ({ book, progress, onDelete }) => {
         <Card className="group overflow-hidden border border-border hover:border-primary/30 hover:shadow-float transition-all duration-300 cursor-pointer h-full relative">
           {/* Book Cover */}
           <div className="aspect-[3/4] relative overflow-hidden bg-muted">
-            <img
-              src={book.cover_image}
-              alt={book.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              loading="lazy"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            {showGeneratedCover ? (
+              <div className="w-full h-full group-hover:scale-105 transition-transform duration-500">
+                <GeneratedBookCover book={book} />
+              </div>
+            ) : (
+              <img
+                src={book.cover_image}
+                alt={book.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                loading="lazy"
+                onError={() => setCoverError(true)}
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
             
             {/* Progress Indicator */}
             {progress && (

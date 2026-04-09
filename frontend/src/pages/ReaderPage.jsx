@@ -36,6 +36,11 @@ import ScriptToggle from '@/components/reader/ScriptToggle';
 import SecondaryScriptToggle from '@/components/reader/SecondaryScriptToggle';
 import HighlightedText from '@/components/reader/HighlightedText';
 import DictionaryPopup from '@/components/reader/DictionaryPopup';
+import ReaderCustomizationPanel, {
+  READER_THEMES,
+  FONT_OPTIONS,
+  FONT_SIZE_STEPS,
+} from '@/components/reader/ReaderCustomizationPanel';
 import { buildVocabIndex } from '@/lib/vocabHighlight';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
@@ -53,7 +58,7 @@ import {
 } from '@/lib/api';
 import { toast } from 'sonner';
 
-const SENTENCES_PER_PAGE = 50;
+const DEFAULT_SENTENCES_PER_PAGE = 50;
 
 export const ReaderPage = () => {
   const { bookId, chapterId } = useParams();
@@ -86,6 +91,13 @@ export const ReaderPage = () => {
   const [secondaryLayer, setSecondaryLayer] = useState(readerSettings.secondaryLayer || 'none');
   const [showSecondaryText, setShowSecondaryText] = useState(true);
   const [showVocabHighlights, setShowVocabHighlights] = useState(false);
+
+  // Customization settings
+  const [readerTheme, setReaderTheme] = useState(readerSettings.readerTheme || 'default');
+  const [fontFamily, setFontFamily] = useState(readerSettings.fontFamily || 'noto-serif');
+  const [sentencesPerPage, setSentencesPerPage] = useState(
+    readerSettings.sentencesPerPage || DEFAULT_SENTENCES_PER_PAGE
+  );
 
   // Rebuild vocab lookup index only when savedWords changes
   const vocabIndex = useMemo(() => buildVocabIndex(savedWords), [savedWords]);
@@ -141,7 +153,7 @@ export const ReaderPage = () => {
     const interval = setInterval(async () => {
       try {
         // Reload sentences to get updated translations
-        const res = await getSentences(currentChapter.id, 0, sentences.length || SENTENCES_PER_PAGE);
+        const res = await getSentences(currentChapter.id, 0, sentences.length || sentencesPerPage);
         setSentences(res.data);
         
         // Check if all translated now
@@ -195,7 +207,7 @@ export const ReaderPage = () => {
       setTranslatedCount(countRes.data.translated || 0);
       
       // Load sentences
-      const res = await getSentences(chapId, 0, SENTENCES_PER_PAGE);
+      const res = await getSentences(chapId, 0, sentencesPerPage);
       setSentences(res.data);
       setHasMore(res.data.length < countRes.data.count);
       
@@ -224,7 +236,7 @@ export const ReaderPage = () => {
     
     setLoadingMore(true);
     try {
-      const res = await getSentences(currentChapter.id, sentences.length, SENTENCES_PER_PAGE);
+      const res = await getSentences(currentChapter.id, sentences.length, sentencesPerPage);
       setSentences(prev => [...prev, ...res.data]);
       setHasMore(sentences.length + res.data.length < totalSentences);
       
@@ -380,6 +392,27 @@ export const ReaderPage = () => {
     if (v !== 'none') setShowSecondaryText(true);
   };
 
+  const handleThemeChange = (v) => {
+    setReaderTheme(v);
+    updateReaderSettings({ readerTheme: v });
+  };
+
+  const handleFontFamilyChange = (v) => {
+    setFontFamily(v);
+    updateReaderSettings({ fontFamily: v });
+  };
+
+  const handleFontSizeChange = (index) => {
+    const newSize = FONT_SIZE_STEPS[index];
+    setFontSize(newSize);
+    updateReaderSettings({ fontSize: newSize });
+  };
+
+  const handleSentencesPerPageChange = (n) => {
+    setSentencesPerPage(n);
+    updateReaderSettings({ sentencesPerPage: n });
+  };
+
   const getSecondaryText = (sentence) => {
     if (secondaryLayer === 'none') return null;
     
@@ -436,6 +469,11 @@ export const ReaderPage = () => {
     loose: 'leading-loose'
   }[lineHeight];
 
+  const themeClass = readerTheme !== 'default' ? `reader-theme-${readerTheme}` : '';
+  const selectedFont = FONT_OPTIONS.find(f => f.value === fontFamily);
+  const fontCSSValue = selectedFont?.css || '"Noto Serif JP", serif';
+  const fontSizeIndex = FONT_SIZE_STEPS.indexOf(fontSize);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -449,7 +487,7 @@ export const ReaderPage = () => {
   const hasNext = currentChapterIndex < chapters.length - 1;
 
   return (
-    <div className="min-h-screen bg-background" onClick={handleClosePopup}>
+    <div className={`min-h-screen bg-background ${themeClass}`} onClick={handleClosePopup}>
       {/* Top Bar */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
@@ -519,71 +557,39 @@ export const ReaderPage = () => {
                   <Settings className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent>
+              <SheetContent className="overflow-y-auto">
                 <SheetHeader>
-                  <SheetTitle className="font-serif">Reading Settings</SheetTitle>
+                  <SheetTitle className="font-serif">Reading Preferences</SheetTitle>
                 </SheetHeader>
-                <div className="space-y-6 mt-6">
-                  <ScriptToggle
-                    value={scriptMode}
-                    onChange={(v) => {
-                      setScriptMode(v);
-                      updateReaderSettings({ scriptMode: v });
-                    }}
-                  />
-
-                  <div className="space-y-2">
-                    <span className="text-xs text-muted-foreground">Font Size</span>
-                    <Select value={fontSize} onValueChange={(v) => {
-                      setFontSize(v);
-                      updateReaderSettings({ fontSize: v });
-                    }}>
-                      <SelectTrigger data-testid="font-size-select">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sm">Small</SelectItem>
-                        <SelectItem value="base">Medium</SelectItem>
-                        <SelectItem value="lg">Large</SelectItem>
-                        <SelectItem value="xl">Extra Large</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <span className="text-xs text-muted-foreground">Line Height</span>
-                    <Select value={lineHeight} onValueChange={(v) => {
-                      setLineHeight(v);
-                      updateReaderSettings({ lineHeight: v });
-                    }}>
-                      <SelectTrigger data-testid="line-height-select">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="normal">Normal</SelectItem>
-                        <SelectItem value="relaxed">Relaxed</SelectItem>
-                        <SelectItem value="loose">Loose</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-2">
-                    <span className="text-xs text-muted-foreground">Secondary Layer</span>
-                    <p className="text-xs text-muted-foreground/70">Show additional text below each sentence</p>
-                    <Select value={secondaryLayer} onValueChange={handleSecondaryLayerChange}>
-                      <SelectTrigger data-testid="secondary-layer-select">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getSecondaryOptions().map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <ReaderCustomizationPanel
+                  readerTheme={readerTheme}
+                  onThemeChange={handleThemeChange}
+                  fontFamily={fontFamily}
+                  onFontFamilyChange={handleFontFamilyChange}
+                  fontSizeIndex={fontSizeIndex >= 0 ? fontSizeIndex : 2}
+                  onFontSizeChange={handleFontSizeChange}
+                  sentencesPerPage={sentencesPerPage}
+                  onSentencesPerPageChange={handleSentencesPerPageChange}
+                  lineHeight={lineHeight}
+                  onLineHeightChange={(v) => {
+                    setLineHeight(v);
+                    updateReaderSettings({ lineHeight: v });
+                  }}
+                  scriptMode={scriptMode}
+                  onScriptModeChange={(v) => {
+                    setScriptMode(v);
+                    updateReaderSettings({ scriptMode: v });
+                    const validValues = getSecondaryOptions().map(o => o.value);
+                    if (!validValues.includes(secondaryLayer)) {
+                      handleSecondaryLayerChange('none');
+                    }
+                  }}
+                  secondaryLayer={secondaryLayer}
+                  onSecondaryLayerChange={handleSecondaryLayerChange}
+                  secondaryOptions={getSecondaryOptions()}
+                  showSecondaryText={showSecondaryText}
+                  onToggleSecondaryText={() => setShowSecondaryText(prev => !prev)}
+                />
               </SheetContent>
             </Sheet>
           </div>
@@ -641,7 +647,7 @@ export const ReaderPage = () => {
               <p className="text-lg text-muted-foreground mt-1">{currentChapter.title}</p>
             )}
             <div className="flex items-center justify-center gap-4 mt-3 text-xs text-muted-foreground">
-              <span>Page {Math.ceil(sentences.length / SENTENCES_PER_PAGE)} of {Math.ceil(totalSentences / SENTENCES_PER_PAGE)}</span>
+              <span>Page {Math.ceil(sentences.length / sentencesPerPage)} of {Math.ceil(totalSentences / sentencesPerPage)}</span>
               <span>•</span>
               <span>{sentences.length} / {totalSentences} sentences</span>
               {translatedCount < totalSentences && (
@@ -659,7 +665,11 @@ export const ReaderPage = () => {
           </div>
 
           {/* Sentences */}
-          <div className={`reader-content space-y-6 ${fontSizeClass} ${lineHeightClass}`} data-testid="reader-content">
+          <div
+            className={`reader-content space-y-6 ${fontSizeClass} ${lineHeightClass}`}
+            style={{ '--jp-font-family': fontCSSValue }}
+            data-testid="reader-content"
+          >
             {sentences.map((sentence) => {
               const secondaryText = getSecondaryText(sentence);
               const showSecondary = secondaryLayer !== 'none' && showSecondaryText && secondaryText && sentence.translation_status === 'completed';

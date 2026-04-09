@@ -11,11 +11,15 @@ export const ThemeProvider = ({ children }) => {
 
   const [readerSettings, setReaderSettings] = useState(() => {
     const stored = localStorage.getItem('readerSettings');
-    return stored ? JSON.parse(stored) : {
-      fontSize: 'base',
+    const defaults = {
+      fontSize: 'lg',
       lineHeight: 'relaxed',
-      scriptMode: 'kanji'
+      scriptMode: 'kanji',
+      readerTheme: 'default',
+      fontFamily: 'noto-serif',
+      sentencesPerPage: 50,
     };
+    return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
   });
 
   useEffect(() => {
