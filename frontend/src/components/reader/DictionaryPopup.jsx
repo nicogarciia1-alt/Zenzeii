@@ -73,8 +73,8 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
     <Card
       className="fixed z-50 w-80 p-4 shadow-float border border-border animate-scale-in"
       style={{
-        left: `${Math.min(position.x, window.innerWidth - 340)}px`,
-        top: `${Math.min(position.y + 10, window.innerHeight - 300)}px`,
+        left: `${Math.min(Math.max(0, position.x), window.innerWidth - 340)}px`,
+        top: `${Math.min(Math.max(10, position.y + 10), window.innerHeight - 500)}px`,
       }}
       data-testid="dictionary-popup"
       onClick={(e) => e.stopPropagation()}
