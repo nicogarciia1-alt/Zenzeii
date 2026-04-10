@@ -19,7 +19,8 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
   const [aiError, setAiError] = useState('');
   const [aiAvailable, setAiAvailable] = useState(true);
 
-  const handleAskAI = async () => {
+  const handleAskAI = async (e) => {
+    e.stopPropagation();
     setAiOpen(true);
     if (aiExplanation) return; // already fetched for this word
     setAiLoading(true);
@@ -76,6 +77,7 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
         top: `${Math.min(position.y + 10, window.innerHeight - 300)}px`,
       }}
       data-testid="dictionary-popup"
+      onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
