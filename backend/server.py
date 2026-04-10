@@ -1548,6 +1548,55 @@ async def ai_explain_word(
         raise HTTPException(status_code=500, detail="AI explanation failed")
 
 
+class AIChatRequest(BaseModel):
+    message: str
+    book_title: str = ""
+    current_sentence: str = ""
+    chat_history: List[dict] = []
+
+@api_router.post("/ai/chat")
+async def ai_chat(
+    request: AIChatRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Chat with Zenzeii, a scholarly Japanese literature companion."""
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        raise HTTPException(status_code=503, detail="AI not available")
+
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=openai_key)
+
+        system_prompt = (
+            "You are Zenzeii, a scholarly and calm literary companion specializing in "
+            "Japanese language and literature. You help readers understand nuance, "
+            "cultural context, and literary meaning with the patience of a learned professor."
+        )
+        if request.book_title:
+            system_prompt += f" The reader is currently reading: {request.book_title}."
+        if request.current_sentence:
+            system_prompt += f" Their current sentence is: {request.current_sentence}."
+
+        messages = [{"role": "system", "content": system_prompt}]
+        for msg in request.chat_history:
+            if msg.get("role") in ("user", "assistant") and msg.get("content"):
+                messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": request.message})
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=500,
+            temperature=0.7,
+        )
+
+        return {"reply": response.choices[0].message.content.strip()}
+    except Exception as e:
+        logger.error(f"AI chat error: {e}")
+        raise HTTPException(status_code=500, detail="AI chat failed")
+
+
 # ========================
 # ROOT
 # ========================
