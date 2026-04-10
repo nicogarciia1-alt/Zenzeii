@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Plus, Check, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,39 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
   const [saved, setSaved] = useState(
     savedWords.some(w => w.word === wordData?.word)
   );
+
+  // Drag-to-move state — initialised once from the clamped position prop
+  const [dragPos, setDragPos] = useState(() => ({
+    x: Math.min(Math.max(0, position.x), window.innerWidth - 340),
+    y: Math.min(Math.max(10, position.y + 10), window.innerHeight - 500),
+  }));
+  const isDragging = useRef(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      if (!isDragging.current) return;
+      setDragPos({
+        x: Math.min(Math.max(0, e.clientX - dragOffset.current.x), window.innerWidth - 340),
+        y: Math.min(Math.max(0, e.clientY - dragOffset.current.y), window.innerHeight - 80),
+      });
+    };
+    const onMouseUp = () => { isDragging.current = false; };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  const handleDragStart = (e) => {
+    // Don't hijack clicks on the close button
+    if (e.target.closest('[data-testid="dictionary-close"]')) return;
+    e.preventDefault();
+    isDragging.current = true;
+    dragOffset.current = { x: e.clientX - dragPos.x, y: e.clientY - dragPos.y };
+  };
 
   // AI explanation state
   const [aiOpen, setAiOpen] = useState(false);
@@ -73,14 +106,17 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
     <Card
       className="fixed z-50 w-80 p-4 shadow-float border border-border animate-scale-in"
       style={{
-        left: `${Math.min(Math.max(0, position.x), window.innerWidth - 340)}px`,
-        top: `${Math.min(Math.max(10, position.y + 10), window.innerHeight - 500)}px`,
+        left: `${dragPos.x}px`,
+        top: `${dragPos.y}px`,
       }}
       data-testid="dictionary-popup"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
+      {/* Header — drag handle */}
+      <div
+        className="flex items-start justify-between mb-3 cursor-grab active:cursor-grabbing select-none"
+        onMouseDown={handleDragStart}
+      >
         <div>
           <h3 className="text-2xl font-serif text-foreground">{wordData.word}</h3>
           {wordData.reading && (
