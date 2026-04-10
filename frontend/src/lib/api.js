@@ -60,3 +60,7 @@ export const updateProgress = (data) => axios.post(`${API}/progress`, data);
 
 // Stats API
 export const getStats = () => axios.get(`${API}/stats`);
+
+// AI API
+export const explainWord = (word, contextSentence) =>
+  axios.post(`${API}/ai/explain`, { word, context_sentence: contextSentence || null });

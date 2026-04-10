@@ -83,6 +83,7 @@ export const ReaderPage = () => {
   const [wordData, setWordData] = useState(null);
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [lookingUp, setLookingUp] = useState(false);
+  const [contextSentence, setContextSentence] = useState('');
 
   // Settings
   const [fontSize, setFontSize] = useState(readerSettings.fontSize || 'lg');
@@ -259,13 +260,14 @@ export const ReaderPage = () => {
     }
   };
 
-  const handleWordClick = useCallback(async (word, event) => {
+  const handleWordClick = useCallback(async (word, event, sentenceText = '') => {
     if (scriptMode === 'english') return;
-    
+
     event.stopPropagation();
     const rect = event.target.getBoundingClientRect();
     setPopupPosition({ x: rect.left, y: rect.bottom });
     setSelectedWord(word);
+    setContextSentence(sentenceText);
     setLookingUp(true);
 
     try {
@@ -687,7 +689,9 @@ export const ReaderPage = () => {
                         <HighlightedText
                           text={getSentenceText(sentence)}
                           vocabIndex={vocabIndex}
-                          onWordClick={handleWordClick}
+                          onWordClick={(word, e) =>
+                            handleWordClick(word, e, getSentenceText(sentence))
+                          }
                         />
                       ) : (
                         <span
@@ -696,10 +700,10 @@ export const ReaderPage = () => {
                             const text = getSentenceText(sentence);
                             const selection = window.getSelection();
                             if (selection && selection.toString().trim()) {
-                              handleWordClick(selection.toString().trim(), e);
+                              handleWordClick(selection.toString().trim(), e, text);
                             } else {
                               const firstWord = text.split(/[\s、。！？]/)[0];
-                              if (firstWord) handleWordClick(firstWord, e);
+                              if (firstWord) handleWordClick(firstWord, e, text);
                             }
                           }}
                         >
@@ -797,6 +801,7 @@ export const ReaderPage = () => {
               onClose={handleClosePopup}
               savedWords={savedWords}
               onWordSaved={handleWordSaved}
+              contextSentence={contextSentence}
             />
           )}
         </>
