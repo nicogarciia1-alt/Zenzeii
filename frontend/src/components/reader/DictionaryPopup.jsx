@@ -1,16 +1,43 @@
 import React, { useState } from 'react';
-import { X, Plus, Check, Loader2 } from 'lucide-react';
+import { X, Plus, Check, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { saveWord } from '@/lib/api';
+import { saveWord, explainWord } from '@/lib/api';
 import { toast } from 'sonner';
 
-export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], onWordSaved }) => {
+export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], onWordSaved, contextSentence = '' }) => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(
     savedWords.some(w => w.word === wordData?.word)
   );
+
+  // AI explanation state
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState('');
+  const [aiError, setAiError] = useState('');
+  const [aiAvailable, setAiAvailable] = useState(true);
+
+  const handleAskAI = async () => {
+    setAiOpen(true);
+    if (aiExplanation) return; // already fetched for this word
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const res = await explainWord(wordData.word, contextSentence);
+      setAiExplanation(res.data.explanation);
+    } catch (err) {
+      if (err.response?.status === 503) {
+        setAiAvailable(false);
+        setAiOpen(false);
+      } else {
+        setAiError('Could not fetch explanation. Please try again.');
+      }
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   if (!wordData) return null;
 
@@ -104,6 +131,43 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
           <p className="text-sm text-foreground jp-text">{wordData.example_sentence}</p>
           {wordData.example_translation && (
             <p className="text-xs text-muted-foreground mt-1">{wordData.example_translation}</p>
+          )}
+        </div>
+      )}
+
+      {/* AI Explanation */}
+      {aiAvailable && (
+        <div className="mb-4">
+          {!aiOpen ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-1.5 text-xs h-8"
+              onClick={handleAskAI}
+              data-testid="ask-zenzeii-btn"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Ask Zenzeii
+            </Button>
+          ) : (
+            <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  Zenzeii explains
+                </span>
+                {aiLoading && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+              </div>
+              {aiLoading ? (
+                <p className="text-xs text-muted-foreground">Thinking...</p>
+              ) : aiError ? (
+                <p className="text-xs text-destructive">{aiError}</p>
+              ) : (
+                <p className="text-xs text-foreground leading-relaxed max-h-32 overflow-y-auto whitespace-pre-line">
+                  {aiExplanation}
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}

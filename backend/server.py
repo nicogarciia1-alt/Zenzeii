@@ -1503,6 +1503,52 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
     }
 
 # ========================
+# AI EXPLAIN
+# ========================
+
+class AIExplainRequest(BaseModel):
+    word: str
+    context_sentence: Optional[str] = None
+
+@api_router.post("/ai/explain")
+async def ai_explain_word(
+    request: AIExplainRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Explain a Japanese word in context using GPT-4o-mini."""
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        raise HTTPException(status_code=503, detail="AI explanation not available")
+
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=openai_key)
+
+        context_line = f"\nContext sentence: {request.context_sentence}" if request.context_sentence else ""
+        prompt = (
+            f"You are a Japanese language tutor helping an intermediate learner.\n\n"
+            f"Word: {request.word}{context_line}\n\n"
+            f"In 3-5 sentences explain:\n"
+            f"- What this word means in this context\n"
+            f"- Any nuance, register, or common-usage note worth knowing\n"
+            f"- One closely related word or expression if useful\n\n"
+            f"Be concise and practical."
+        )
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=220,
+            temperature=0.7,
+        )
+
+        return {"explanation": response.choices[0].message.content.strip()}
+    except Exception as e:
+        logger.error(f"AI explain error: {e}")
+        raise HTTPException(status_code=500, detail="AI explanation failed")
+
+
+# ========================
 # ROOT
 # ========================
 
