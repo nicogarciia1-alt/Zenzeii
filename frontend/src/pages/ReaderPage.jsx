@@ -41,6 +41,7 @@ import ReaderCustomizationPanel, {
   FONT_OPTIONS,
   FONT_SIZE_STEPS,
 } from '@/components/reader/ReaderCustomizationPanel';
+import ZenzeiiChat from '@/components/reader/ZenzeiiChat';
 import { buildVocabIndex } from '@/lib/vocabHighlight';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
@@ -92,6 +93,7 @@ export const ReaderPage = () => {
   const [secondaryLayer, setSecondaryLayer] = useState(readerSettings.secondaryLayer || 'none');
   const [showSecondaryText, setShowSecondaryText] = useState(true);
   const [showVocabHighlights, setShowVocabHighlights] = useState(false);
+  const [zenzeiiOpen, setZenzeiiOpen] = useState(false);
 
   // Customization settings
   const [readerTheme, setReaderTheme] = useState(readerSettings.readerTheme || 'default');
@@ -806,6 +808,34 @@ export const ReaderPage = () => {
           )}
         </>
       )}
+
+      {/* Zenzeii chat trigger */}
+      <button
+        onClick={(e) => { e.stopPropagation(); setZenzeiiOpen(true); }}
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '24px',
+          fontFamily: 'EB Garamond, serif',
+          fontSize: '14px',
+          background: 'var(--background)',
+          border: '1px solid var(--border)',
+          color: 'var(--foreground)',
+          padding: '8px 16px',
+          cursor: 'pointer',
+          letterSpacing: '0.05em',
+        }}
+      >
+        文 Zenzeii
+      </button>
+
+      <ZenzeiiChat
+        bookTitle={book?.title || ''}
+        currentSentence={contextSentence || ''}
+        isOpen={zenzeiiOpen}
+        onClose={() => setZenzeiiOpen(false)}
+      />
+
     </div>
   );
 };
