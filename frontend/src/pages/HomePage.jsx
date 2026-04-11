@@ -317,7 +317,6 @@ export const HomePage = () => {
                               <p className="text-sm text-muted-foreground">{book.author}</p>
                               <div className="flex gap-2 mt-1">
                                 <Badge variant="secondary" className="text-xs">{book.genre}</Badge>
-                                <Badge variant="outline" className="text-xs">{book.difficulty}</Badge>
                                 <Badge variant={book.language === 'ja' ? 'default' : 'secondary'} className="text-xs">
                                   {book.language === 'ja' ? '日本語' : 'English'}
                                 </Badge>

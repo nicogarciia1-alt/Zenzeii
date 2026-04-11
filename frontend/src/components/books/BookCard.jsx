@@ -24,11 +24,6 @@ import { deleteBook } from '@/lib/api';
 import { toast } from 'sonner';
 import GeneratedBookCover from './GeneratedBookCover';
 
-const difficultyColors = {
-  beginner: 'bg-success/20 text-success border-success/30',
-  intermediate: 'bg-warning/20 text-warning border-warning/30',
-  advanced: 'bg-primary/20 text-primary border-primary/30',
-};
 
 export const BookCard = ({ book, progress, onDelete }) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -107,14 +102,6 @@ export const BookCard = ({ book, progress, onDelete }) => {
               </div>
             )}
             
-            {/* Difficulty Badge */}
-            <Badge 
-              variant="outline" 
-              className={`absolute top-3 right-12 text-xs ${difficultyColors[book.difficulty] || difficultyColors.intermediate}`}
-            >
-              {book.difficulty}
-            </Badge>
-
             {/* Menu Button */}
             <div className="absolute top-2 right-2" onClick={handleMenuClick}>
               <DropdownMenu>
