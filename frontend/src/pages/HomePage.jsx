@@ -47,6 +47,7 @@ export const HomePage = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchSource, setSearchSource] = useState('gutenberg');
+  const [hasSearched, setHasSearched] = useState(false);
   const [importingBooks, setImportingBooks] = useState(new Set());
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedSource, setSelectedSource] = useState('all');
@@ -138,6 +139,7 @@ export const HomePage = () => {
       toast.error('Search failed');
     } finally {
       setSearching(false);
+      setHasSearched(true);
     }
   };
 
@@ -266,7 +268,7 @@ export const HomePage = () => {
                 Add Books to Library
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[80vh]">
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="font-serif flex items-center gap-2">
                   Add Books to Library
@@ -356,14 +358,14 @@ export const HomePage = () => {
                       <Button
                         size="sm"
                         variant={searchSource === 'gutenberg' ? 'default' : 'outline'}
-                        onClick={() => { setSearchSource('gutenberg'); setSearchResults([]); setSearchQuery(''); }}
+                        onClick={() => { setSearchSource('gutenberg'); setSearchResults([]); setSearchQuery(''); setHasSearched(false); }}
                       >
                         <Globe className="h-3.5 w-3.5 mr-1" /> Gutenberg
                       </Button>
                       <Button
                         size="sm"
                         variant={searchSource === 'aozora' ? 'default' : 'outline'}
-                        onClick={() => { setSearchSource('aozora'); setSearchResults([]); setSearchQuery(''); }}
+                        onClick={() => { setSearchSource('aozora'); setSearchResults([]); setSearchQuery(''); setHasSearched(false); }}
                       >
                         青空 Aozora
                       </Button>
@@ -434,7 +436,7 @@ export const HomePage = () => {
                             </Card>
                           )
                         )}
-                        {searchResults.length === 0 && searchQuery && !searching && (
+                        {hasSearched && searchResults.length === 0 && !searching && (
                           <p className="text-center text-muted-foreground py-8">
                             No results found.
                           </p>
