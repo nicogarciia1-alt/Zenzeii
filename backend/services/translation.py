@@ -111,8 +111,31 @@ def _translate_single_google(text: str) -> str:
         return text
 
 
-def _translate_japanese_to_english(text: str) -> str:
-    """Translate Japanese text to English using Google Translate."""
+async def _translate_japanese_to_english(text: str) -> str:
+    """Translate Japanese text to English using OpenAI if available,
+    else Google Translate."""
+    if OPENAI_API_KEY:
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": (
+                        "You are a literary translator specializing in Japanese literature. "
+                        "Translate the Japanese sentence into natural, elegant English. "
+                        "Preserve the tone, style and literary quality of the original. "
+                        "Return ONLY the translated English sentence, nothing else."
+                    )},
+                    {"role": "user", "content": text}
+                ],
+                temperature=0.3,
+                max_tokens=256,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.warning(f"OpenAI Japanese->English failed: {e}")
+
     from deep_translator import GoogleTranslator
     try:
         return GoogleTranslator(source="ja", target="en").translate(text.strip()) or ""
@@ -136,7 +159,7 @@ async def translate_japanese_source_batch(
             result[sid] = {"translation_status": "pending"}
             continue
         readings = _to_readings(japanese)
-        english = _translate_japanese_to_english(japanese)
+        english = await _translate_japanese_to_english(japanese)
         result[sid] = {
             "kanji_text": readings["japanese"],
             "hiragana_text": readings["hiragana"],
