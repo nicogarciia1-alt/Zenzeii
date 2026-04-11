@@ -103,9 +103,15 @@ async def process_translation_batch(db, sentences):
         return 0
     
     sentence_ids = [s["id"] for s in sentences]
-    english_texts = [s["english"] for s in sentences]
-    
-    results = await translate_batch_for_worker(sentence_ids, english_texts)
+
+    if sentences[0].get("source_language") == "ja":
+        from services.translation import translate_japanese_source_batch
+        results = await translate_japanese_source_batch(
+            sentence_ids,
+            [s.get("japanese_original") or s.get("kanji_text") or "" for s in sentences])
+    else:
+        english_texts = [s["english"] for s in sentences]
+        results = await translate_batch_for_worker(sentence_ids, english_texts)
     
     # Save results to database
     for sid, data in results.items():
@@ -128,7 +134,7 @@ async def process_job(db, job, semaphore):
                         "book_id": job["book_id"],
                         "translation_status": {"$ne": "completed"}
                     },
-                    {"_id": 0, "id": 1, "english": 1}
+                    {"_id": 0, "id": 1, "english": 1, "source_language": 1, "japanese_original": 1, "kanji_text": 1}
                 ).sort("order", 1).limit(SENTENCES_PER_BOOK_BATCH).to_list(SENTENCES_PER_BOOK_BATCH)
                 
                 if sentences:
@@ -153,7 +159,7 @@ async def process_job(db, job, semaphore):
                         "chapter_id": job["chapter_id"],
                         "translation_status": {"$ne": "completed"}
                     },
-                    {"_id": 0, "id": 1, "english": 1}
+                    {"_id": 0, "id": 1, "english": 1, "source_language": 1, "japanese_original": 1, "kanji_text": 1}
                 ).sort("order", 1).limit(SENTENCES_PER_BOOK_BATCH).to_list(SENTENCES_PER_BOOK_BATCH)
                 
                 if sentences:

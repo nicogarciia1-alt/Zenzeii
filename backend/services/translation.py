@@ -111,6 +111,43 @@ def _translate_single_google(text: str) -> str:
         return text
 
 
+def _translate_japanese_to_english(text: str) -> str:
+    """Translate Japanese text to English using Google Translate."""
+    from deep_translator import GoogleTranslator
+    try:
+        return GoogleTranslator(source="ja", target="en").translate(text.strip()) or ""
+    except Exception as e:
+        logger.warning(f"Japanese->English translation failed: {e}")
+        return ""
+
+
+async def translate_japanese_source_batch(
+    sentence_ids: List[str],
+    japanese_texts: List[str],
+) -> Dict[str, Dict]:
+    """
+    Process sentences where source is already Japanese (Aozora books).
+    1. Run pykakasi to get hiragana/katakana/romaji from japanese_original
+    2. Translate Japanese->English using Google Translate
+    """
+    result = {}
+    for sid, japanese in zip(sentence_ids, japanese_texts):
+        if not japanese:
+            result[sid] = {"translation_status": "pending"}
+            continue
+        readings = _to_readings(japanese)
+        english = _translate_japanese_to_english(japanese)
+        result[sid] = {
+            "kanji_text": readings["japanese"],
+            "hiragana_text": readings["hiragana"],
+            "katakana_text": readings["katakana"],
+            "romaji_text": readings["romaji"],
+            "english": english if english else japanese,
+            "translation_status": "completed",
+        }
+    return result
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def translate_to_japanese(text: str) -> Dict[str, str]:
