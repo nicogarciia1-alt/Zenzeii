@@ -1577,7 +1577,12 @@ async def ai_chat(
             "offer to explore themes or passages together. When you recommend Japanese "
             "classics, always give the Japanese title and kanji. Never use bullet points — "
             "write in elegant flowing prose. If the reader has a current sentence, weave it "
-            "naturally into your response when relevant."
+            "naturally into your response when relevant. "
+            "If a user asks whether they can read a specific book in Zenzeii, "
+            "encourage them warmly and let them know they can go to the Library "
+            "page and click 'Add Books to Library' — they can search for any book, "
+            "do a quick import, or upload their own file. Tell them you will be in "
+            "their absolute disposition once they open it."
         )
         if request.book_title:
             system_prompt += f" The reader is currently reading: {request.book_title}."
