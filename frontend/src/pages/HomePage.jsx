@@ -30,6 +30,7 @@ import {
   getAvailableBooks, 
   importBook, 
   searchGutenberg,
+  searchAozora,
   uploadBook,
   getBookStatus,
   cancelImport,
@@ -45,6 +46,7 @@ export const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [searchSource, setSearchSource] = useState('gutenberg');
   const [importingBooks, setImportingBooks] = useState(new Set());
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedSource, setSelectedSource] = useState('all');
@@ -128,7 +130,9 @@ export const HomePage = () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
     try {
-      const res = await searchGutenberg(searchQuery);
+      const res = searchSource === 'aozora'
+        ? await searchAozora(searchQuery)
+        : await searchGutenberg(searchQuery);
       setSearchResults(res.data);
     } catch (error) {
       toast.error('Search failed');
@@ -349,8 +353,24 @@ export const HomePage = () => {
                 <TabsContent value="search">
                   <div className="space-y-4">
                     <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant={searchSource === 'gutenberg' ? 'default' : 'outline'}
+                        onClick={() => { setSearchSource('gutenberg'); setSearchResults([]); setSearchQuery(''); }}
+                      >
+                        <Globe className="h-3.5 w-3.5 mr-1" /> Gutenberg
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={searchSource === 'aozora' ? 'default' : 'outline'}
+                        onClick={() => { setSearchSource('aozora'); setSearchResults([]); setSearchQuery(''); }}
+                      >
+                        青空 Aozora
+                      </Button>
+                    </div>
+                    <div className="flex gap-2">
                       <Input
-                        placeholder="Search Project Gutenberg..."
+                        placeholder={searchSource === 'aozora' ? 'Search Aozora Bunko...' : 'Search Project Gutenberg...'}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -360,34 +380,60 @@ export const HomePage = () => {
                         {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                       </Button>
                     </div>
-                    
-                    <ScrollArea className="h-[350px]">
+
+                    <ScrollArea className="h-[310px]">
                       <div className="space-y-2">
-                        {searchResults.map((result) => (
-                          <Card key={result.gutenberg_id} className="border-border">
-                            <CardContent className="p-3 flex items-center justify-between">
-                              <div>
-                                <h4 className="font-medium text-sm text-foreground line-clamp-1">{result.title}</h4>
-                                <p className="text-xs text-muted-foreground">{result.author}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {result.download_count.toLocaleString()} downloads
-                                </p>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleImportGutenberg(result)}
-                                disabled={importingBooks.has(`gutenberg-${result.gutenberg_id}`)}
-                              >
-                                {importingBooks.has(`gutenberg-${result.gutenberg_id}`) ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Download className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </CardContent>
-                          </Card>
-                        ))}
+                        {searchResults.map((result) =>
+                          searchSource === 'aozora' ? (
+                            <Card key={result.book_key} className="border-border">
+                              <CardContent className="p-3 flex items-center justify-between">
+                                <div>
+                                  <h4 className="font-medium text-sm text-foreground line-clamp-1">{result.title}</h4>
+                                  {result.title_en && (
+                                    <p className="text-xs text-muted-foreground">{result.title_en}</p>
+                                  )}
+                                  <p className="text-xs text-muted-foreground">{result.author}</p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleImportPredefined(result.book_key, 'aozora')}
+                                  disabled={importingBooks.has(result.book_key)}
+                                >
+                                  {importingBooks.has(result.book_key) ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Download className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          ) : (
+                            <Card key={result.gutenberg_id} className="border-border">
+                              <CardContent className="p-3 flex items-center justify-between">
+                                <div>
+                                  <h4 className="font-medium text-sm text-foreground line-clamp-1">{result.title}</h4>
+                                  <p className="text-xs text-muted-foreground">{result.author}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {result.download_count.toLocaleString()} downloads
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleImportGutenberg(result)}
+                                  disabled={importingBooks.has(`gutenberg-${result.gutenberg_id}`)}
+                                >
+                                  {importingBooks.has(`gutenberg-${result.gutenberg_id}`) ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Download className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          )
+                        )}
                         {searchResults.length === 0 && searchQuery && !searching && (
                           <p className="text-center text-muted-foreground py-8">
                             No results found.
