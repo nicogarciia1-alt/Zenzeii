@@ -1608,6 +1608,33 @@ async def ai_chat(
         raise HTTPException(status_code=500, detail="AI chat failed")
 
 
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "nova"
+
+@api_router.post("/tts")
+async def text_to_speech(request: TTSRequest, current_user: dict = Depends(get_current_user)):
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        raise HTTPException(status_code=503, detail="TTS not available")
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=openai_key)
+        valid_voices = ["nova", "shimmer", "echo", "onyx", "fable", "alloy"]
+        voice = request.voice if request.voice in valid_voices else "nova"
+        response = await client.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=request.text[:500]
+        )
+        audio_bytes = response.content
+        from fastapi.responses import Response
+        return Response(content=audio_bytes, media_type="audio/mpeg")
+    except Exception as e:
+        logger.error(f"TTS error: {e}")
+        raise HTTPException(status_code=500, detail="TTS failed")
+
+
 # ========================
 # ROOT
 # ========================
