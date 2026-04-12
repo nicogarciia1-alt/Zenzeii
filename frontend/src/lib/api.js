@@ -64,3 +64,6 @@ export const getStats = () => axios.get(`${API}/stats`);
 // AI API
 export const explainWord = (word, contextSentence) =>
   axios.post(`${API}/ai/explain`, { word, context_sentence: contextSentence || null });
+
+export const textToSpeech = (text, voice = 'nova') =>
+  axios.post(`${API}/tts`, { text, voice }, { responseType: 'arraybuffer' });
