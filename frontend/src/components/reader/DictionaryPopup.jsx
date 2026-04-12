@@ -3,7 +3,7 @@ import { X, Plus, Check, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { saveWord, explainWord } from '@/lib/api';
+import { saveWord, explainWord, textToSpeech } from '@/lib/api';
 import { toast } from 'sonner';
 
 export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], onWordSaved, contextSentence = '' }) => {
@@ -51,6 +51,7 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
   const [aiExplanation, setAiExplanation] = useState('');
   const [aiError, setAiError] = useState('');
   const [aiAvailable, setAiAvailable] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const handleAskAI = async (e) => {
     e.stopPropagation();
@@ -70,6 +71,24 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
       }
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleSpeak = async () => {
+    if (!wordData?.word || isSpeaking) return;
+    setIsSpeaking(true);
+    try {
+      const res = await textToSpeech(wordData.word, 'nova');
+      const blob = new Blob([res.data], { type: 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(url);
+      };
+      audio.play();
+    } catch {
+      setIsSpeaking(false);
     }
   };
 
@@ -118,7 +137,22 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
         onMouseDown={handleDragStart}
       >
         <div>
-          <h3 className="text-2xl font-serif text-foreground">{wordData.word}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-2xl font-serif text-foreground">{wordData.word}</h3>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleSpeak(); }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: isSpeaking ? 'wait' : 'pointer',
+                fontSize: '16px',
+                opacity: isSpeaking ? 0.5 : 1,
+              }}
+              title="Listen to pronunciation"
+            >
+              {isSpeaking ? '⏸' : '🔊'}
+            </button>
+          </div>
           {wordData.reading && (
             <p className="text-sm text-muted-foreground">{wordData.reading}</p>
           )}
