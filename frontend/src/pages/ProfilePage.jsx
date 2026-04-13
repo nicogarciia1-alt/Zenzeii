@@ -12,6 +12,9 @@ import { Progress } from '@/components/ui/progress';
 import Layout from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { getStats, getProgress, getVocabulary, getBooks } from '@/lib/api';
+import axios from 'axios';
+import { toast } from 'sonner';
+const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
 
 export const ProfilePage = () => {
   const { user } = useAuth();
@@ -20,6 +23,11 @@ export const ProfilePage = () => {
   const [vocabulary, setVocabulary] = useState([]);
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [editUsername, setEditUsername] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editConfirm, setEditConfirm] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -64,6 +72,37 @@ export const ProfilePage = () => {
     return cleaned.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || bookId;
   };
 
+  const handleSaveProfile = async () => {
+    if (editPassword && editPassword !== editConfirm) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    if (editPassword && editPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const updates = {};
+      if (editUsername && editUsername !== user?.username) updates.username = editUsername;
+      if (editPassword) updates.password = editPassword;
+      if (Object.keys(updates).length === 0) {
+        setEditMode(false);
+        return;
+      }
+      await axios.patch(`${API}/auth/profile`, updates);
+      toast.success('Profile updated');
+      setEditMode(false);
+      setEditPassword('');
+      setEditConfirm('');
+      window.location.reload();
+    } catch {
+      toast.error('Failed to update profile');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -82,11 +121,60 @@ export const ProfilePage = () => {
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
             <User className="h-8 w-8 text-primary" />
           </div>
-          <div>
-            <h1 className="text-2xl font-serif text-foreground" data-testid="profile-username">
-              {user?.username}
-            </h1>
-            <p className="text-muted-foreground">{user?.email}</p>
+          <div className="flex-1">
+            {!editMode ? (
+              <div>
+                <h1 className="text-2xl font-serif text-foreground" data-testid="profile-username">
+                  {user?.username}
+                </h1>
+                <p className="text-muted-foreground">{user?.email}</p>
+                <button
+                  onClick={() => { setEditMode(true); setEditUsername(user?.username || ''); }}
+                  style={{ background: 'none', border: 'none', color: '#B5294E', cursor: 'pointer', fontSize: '13px', fontFamily: 'EB Garamond, serif', padding: '4px 0' }}
+                >
+                  Edit profile
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '320px' }}>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={e => setEditUsername(e.target.value)}
+                  placeholder="Username"
+                  style={{ padding: '6px 10px', border: '1px solid #c8b89a', fontFamily: 'EB Garamond, serif', fontSize: '15px', background: '#fdf8f0' }}
+                />
+                <input
+                  type="password"
+                  value={editPassword}
+                  onChange={e => setEditPassword(e.target.value)}
+                  placeholder="New password (leave blank to keep current)"
+                  style={{ padding: '6px 10px', border: '1px solid #c8b89a', fontFamily: 'EB Garamond, serif', fontSize: '15px', background: '#fdf8f0' }}
+                />
+                <input
+                  type="password"
+                  value={editConfirm}
+                  onChange={e => setEditConfirm(e.target.value)}
+                  placeholder="Confirm new password"
+                  style={{ padding: '6px 10px', border: '1px solid #c8b89a', fontFamily: 'EB Garamond, serif', fontSize: '15px', background: '#fdf8f0' }}
+                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={editSaving}
+                    style={{ padding: '6px 16px', background: '#B5294E', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'EB Garamond, serif', fontSize: '14px' }}
+                  >
+                    {editSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => { setEditMode(false); setEditPassword(''); setEditConfirm(''); }}
+                    style={{ padding: '6px 16px', background: 'none', border: '1px solid #c8b89a', cursor: 'pointer', fontFamily: 'EB Garamond, serif', fontSize: '14px' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
