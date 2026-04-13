@@ -554,6 +554,32 @@ async def update_profile(request: UpdateProfileRequest, current_user: dict = Dep
     )
     return {"message": "Profile updated successfully"}
 
+class FeedbackRequest(BaseModel):
+    message: str
+    user_email: str = ""
+    username: str = ""
+
+@api_router.post("/feedback")
+async def submit_feedback(request: FeedbackRequest, current_user: dict = Depends(get_current_user)):
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    if RESEND_API_KEY:
+        import resend
+        resend.api_key = RESEND_API_KEY
+        resend.Emails.send({
+            "from": "Zenzeii <onboarding@resend.dev>",
+            "to": "nicogarciia1@gmail.com",
+            "subject": f"Zenzeii Feedback from {request.username or request.user_email}",
+            "html": f"""
+            <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; padding: 40px; background: #f5efe0;">
+                <h1 style="font-size: 24px; color: #3d2b1f;">禅々 Zenzeii — User Feedback</h1>
+                <p style="color: #3d2b1f;"><strong>From:</strong> {request.username} ({request.user_email})</p>
+                <p style="color: #3d2b1f;"><strong>Message:</strong></p>
+                <p style="color: #3d2b1f; background: #ede5db; padding: 16px;">{request.message}</p>
+            </div>
+            """
+        })
+    return {"message": "Feedback received"}
+
 # ========================
 # SYSTEM STATUS ENDPOINT
 # ========================
