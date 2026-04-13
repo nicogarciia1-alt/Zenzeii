@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 
-const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API_BASE = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
 
 const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
   const [messages, setMessages] = useState([
