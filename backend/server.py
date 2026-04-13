@@ -18,6 +18,7 @@ import bcrypt
 import jwt
 import httpx
 import asyncio
+import secrets
 
 # Import services
 from services.book_import import (
@@ -463,6 +464,70 @@ async def login(credentials: UserLogin):
             total_words_read=user.get("total_words_read", 0)
         )
     )
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    user = await db.users.find_one({"email": request.email})
+    if not user:
+        return {"message": "If this email exists, a reset link has been sent."}
+    reset_token = secrets.token_urlsafe(32)
+    expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    await db.password_resets.insert_one({
+        "token": reset_token,
+        "user_id": user["id"],
+        "email": request.email,
+        "expires_at": expiry.isoformat(),
+        "used": False
+    })
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://zenzeii-ci1x.vercel.app")
+    if RESEND_API_KEY:
+        import resend
+        resend.api_key = RESEND_API_KEY
+        reset_url = f"{FRONTEND_URL}/reset-password?token={reset_token}"
+        resend.Emails.send({
+            "from": "Zenzeii <onboarding@resend.dev>",
+            "to": request.email,
+            "subject": "Reset your Zenzeii password",
+            "html": f"""
+            <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; padding: 40px; background: #f5efe0;">
+                <h1 style="font-size: 28px; color: #3d2b1f; margin-bottom: 8px;">禅々 Zenzeii</h1>
+                <p style="color: #3d2b1f; font-size: 16px;">You requested a password reset.</p>
+                <p style="color: #3d2b1f; font-size: 16px;">Click the link below to set a new password. This link expires in 1 hour.</p>
+                <a href="{reset_url}" style="display: inline-block; margin: 24px 0; padding: 12px 24px; background: #B5294E; color: white; text-decoration: none; font-size: 16px;">Reset Password</a>
+                <p style="color: #888; font-size: 13px;">If you did not request this, ignore this email.</p>
+            </div>
+            """
+        })
+    return {"message": "If this email exists, a reset link has been sent."}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    now = datetime.now(timezone.utc).isoformat()
+    reset_doc = await db.password_resets.find_one({
+        "token": request.token,
+        "used": False
+    })
+    if not reset_doc:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    if reset_doc["expires_at"] < now:
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+    await db.users.update_one(
+        {"id": reset_doc["user_id"]},
+        {"$set": {"password": hash_password(request.new_password)}}
+    )
+    await db.password_resets.update_one(
+        {"token": request.token},
+        {"$set": {"used": True}}
+    )
+    return {"message": "Password reset successfully"}
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
