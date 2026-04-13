@@ -4,8 +4,8 @@
   "description": "Learn Japanese by reading classic literature",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5efe0",
-  "theme_color": "#B5294E",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "orientation": "portrait-primary",
   "icons": [
     {
