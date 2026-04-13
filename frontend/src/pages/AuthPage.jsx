@@ -60,7 +60,7 @@ export const AuthPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#ffffff' }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#ffffff', colorScheme: 'light' }}>
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -71,7 +71,7 @@ export const AuthPage = () => {
           <p className="text-muted-foreground mt-2">Learn Japanese through reading</p>
         </div>
 
-        <Card className="border-border shadow-card">
+        <Card className="border-border shadow-card" style={{ background: '#ffffff', color: '#1a1a1a' }}>
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login" data-testid="auth-tab-login">Login</TabsTrigger>
@@ -84,7 +84,7 @@ export const AuthPage = () => {
                   <CardTitle className="font-serif">Welcome Back</CardTitle>
                   <CardDescription>Continue your Japanese reading journey</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4" style={{ background: '#ffffff' }}>
                   <div className="space-y-2">
                     <Label htmlFor="login-email">Email</Label>
                     <div className="relative">
@@ -179,7 +179,7 @@ export const AuthPage = () => {
                   <CardTitle className="font-serif">Create Account</CardTitle>
                   <CardDescription>Start your Japanese learning adventure</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4" style={{ background: '#ffffff' }}>
                   <div className="space-y-2">
                     <Label htmlFor="register-username">Username</Label>
                     <div className="relative">
