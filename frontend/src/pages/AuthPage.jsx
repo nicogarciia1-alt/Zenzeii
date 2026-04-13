@@ -73,9 +73,17 @@ export const AuthPage = () => {
 
         <Card className="border-border shadow-card" style={{ background: '#ffffff', color: '#1a1a1a' }}>
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2" style={{backgroundColor: '#f5f0eb', border: '1px solid #e0d9d0'}}>
-              <TabsTrigger value="login" data-testid="auth-tab-login">Login</TabsTrigger>
-              <TabsTrigger value="register" data-testid="auth-tab-register">Register</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2" style={{backgroundColor: '#f5f0eb', border: '1px solid #e0d9d0', color: '#1a1a1a'}}>
+              <TabsTrigger
+                value="login"
+                data-testid="auth-tab-login"
+                style={{fontFamily: 'Georgia, serif', color: '#1a1a1a'}}
+              >Login</TabsTrigger>
+              <TabsTrigger
+                value="register"
+                data-testid="auth-tab-register"
+                style={{fontFamily: 'Georgia, serif', color: '#1a1a1a'}}
+              >Register</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login">
