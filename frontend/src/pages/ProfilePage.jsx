@@ -11,13 +11,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import Layout from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
-import { getStats, getProgress, getVocabulary } from '@/lib/api';
+import { getStats, getProgress, getVocabulary, getBooks } from '@/lib/api';
 
 export const ProfilePage = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [progress, setProgress] = useState([]);
   const [vocabulary, setVocabulary] = useState([]);
+  const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,14 +27,16 @@ export const ProfilePage = () => {
 
   const fetchData = async () => {
     try {
-      const [statsRes, progressRes, vocabRes] = await Promise.all([
+      const [statsRes, progressRes, vocabRes, booksRes] = await Promise.all([
         getStats(),
         getProgress(),
-        getVocabulary()
+        getVocabulary(),
+        getBooks()
       ]);
       setStats(statsRes.data);
       setProgress(progressRes.data);
       setVocabulary(vocabRes.data);
+      setBooks(booksRes.data);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
     } finally {
@@ -53,6 +56,13 @@ export const ProfilePage = () => {
 
   const masteryData = getMasteryDistribution();
   const totalMasteryWords = masteryData.reduce((sum, d) => sum + d.count, 0);
+
+  const getBookTitle = (bookId) => {
+    const match = books.find(b => b.id === bookId);
+    if (match) return match.title;
+    const cleaned = bookId.split('-').slice(1).join('-');
+    return cleaned.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || bookId;
+  };
 
   if (loading) {
     return (
@@ -192,7 +202,7 @@ export const ProfilePage = () => {
                     className="flex items-center justify-between p-3 bg-muted rounded-lg"
                   >
                     <div>
-                      <p className="font-medium text-foreground">Book: {p.book_id}</p>
+                      <p className="font-medium text-foreground">{getBookTitle(p.book_id)}</p>
                       <p className="text-sm text-muted-foreground">
                         Last read: {new Date(p.last_read).toLocaleDateString()}
                       </p>
