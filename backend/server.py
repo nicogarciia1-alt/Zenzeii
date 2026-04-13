@@ -543,14 +543,15 @@ async def get_book_sources():
     return {"sources": sources}
 
 @api_router.get("/books/available/list")
-async def get_available_books(source: Optional[str] = None):
+async def get_available_books(source: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """Get all available books, optionally filtered by source"""
     available = []
-    
+    user_prefix = current_user["id"][:8]
+
     # Gutenberg books (English)
     if source is None or source == "gutenberg":
         for key, info in GUTENBERG_BOOKS.items():
-            existing = await db.books.find_one({"id": key})
+            existing = await db.books.find_one({"id": f"{user_prefix}-{key}"})
             available.append({
                 "book_key": key,
                 "title": info["title"],
@@ -563,11 +564,11 @@ async def get_available_books(source: Optional[str] = None):
                 "is_imported": existing is not None,
                 "import_status": existing.get("import_status", "not_started") if existing else "not_started"
             })
-    
+
     # Aozora books (Japanese)
     if source is None or source == "aozora":
         for key, info in AOZORA_BOOKS.items():
-            existing = await db.books.find_one({"id": key})
+            existing = await db.books.find_one({"id": f"{user_prefix}-{key}"})
             available.append({
                 "book_key": key,
                 "title": info["title"],
@@ -582,7 +583,7 @@ async def get_available_books(source: Optional[str] = None):
                 "is_imported": existing is not None,
                 "import_status": existing.get("import_status", "not_started") if existing else "not_started"
             })
-    
+
     return available
 
 @api_router.get("/books/search/gutenberg")
@@ -606,7 +607,7 @@ async def search_aozora_books(query: str = Query(..., min_length=1)):
         return []
 
 @api_router.get("/books")
-async def get_books():
+async def get_books(current_user: dict = Depends(get_current_user)):
     """
     Get all imported books.
     Uses safe transform to handle missing fields and prevent crashes.
@@ -614,7 +615,7 @@ async def get_books():
     """
     try:
         books = await db.books.find(
-            {"import_status": {"$nin": ["failed", "cancelled"]}},
+            {"user_id": current_user["id"], "import_status": {"$nin": ["failed", "cancelled"]}},
             {"_id": 0}
         ).to_list(100)
         
@@ -795,7 +796,7 @@ async def import_book(
     if source == "gutenberg":
         if request.book_key and request.book_key in GUTENBERG_BOOKS:
             book_info = GUTENBERG_BOOKS[request.book_key]
-            book_id = request.book_key
+            book_id = f"{current_user['id'][:8]}-{request.book_key}"
             gutenberg_id = book_info["gutenberg_id"]
             title = book_info["title"]
             author = book_info["author"]
@@ -803,7 +804,7 @@ async def import_book(
             difficulty = book_info.get("difficulty", "intermediate")
             language = "en"
         elif request.gutenberg_id:
-            book_id = f"gutenberg-{request.gutenberg_id}"
+            book_id = f"{current_user['id'][:8]}-gutenberg-{request.gutenberg_id}"
             gutenberg_id = request.gutenberg_id
             title = request.title or f"Book {request.gutenberg_id}"
             author = request.author or "Unknown"
@@ -819,15 +820,15 @@ async def import_book(
         
         await record_import(current_user["id"], book_id)
         background_tasks.add_task(
-            process_book_import_gutenberg, 
+            process_book_import_gutenberg,
             book_id, gutenberg_id, title, author, genre, difficulty, language,
-            request.priority or 0
+            request.priority or 0, current_user["id"]
         )
-        
+
     elif source == "aozora":
         if request.book_key and request.book_key in AOZORA_BOOKS:
             book_info = AOZORA_BOOKS[request.book_key]
-            book_id = request.book_key
+            book_id = f"{current_user['id'][:8]}-{request.book_key}"
             aozora_id = book_info["aozora_id"]
             file_path = book_info["file_path"]
             title = book_info["title"]
@@ -844,9 +845,9 @@ async def import_book(
         
         await record_import(current_user["id"], book_id)
         background_tasks.add_task(
-            process_book_import_aozora, 
+            process_book_import_aozora,
             book_id, aozora_id, file_path, title, author, genre, difficulty, language,
-            request.priority or 0
+            request.priority or 0, current_user["id"]
         )
     else:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
@@ -891,19 +892,20 @@ async def prioritize_import(request: PrioritizeImportRequest, current_user: dict
 
 
 async def process_book_import_gutenberg(
-    book_id: str, 
-    gutenberg_id: int, 
-    title: str, 
+    book_id: str,
+    gutenberg_id: int,
+    title: str,
     author: str,
     genre: str,
     difficulty: str,
     language: str = "en",
-    priority: int = 0
+    priority: int = 0,
+    user_id: str = ""
 ):
     """Import book from Project Gutenberg (English source)"""
     try:
         logger.info(f"Starting Gutenberg import for {book_id}")
-        
+
         book_doc = {
             "id": book_id,
             "title": title,
@@ -921,7 +923,8 @@ async def process_book_import_gutenberg(
             "book_language": language,  # Source language
             "gutenberg_id": gutenberg_id,
             "priority": priority,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "user_id": user_id,
         }
         
         await db.books.update_one({"id": book_id}, {"$set": book_doc}, upsert=True)
@@ -1012,25 +1015,27 @@ async def process_book_import_gutenberg(
 
 
 async def process_book_import_aozora(
-    book_id: str, 
+    book_id: str,
     aozora_id: str,
     file_path: str,
-    title: str, 
+    title: str,
     author: str,
     genre: str,
     difficulty: str,
     language: str = "ja",
-    priority: int = 0
+    priority: int = 0,
+    user_id: str = ""
 ):
     """Import book from Aozora Bunko (Japanese source)"""
     try:
         logger.info(f"Starting Aozora import for {book_id}")
-        
-        # Get English title/author from book info
-        book_info = AOZORA_BOOKS.get(book_id, {})
+
+        # Get English title/author from book info — strip user prefix to look up base key
+        base_key = book_id.split("-", 1)[1] if "-" in book_id else book_id
+        book_info = AOZORA_BOOKS.get(base_key, {})
         title_en = book_info.get("title_en", title)
         author_en = book_info.get("author_en", author)
-        
+
         book_doc = {
             "id": book_id,
             "title": title,  # Japanese title
@@ -1051,7 +1056,8 @@ async def process_book_import_aozora(
             "book_language": language,  # Source language is Japanese
             "aozora_id": aozora_id,
             "priority": priority,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "user_id": user_id,
         }
         
         await db.books.update_one({"id": book_id}, {"$set": book_doc}, upsert=True)
@@ -1145,25 +1151,26 @@ async def upload_book(
     file: UploadFile = File(...),
     title: str = Query(...),
     author: str = Query(...),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: dict = Depends(get_current_user)
 ):
     """Upload a book file for instant import"""
     if not file.filename.endswith('.txt'):
         raise HTTPException(status_code=400, detail="Only .txt files supported")
-    
+
     content = await file.read()
     try:
         text = content.decode('utf-8')
     except UnicodeDecodeError:
         text = content.decode('latin-1')
-    
-    book_id = f"upload-{str(uuid.uuid4())[:8]}"
-    background_tasks.add_task(process_upload_fast, book_id, text, title, author)
-    
+
+    book_id = f"{current_user['id'][:8]}-upload-{str(uuid.uuid4())[:8]}"
+    background_tasks.add_task(process_upload_fast, book_id, text, title, author, current_user["id"])
+
     return {"message": "Upload started", "book_id": book_id, "status": "importing"}
 
 
-async def process_upload_fast(book_id: str, text: str, title: str, author: str):
+async def process_upload_fast(book_id: str, text: str, title: str, author: str, user_id: str = ""):
     """Process uploaded book with fast import"""
     try:
         book_doc = {
@@ -1181,7 +1188,8 @@ async def process_upload_fast(book_id: str, text: str, title: str, author: str):
             "import_status": "importing",
             "sentences_count": 0,
             "source": "upload",
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "user_id": user_id,
         }
         await db.books.insert_one(book_doc)
         
