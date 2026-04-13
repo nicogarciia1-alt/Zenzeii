@@ -533,6 +533,27 @@ async def reset_password(request: ResetPasswordRequest):
 async def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(**current_user)
 
+class UpdateProfileRequest(BaseModel):
+    username: str = None
+    password: str = None
+
+@api_router.patch("/auth/profile")
+async def update_profile(request: UpdateProfileRequest, current_user: dict = Depends(get_current_user)):
+    updates = {}
+    if request.username:
+        updates["username"] = request.username
+    if request.password:
+        if len(request.password) < 6:
+            raise HTTPException(status_code=400, detail="Password too short")
+        updates["password"] = hash_password(request.password)
+    if not updates:
+        return {"message": "Nothing to update"}
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": updates}
+    )
+    return {"message": "Profile updated successfully"}
+
 # ========================
 # SYSTEM STATUS ENDPOINT
 # ========================
