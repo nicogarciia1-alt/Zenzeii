@@ -65,6 +65,7 @@ export const Navbar = () => {
   ];
 
   return (
+    <>
     <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
@@ -157,7 +158,7 @@ export const Navbar = () => {
         </div>
       </div>
     </nav>
-      {reportOpen && (
+    {reportOpen && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.4)', zIndex: 1000,
@@ -210,6 +211,7 @@ export const Navbar = () => {
           </div>
         </div>
       )}
+    </>
   );
 };
 
