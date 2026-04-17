@@ -34,7 +34,8 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
 
   // Focus input when panel opens
   useEffect(() => {
-    if (isOpen) inputRef.current?.focus();
+    const isMobile = window.innerWidth <= 768;
+    if (isOpen && !isMobile) inputRef.current?.focus();
   }, [isOpen]);
 
   const handleSend = async () => {
