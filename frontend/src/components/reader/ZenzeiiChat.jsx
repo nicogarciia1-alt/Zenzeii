@@ -76,7 +76,21 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
-  const panelStyle = {
+  const isMobile = window.innerWidth <= 768;
+
+  const panelStyle = isMobile ? {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '100vw',
+    height: '100vh',
+    zIndex: 100,
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: 'hsl(var(--background))',
+    fontFamily: '"EB Garamond", Georgia, serif',
+    overflow: 'hidden',
+  } : {
     position: 'fixed',
     bottom: '24px',
     left: '24px',
