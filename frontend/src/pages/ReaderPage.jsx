@@ -685,7 +685,10 @@ export const ReaderPage = () => {
           {/* Sentences */}
           <div
             className={`reader-content space-y-6 ${fontSizeClass} ${lineHeightClass}`}
-            style={{ '--jp-font-family': fontCSSValue }}
+            style={{
+              '--jp-font-family': fontCSSValue,
+              '--reader-line-height': lineHeight === 'normal' ? '1.5' : lineHeight === 'relaxed' ? '1.8' : '2.2'
+            }}
             data-testid="reader-content"
           >
             {sentences.map((sentence) => {

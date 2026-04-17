@@ -87,7 +87,7 @@
 /* Japanese text specific styles */
 .jp-text {
   font-family: var(--jp-font-family, 'Noto Serif JP', serif);
-  line-height: 1.8;
+  line-height: var(--reader-line-height, 1.8);
   letter-spacing: 0.05em;
 }
 
