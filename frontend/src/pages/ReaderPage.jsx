@@ -66,6 +66,7 @@ export const ReaderPage = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme, readerSettings, updateReaderSettings } = useTheme();
   const sentinelRef = useRef(null);
+  const touchStartX = useRef(null);
 
   const [book, setBook] = useState(null);
   const [chapters, setChapters] = useState([]);
@@ -490,8 +491,21 @@ export const ReaderPage = () => {
   const hasPrev = currentChapterIndex > 0;
   const hasNext = currentChapterIndex < chapters.length - 1;
 
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current === null) return;
+    if (selectedWord) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    if (deltaX < -50) setZenzeiiOpen(true);
+    if (deltaX > 50) setZenzeiiOpen(false);
+    touchStartX.current = null;
+  };
+
   return (
-    <div className={`min-h-screen bg-background ${themeClass}`} onClick={handleClosePopup}>
+    <div className={`min-h-screen bg-background ${themeClass}`} onClick={handleClosePopup} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       {/* Top Bar */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
