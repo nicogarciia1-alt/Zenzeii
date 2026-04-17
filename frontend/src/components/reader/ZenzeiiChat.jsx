@@ -90,6 +90,8 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
     backgroundColor: 'hsl(var(--background))',
     fontFamily: '"EB Garamond", Georgia, serif',
     overflow: 'hidden',
+    transform: 'translateX(0)',
+    transition: 'transform 0.3s ease',
   } : {
     position: 'fixed',
     bottom: '24px',
@@ -207,6 +209,7 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
       <div style={{
         borderTop: '1px solid hsl(var(--border))',
         padding: '12px',
+        paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
         display: 'flex',
         gap: '8px',
         flexShrink: 0,
@@ -226,7 +229,7 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
             backgroundColor: 'hsl(var(--background))',
             color: 'hsl(var(--foreground))',
             fontFamily: garamond,
-            fontSize: '0.9rem',
+            fontSize: '16px',
             outline: 'none',
           }}
         />
