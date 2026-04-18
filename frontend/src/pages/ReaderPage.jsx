@@ -687,7 +687,8 @@ export const ReaderPage = () => {
             className={`reader-content space-y-6 ${fontSizeClass} ${lineHeightClass}`}
             style={{
               '--jp-font-family': fontCSSValue,
-              '--reader-line-height': lineHeight === 'normal' ? '1.5' : lineHeight === 'relaxed' ? '1.8' : '2.2'
+              '--reader-line-height': lineHeight === 'normal' ? '1.5' : lineHeight === 'relaxed' ? '1.8' : '2.2',
+              fontFamily: fontCSSValue
             }}
             data-testid="reader-content"
           >
