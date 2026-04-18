@@ -194,28 +194,6 @@ const ReaderCustomizationPanel = ({
         </Select>
       </div>
 
-      <Separator />
-
-      {/* Sentences Per Page */}
-      <div className="space-y-2">
-        <span className="text-xs text-muted-foreground uppercase tracking-wide">Sentences per Load</span>
-        <p className="text-xs text-muted-foreground/70">How many sentences to load at once</p>
-        <Select
-          value={String(sentencesPerPage)}
-          onValueChange={(v) => onSentencesPerPageChange(parseInt(v, 10))}
-        >
-          <SelectTrigger data-testid="sentences-per-page-select">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SENTENCES_PER_PAGE_OPTIONS.map((n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n} sentences
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
       <Separator />
 
