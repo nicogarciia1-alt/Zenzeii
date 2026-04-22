@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, Library, User, Moon, Sun, LogOut, Settings } from 'lucide-react';
+import { BookOpen, Library, Moon, Sun, LogOut, Settings, BookMarked } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,7 +61,7 @@ export const Navbar = () => {
   const navItems = [
     { path: '/', icon: Library, label: 'Library' },
     { path: '/vocabulary', icon: BookOpen, label: 'Vocabulary' },
-    { path: '/profile', icon: User, label: 'Profile' },
+    { path: '/zenzeii-library', icon: BookMarked, label: 'Discover' },
   ];
 
   return (
@@ -70,7 +70,7 @@ export const Navbar = () => {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group" data-testid="nav-logo">
+          <Link to="/profile" className="flex items-center gap-2 group" data-testid="nav-logo">
             <span className="text-2xl font-serif text-primary">読</span>
             <span className="text-lg font-medium text-foreground hidden sm:inline">Zenzeii</span>
           </Link>
