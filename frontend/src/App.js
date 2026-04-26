@@ -11,6 +11,7 @@ import VocabularyPage from "@/pages/VocabularyPage";
 import ProfilePage from "@/pages/ProfilePage";
 import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import ZenzeiiLibraryPage from "@/pages/ZenzeiiLibraryPage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -46,6 +47,7 @@ function AppRoutes() {
       <Route path="/read/:bookId/:chapterId" element={<ProtectedRoute><ReaderPage /></ProtectedRoute>} />
       <Route path="/vocabulary" element={<ProtectedRoute><VocabularyPage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+      <Route path="/zenzeii-library" element={<ProtectedRoute><ZenzeiiLibraryPage /></ProtectedRoute>} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
