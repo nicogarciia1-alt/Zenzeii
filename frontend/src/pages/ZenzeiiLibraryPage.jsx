@@ -5,10 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { importBook } from '@/lib/api';
 import { toast } from 'sonner';
+import GeneratedBookCover from '@/components/books/GeneratedBookCover';
 
 const CURATED_BOOKS = [
   {
-    genre: '🖋 Modern Literature',
+    genre: 'Modern Literature',
     books: [
       { title: '吾輩は猫である', author: '夏目漱石', author_en: 'Natsume Soseki', description: 'A satirical novel narrated by a cat observing the absurdities of Meiji-era Japan.', book_key: 'natsume_soseki/wagahai_wa_neko_de_aru', source: 'aozora' },
       { title: '坊っちゃん', author: '夏目漱石', author_en: 'Natsume Soseki', description: 'A spirited young teacher from Tokyo struggles with rural provincial life.', book_key: 'natsume_soseki/botchan', source: 'aozora' },
@@ -18,27 +19,27 @@ const CURATED_BOOKS = [
     ]
   },
   {
-    genre: '❄️ Lyrical & Poetic',
+    genre: 'Lyrical & Poetic',
     books: [
       { title: '雪国', author: '川端康成', author_en: 'Yasunari Kawabata', description: 'A melancholic love story set in the snow country of northern Japan.', book_key: 'kawabata_yasunari/yukiguni', source: 'aozora' },
       { title: '伊豆の踊子', author: '川端康成', author_en: 'Yasunari Kawabata', description: 'A student encounters a young traveling dancer on the Izu Peninsula.', book_key: 'kawabata_yasunari/izu_no_odoriko', source: 'aozora' },
     ]
   },
   {
-    genre: '👻 Ghost Stories',
+    genre: 'Ghost Stories',
     books: [
       { title: '怪談', author: 'ラフカディオ・ハーン', author_en: 'Lafcadio Hearn', description: 'Classic Japanese ghost stories and supernatural folk tales.', book_key: 'koizumi_yakumo/kwaidan', source: 'aozora' },
       { title: '藪の中', author: '芥川龍之介', author_en: 'Ryunosuke Akutagawa', description: 'A murder told through contradictory accounts — the story that inspired Rashomon.', book_key: 'akutagawa_ryunosuke/yabu_no_naka', source: 'aozora' },
     ]
   },
   {
-    genre: '⚔️ Historical',
+    genre: 'Historical',
     books: [
       { title: '高瀬舟', author: '森鴎外', author_en: 'Mori Ogai', description: 'A philosophical tale of a man transported on a boat to exile.', book_key: 'mori_ogai/takasebune', source: 'aozora' },
     ]
   },
   {
-    genre: '🌸 Poetry',
+    genre: 'Poetry',
     books: [
       { title: '春と修羅', author: '宮沢賢治', author_en: 'Kenji Miyazawa', description: 'Visionary poetry exploring nature, science, and Buddhist themes.', book_key: 'miyazawa_kenji/haru_to_shura', source: 'aozora' },
     ]
@@ -115,7 +116,7 @@ const ZenzeiiLibraryPage = () => {
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
-        <div style={{ marginBottom: '40px' }}>
+        <div style={{ borderBottom: '1px solid hsl(var(--border))', paddingBottom: '24px', marginBottom: '40px' }}>
           <h1 style={{ fontFamily: '"EB Garamond", Georgia, serif', fontSize: '2.5rem', fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             Zenzeii Library
           </h1>
@@ -136,25 +137,10 @@ const ZenzeiiLibraryPage = () => {
                   onClick={() => setSelectedBook(book)}
                   style={{ cursor: 'pointer' }}
                 >
-                  <div style={{
-                    aspectRatio: '3/4',
-                    backgroundColor: 'hsl(var(--muted))',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '16px',
-                    marginBottom: '10px',
-                    border: '1px solid hsl(var(--border))',
-                    transition: 'opacity 0.2s',
-                  }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
-                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-                  >
-                    <p style={{ fontFamily: '"EB Garamond", Georgia, serif', fontSize: '1.3rem', textAlign: 'center', color: 'hsl(var(--foreground))', lineHeight: 1.6 }}>
-                      {book.title}
-                    </p>
+                  <div style={{ marginBottom: '10px' }}>
+                    <GeneratedBookCover
+                      book={{ title: book.title, author: book.author_en }}
+                    />
                   </div>
                   <p style={{ fontFamily: '"EB Garamond", Georgia, serif', fontSize: '0.85rem', color: 'hsl(var(--foreground))', fontWeight: 500 }}>
                     {book.title}
