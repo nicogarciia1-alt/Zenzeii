@@ -59,9 +59,9 @@ export const Navbar = () => {
   const isActive = (path) => location.pathname === path;
   
   const navItems = [
-    { path: '/', icon: Library, label: 'Library' },
+    { path: '/', icon: Library, label: 'My Books' },
     { path: '/vocabulary', icon: BookOpen, label: 'Vocabulary' },
-    { path: '/zenzeii-library', icon: BookMarked, label: 'Discover' },
+    { path: '/zenzeii-library', icon: BookMarked, label: 'Library' },
   ];
 
   return (
