@@ -154,7 +154,7 @@ export const BookCard = ({ book, progress, onDelete }) => {
                     }}
                   >
                     <Mail className="h-4 w-4 mr-2" />
-                    Send to Email
+                    Send to Kindle
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -236,7 +236,7 @@ export const BookCard = ({ book, progress, onDelete }) => {
       <Dialog open={showKindleDialog} onOpenChange={setShowKindleDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send "{book.title}" to Email</DialogTitle>
+            <DialogTitle>Send "{book.title}" to Kindle</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <input
