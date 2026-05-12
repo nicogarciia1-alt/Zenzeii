@@ -713,6 +713,7 @@ export const ReaderPage = () => {
                 overflowY: 'hidden',
                 display: 'flex',
                 flexDirection: 'row',
+                lineHeight: '1.8',
               })
             }}
             data-testid="reader-content"
