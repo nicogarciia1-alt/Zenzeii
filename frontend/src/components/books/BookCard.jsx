@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Clock, Loader2, Trash2, MoreVertical } from 'lucide-react';
+import { BookOpen, Clock, Loader2, Trash2, MoreVertical, Mail } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -20,14 +21,26 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { deleteBook } from '@/lib/api';
 import { toast } from 'sonner';
+import axios from 'axios';
+const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
 import GeneratedBookCover from './GeneratedBookCover';
 
 
 export const BookCard = ({ book, progress, onDelete }) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showKindleDialog, setShowKindleDialog] = useState(false);
+  const [kindleEmail, setKindleEmail] = useState('');
+  const [isSending, setIsSending] = useState(false);
   // Always show the generated cover — the backend supplies random Unsplash
   // stock photos that have no relation to the books.
   const showGeneratedCover = true;
@@ -48,6 +61,23 @@ export const BookCard = ({ book, progress, onDelete }) => {
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);
+    }
+  };
+
+  const handleSendToKindle = async () => {
+    if (!kindleEmail.trim()) return;
+    setIsSending(true);
+    try {
+      await axios.post(`${API}/books/${book.id}/send-to-kindle`, {
+        recipient_email: kindleEmail
+      });
+      toast.success('Book sent to your email!');
+      setShowKindleDialog(false);
+      setKindleEmail('');
+    } catch (error) {
+      toast.error('Failed to send book. Please try again.');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -116,7 +146,18 @@ export const BookCard = ({ book, progress, onDelete }) => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowKindleDialog(true);
+                    }}
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Send to Email
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
                     className="text-destructive focus:text-destructive"
                     onClick={(e) => {
                       e.preventDefault();
@@ -190,6 +231,34 @@ export const BookCard = ({ book, progress, onDelete }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Send to Email Dialog */}
+      <Dialog open={showKindleDialog} onOpenChange={setShowKindleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send "{book.title}" to Email</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <input
+              type="email"
+              placeholder="your@email.com"
+              value={kindleEmail}
+              onChange={(e) => setKindleEmail(e.target.value)}
+              className="w-full border border-border rounded px-3 py-2 text-sm bg-background"
+              onKeyDown={(e) => e.key === 'Enter' && handleSendToKindle()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowKindleDialog(false)} disabled={isSending}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendToKindle} disabled={isSending || !kindleEmail.trim()}>
+              {isSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
