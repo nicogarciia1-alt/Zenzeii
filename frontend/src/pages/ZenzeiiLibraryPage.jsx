@@ -11,37 +11,37 @@ const CURATED_BOOKS = [
   {
     genre: 'Modern Literature',
     books: [
-      { title: '吾輩は猫である', author: '夏目漱石', author_en: 'Natsume Soseki', description: 'A satirical novel narrated by a cat observing the absurdities of Meiji-era Japan.', book_key: 'natsume_soseki/wagahai_wa_neko_de_aru', source: 'aozora' },
-      { title: '坊っちゃん', author: '夏目漱石', author_en: 'Natsume Soseki', description: 'A spirited young teacher from Tokyo struggles with rural provincial life.', book_key: 'natsume_soseki/botchan', source: 'aozora' },
-      { title: '人間失格', author: '太宰治', author_en: 'Osamu Dazai', description: 'A confessional tale of alienation and self-destruction in modern Japan.', book_key: 'dazai_osamu/ningen_shikkaku', source: 'aozora' },
-      { title: '羅生門', author: '芥川龍之介', author_en: 'Ryunosuke Akutagawa', description: 'A servant makes a moral choice in the ruins of Heian-era Kyoto.', book_key: 'akutagawa_ryunosuke/rashomon', source: 'aozora' },
-      { title: '鼻', author: '芥川龍之介', author_en: 'Ryunosuke Akutagawa', description: 'A monk obsessed with his unusually long nose seeks a cure.', book_key: 'akutagawa_ryunosuke/hana', source: 'aozora' },
+      { title: '吾輩は猫である', author: '夏目漱石', author_en: 'Natsume Soseki', description: 'A satirical novel narrated by a cat observing the absurdities of Meiji-era Japan.', book_key: 'wagahai-wa-neko', source: 'aozora' },
+      { title: '坊っちゃん', author: '夏目漱石', author_en: 'Natsume Soseki', description: 'A spirited young teacher from Tokyo struggles with rural provincial life.', book_key: 'botchan', source: 'aozora' },
+      { title: '人間失格', author: '太宰治', author_en: 'Osamu Dazai', description: 'A confessional tale of alienation and self-destruction in modern Japan.', book_key: 'ningen-shikkaku', source: 'aozora' },
+      { title: '羅生門', author: '芥川龍之介', author_en: 'Ryunosuke Akutagawa', description: 'A servant makes a moral choice in the ruins of Heian-era Kyoto.', book_key: 'rashomon', source: 'aozora' },
+      { title: '鼻', author: '芥川龍之介', author_en: 'Ryunosuke Akutagawa', description: 'A monk obsessed with his unusually long nose seeks a cure.', book_key: 'hana', source: 'aozora' },
     ]
   },
   {
     genre: 'Lyrical & Poetic',
     books: [
-      { title: '雪国', author: '川端康成', author_en: 'Yasunari Kawabata', description: 'A melancholic love story set in the snow country of northern Japan.', book_key: 'kawabata_yasunari/yukiguni', source: 'aozora' },
-      { title: '伊豆の踊子', author: '川端康成', author_en: 'Yasunari Kawabata', description: 'A student encounters a young traveling dancer on the Izu Peninsula.', book_key: 'kawabata_yasunari/izu_no_odoriko', source: 'aozora' },
+      { title: '雪国', author: '川端康成', author_en: 'Yasunari Kawabata', description: 'A melancholic love story set in the snow country of northern Japan.', book_key: 'snow-country', source: 'aozora' },
+      { title: '伊豆の踊子', author: '川端康成', author_en: 'Yasunari Kawabata', description: 'A student encounters a young traveling dancer on the Izu Peninsula.', book_key: 'izu-no-odoriko', source: 'aozora' },
     ]
   },
   {
     genre: 'Ghost Stories',
     books: [
-      { title: '怪談', author: 'ラフカディオ・ハーン', author_en: 'Lafcadio Hearn', description: 'Classic Japanese ghost stories and supernatural folk tales.', book_key: 'koizumi_yakumo/kwaidan', source: 'aozora' },
-      { title: '藪の中', author: '芥川龍之介', author_en: 'Ryunosuke Akutagawa', description: 'A murder told through contradictory accounts — the story that inspired Rashomon.', book_key: 'akutagawa_ryunosuke/yabu_no_naka', source: 'aozora' },
+      { title: '怪談', author: 'ラフカディオ・ハーン', author_en: 'Lafcadio Hearn', description: 'Classic Japanese ghost stories and supernatural folk tales.', book_key: 'kwaidan', source: 'aozora' },
+      { title: '藪の中', author: '芥川龍之介', author_en: 'Ryunosuke Akutagawa', description: 'A murder told through contradictory accounts — the story that inspired Rashomon.', book_key: 'yabu-no-naka', source: 'aozora' },
     ]
   },
   {
     genre: 'Historical',
     books: [
-      { title: '高瀬舟', author: '森鴎外', author_en: 'Mori Ogai', description: 'A philosophical tale of a man transported on a boat to exile.', book_key: 'mori_ogai/takasebune', source: 'aozora' },
+      { title: '高瀬舟', author: '森鴎外', author_en: 'Mori Ogai', description: 'A philosophical tale of a man transported on a boat to exile.', book_key: 'takasebune', source: 'aozora' },
     ]
   },
   {
     genre: 'Poetry',
     books: [
-      { title: '春と修羅', author: '宮沢賢治', author_en: 'Kenji Miyazawa', description: 'Visionary poetry exploring nature, science, and Buddhist themes.', book_key: 'miyazawa_kenji/haru_to_shura', source: 'aozora' },
+      { title: '春と修羅', author: '宮沢賢治', author_en: 'Kenji Miyazawa', description: 'Visionary poetry exploring nature, science, and Buddhist themes.', book_key: 'haru-to-shura', source: 'aozora' },
     ]
   },
 ];

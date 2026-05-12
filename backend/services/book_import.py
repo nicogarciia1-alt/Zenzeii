@@ -150,6 +150,66 @@ AOZORA_BOOKS = {
         "difficulty": "advanced",
         "source": "aozora",
         "language": "ja"
+    },
+    "wagahai-wa-neko": {
+        "aozora_id": "000148",
+        "file_path": "files/789_14547.html",
+        "title": "吾輩は猫である",
+        "title_en": "I Am a Cat",
+        "author": "夏目漱石",
+        "author_en": "Natsume Soseki",
+        "genre": "literary",
+        "difficulty": "intermediate",
+        "source": "aozora",
+        "language": "ja"
+    },
+    "hana": {
+        "aozora_id": "000879",
+        "file_path": "files/42_15228.html",
+        "title": "鼻",
+        "title_en": "The Nose",
+        "author": "芥川龍之介",
+        "author_en": "Ryunosuke Akutagawa",
+        "genre": "literary",
+        "difficulty": "intermediate",
+        "source": "aozora",
+        "language": "ja"
+    },
+    "yabu-no-naka": {
+        "aozora_id": "000879",
+        "file_path": "files/229_15261.html",
+        "title": "藪の中",
+        "title_en": "In a Grove",
+        "author": "芥川龍之介",
+        "author_en": "Ryunosuke Akutagawa",
+        "genre": "literary",
+        "difficulty": "intermediate",
+        "source": "aozora",
+        "language": "ja"
+    },
+    "izu-no-odoriko": {
+        "aozora_id": "000879",
+        "file_path": "files/389_19745.html",
+        "title": "伊豆の踊子",
+        "title_en": "The Izu Dancer",
+        "author": "川端康成",
+        "author_en": "Yasunari Kawabata",
+        "genre": "literary",
+        "difficulty": "intermediate",
+        "source": "aozora",
+        "language": "ja"
+    },
+    "takasebune": {
+        "aozora_id": "000129",
+        "file_path": "files/694_14523.html",
+        "title": "高瀬舟",
+        "title_en": "The Takase Boat",
+        "author": "森鴎外",
+        "author_en": "Mori Ogai",
+        "genre": "historical",
+        "difficulty": "intermediate",
+        "source": "aozora",
+        "language": "ja"
     }
 }
 
