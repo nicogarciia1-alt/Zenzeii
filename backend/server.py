@@ -312,6 +312,9 @@ class ImportBookRequest(BaseModel):
     source: Optional[str] = "gutenberg"  # gutenberg, aozora, etc.
     priority: Optional[int] = 0  # Higher = more priority
 
+class SendToKindleRequest(BaseModel):
+    recipient_email: str
+
 class GutenbergSearchResult(BaseModel):
     model_config = ConfigDict(extra="ignore")
     gutenberg_id: int
@@ -1391,6 +1394,61 @@ async def delete_book(book_id: str, current_user: dict = Depends(get_current_use
     await db.books.delete_one({"id": book_id})
     
     return {"message": "Book deleted"}
+
+@api_router.post("/books/{book_id}/send-to-kindle")
+async def send_to_kindle(
+    book_id: str,
+    request: SendToKindleRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    if not RESEND_API_KEY:
+        raise HTTPException(status_code=503, detail="Email service not configured")
+
+    book = await db.books.find_one({"id": book_id})
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    chapters = await db.chapters.find({"book_id": book_id}).sort("chapter_number", 1).to_list(None)
+
+    html_parts = [f"""
+    <html><body style="font-family: Georgia, serif; max-width: 680px; margin: 0 auto; padding: 40px;">
+    <h1 style="font-size: 2rem;">{book.get('title', '')}</h1>
+    <p style="color: #888;">{book.get('author', '')}</p>
+    <hr/>
+    """]
+
+    for chapter in chapters:
+        if chapter.get("title"):
+            html_parts.append(f"<h2>{chapter['title']}</h2>")
+        sentences = await db.sentences.find(
+            {"chapter_id": chapter["id"]}
+        ).sort("order", 1).to_list(None)
+        for s in sentences:
+            text = s.get("japanese_original") or s.get("kanji_text") or s.get("english", "")
+            if text:
+                html_parts.append(f"<p>{text}</p>")
+
+    html_parts.append("""
+    <p style="color: #aaa; font-size: 0.8rem; margin-top: 40px;">
+    Sent from Zenzeii — your Japanese literary companion
+    </p>
+    </body></html>""")
+    html_body = "".join(html_parts)
+
+    try:
+        import resend
+        resend.api_key = RESEND_API_KEY
+        resend.Emails.send({
+            "from": "Zenzeii <onboarding@resend.dev>",
+            "to": request.recipient_email,
+            "subject": f"{book.get('title', 'Book')} — from your Zenzeii Library",
+            "html": html_body,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+    return {"success": True, "message": "Book sent to your Kindle"}
 
 # ========================
 # DICTIONARY ENDPOINT
