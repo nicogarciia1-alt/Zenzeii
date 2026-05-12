@@ -700,7 +700,7 @@ export const ReaderPage = () => {
 
           {/* Sentences */}
           <div
-            className={`reader-content space-y-6 ${fontSizeClass} ${lineHeightClass}`}
+            className={`reader-content ${verticalMode ? 'space-y-0' : 'space-y-6'} ${fontSizeClass} ${lineHeightClass}`}
             style={{
               '--jp-font-family': fontCSSValue,
               '--reader-line-height': lineHeight === 'normal' ? '1.5' : lineHeight === 'relaxed' ? '1.8' : '2.2',
