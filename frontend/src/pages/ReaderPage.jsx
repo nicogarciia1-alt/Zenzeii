@@ -95,6 +95,7 @@ export const ReaderPage = () => {
   const [showSecondaryText, setShowSecondaryText] = useState(true);
   const [showVocabHighlights, setShowVocabHighlights] = useState(false);
   const [zenzeiiOpen, setZenzeiiOpen] = useState(false);
+  const [verticalMode, setVerticalMode] = useState(false);
 
   // Customization settings
   const [readerTheme, setReaderTheme] = useState(readerSettings.readerTheme || 'default');
@@ -629,6 +630,21 @@ export const ReaderPage = () => {
               }
             }}
           />
+          <button
+            onClick={() => setVerticalMode(v => !v)}
+            style={{
+              fontFamily: '"EB Garamond", Georgia, serif',
+              fontSize: '0.85rem',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              border: '1px solid hsl(var(--border))',
+              backgroundColor: verticalMode ? 'hsl(var(--primary))' : 'transparent',
+              color: verticalMode ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))',
+              cursor: 'pointer',
+            }}
+          >
+            縦
+          </button>
           <div className="flex items-center justify-between gap-4">
             <SecondaryScriptToggle
               value={secondaryLayer}
@@ -688,7 +704,16 @@ export const ReaderPage = () => {
             style={{
               '--jp-font-family': fontCSSValue,
               '--reader-line-height': lineHeight === 'normal' ? '1.5' : lineHeight === 'relaxed' ? '1.8' : '2.2',
-              fontFamily: fontCSSValue
+              fontFamily: fontCSSValue,
+              ...(verticalMode && {
+                writingMode: 'vertical-rl',
+                textOrientation: 'mixed',
+                height: '70vh',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                display: 'flex',
+                flexDirection: 'row',
+              })
             }}
             data-testid="reader-content"
           >
