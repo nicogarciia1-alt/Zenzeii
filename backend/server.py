@@ -1411,30 +1411,57 @@ async def send_to_kindle(
 
     chapters = await db.chapters.find({"book_id": book_id}).sort("chapter_number", 1).to_list(None)
 
-    html_parts = [f"""
-    <html><body style="font-family: Georgia, serif; max-width: 680px; margin: 0 auto; padding: 40px;">
-    <h1 style="font-size: 2rem;">{book.get('title', '')}</h1>
-    <p style="color: #888;">{book.get('author', '')}</p>
-    <hr/>
-    """]
+    # Build PDF in memory
+    import io
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib.colors import HexColor
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+    pdfmetrics.registerFont(UnicodeCIDFont('HeiseiMin-W3'))
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=2*cm, leftMargin=2*cm,
+        topMargin=2*cm, bottomMargin=2*cm,
+    )
+
+    title_style = ParagraphStyle('BookTitle', fontName='HeiseiMin-W3', fontSize=24, leading=32, spaceAfter=12)
+    author_style = ParagraphStyle('BookAuthor', fontName='HeiseiMin-W3', fontSize=14, leading=20, textColor=HexColor('#888888'), spaceAfter=24)
+    chapter_style = ParagraphStyle('ChapterTitle', fontName='HeiseiMin-W3', fontSize=16, leading=22, spaceBefore=18, spaceAfter=10)
+    body_style = ParagraphStyle('BodyText', fontName='HeiseiMin-W3', fontSize=12, leading=20, spaceAfter=8)
+    footer_style = ParagraphStyle('Footer', fontName='Helvetica', fontSize=9, textColor=HexColor('#aaaaaa'), spaceBefore=40)
+
+    story = [Spacer(1, 3*cm)]
+    story.append(Paragraph(book.get('title', ''), title_style))
+    story.append(Paragraph(book.get('author', ''), author_style))
+    story.append(PageBreak())
 
     for chapter in chapters:
         if chapter.get("title"):
-            html_parts.append(f"<h2>{chapter['title']}</h2>")
+            story.append(Paragraph(chapter['title'], chapter_style))
         sentences = await db.sentences.find(
             {"chapter_id": chapter["id"]}
         ).sort("order", 1).to_list(None)
         for s in sentences:
             text = s.get("japanese_original") or s.get("kanji_text") or s.get("english", "")
             if text:
-                html_parts.append(f"<p>{text}</p>")
+                story.append(Paragraph(text, body_style))
 
-    html_parts.append("""
-    <p style="color: #aaa; font-size: 0.8rem; margin-top: 40px;">
-    Sent from Zenzeii — your Japanese literary companion
-    </p>
-    </body></html>""")
-    html_body = "".join(html_parts)
+    story.append(Spacer(1, 2*cm))
+    story.append(Paragraph("Sent from Zenzeii — your Japanese literary companion", footer_style))
+
+    doc.build(story)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    safe_title = book.get('title', 'book').replace('/', '-').replace(' ', '_')
+    filename = f"{safe_title}.pdf"
 
     try:
         import resend
@@ -1442,8 +1469,9 @@ async def send_to_kindle(
         resend.Emails.send({
             "from": "Zenzeii <onboarding@resend.dev>",
             "to": request.recipient_email,
-            "subject": f"{book.get('title', 'Book')} — from your Zenzeii Library",
-            "html": html_body,
+            "subject": f"{book.get('title', 'Book')} — from Zenzeii",
+            "html": "<p>Your book is attached as a PDF.</p><p style=\"color:#aaa;font-size:0.8rem;\">Sent from Zenzeii — your Japanese literary companion</p>",
+            "attachments": [{"filename": filename, "content": list(pdf_bytes)}],
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
