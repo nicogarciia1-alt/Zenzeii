@@ -1760,6 +1760,9 @@ class AIChatRequest(BaseModel):
     current_sentence: str = ""
     chat_history: List[dict] = []
 
+class TokenizeRequest(BaseModel):
+    text: str
+
 @api_router.post("/ai/chat")
 async def ai_chat(
     request: AIChatRequest,
@@ -1815,11 +1818,11 @@ async def ai_chat(
 
 
 @api_router.post("/tokenize")
-async def tokenize_text(request: dict):
+async def tokenize_text(request: TokenizeRequest):
     try:
         import fugashi
         tagger = fugashi.Tagger()
-        text = request.get("text", "")
+        text = request.text
         tokens = []
         for word in tagger(text):
             surface = word.surface
