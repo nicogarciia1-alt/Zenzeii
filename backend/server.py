@@ -1814,6 +1814,24 @@ async def ai_chat(
         raise HTTPException(status_code=500, detail="AI chat failed")
 
 
+@api_router.post("/tokenize")
+async def tokenize_text(request: dict):
+    try:
+        import fugashi
+        tagger = fugashi.Tagger()
+        text = request.get("text", "")
+        tokens = []
+        for word in tagger(text):
+            tokens.append({
+                "surface": word.surface,
+                "reading": word.feature.kana if hasattr(word.feature, 'kana') else "",
+                "pos": word.feature.pos1 if hasattr(word.feature, 'pos1') else "",
+            })
+        return {"tokens": tokens}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class TTSRequest(BaseModel):
     text: str
     voice: str = "nova"
