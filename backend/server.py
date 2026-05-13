@@ -1822,10 +1822,12 @@ async def tokenize_text(request: dict):
         text = request.get("text", "")
         tokens = []
         for word in tagger(text):
+            surface = word.surface
+            feature = word.feature
             tokens.append({
-                "surface": word.surface,
-                "reading": word.feature.kana if hasattr(word.feature, 'kana') else "",
-                "pos": word.feature.pos1 if hasattr(word.feature, 'pos1') else "",
+                "surface": surface,
+                "reading": str(feature[7]) if len(feature) > 7 and feature[7] != '*' else surface,
+                "pos": str(feature[0]) if len(feature) > 0 else "",
             })
         return {"tokens": tokens}
     except Exception as e:
