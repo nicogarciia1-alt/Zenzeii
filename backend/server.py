@@ -1838,28 +1838,6 @@ async def tokenize_text(request: TokenizeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.post("/tokenize/debug")
-async def tokenize_debug(request: TokenizeRequest):
-    try:
-        import fugashi
-        import sys
-        tagger = fugashi.Tagger()
-        text = request.text
-        raw_output = []
-        for word in tagger(text):
-            raw_output.append({
-                "surface_repr": repr(word.surface),
-                "feature_repr": repr(word.feature),
-            })
-        return {
-            "text_repr": repr(text),
-            "sys_encoding": sys.getdefaultencoding(),
-            "sys_fs_encoding": sys.getfilesystemencoding(),
-            "raw_output": raw_output
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 class TTSRequest(BaseModel):
     text: str
