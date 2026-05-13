@@ -1826,6 +1826,8 @@ async def tokenize_text(request: TokenizeRequest):
         tokens = []
         for word in tagger(text):
             surface = word.surface
+            if isinstance(surface, bytes):
+                surface = surface.decode('utf-8', errors='replace')
             feature = word.feature
             tokens.append({
                 "surface": surface,
