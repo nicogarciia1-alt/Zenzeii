@@ -790,9 +790,7 @@ export const ReaderPage = () => {
                           text={getSentenceText(sentence)}
                           sentenceId={sentence.id}
                           onWordClick={(word, e) => {
-                            const rect = e.target.getBoundingClientRect();
-                            setPopupPosition({ x: rect.left, y: rect.bottom });
-                            handleWordClick(word);
+                            handleWordClick(word, e);
                           }}
                           tokenCache={tokenCache}
                           getTokens={getTokens}
