@@ -1819,6 +1819,12 @@ async def ai_chat(
 
 @api_router.post("/tokenize")
 async def tokenize_text(request: TokenizeRequest):
+    def katakana_to_hiragana(text):
+        return ''.join(
+            chr(ord(c) - 0x60) if 'ァ' <= c <= 'ヶ' else c
+            for c in text
+        )
+
     try:
         import fugashi
         tagger = fugashi.Tagger()
@@ -1829,9 +1835,14 @@ async def tokenize_text(request: TokenizeRequest):
             if isinstance(surface, bytes):
                 surface = surface.decode('utf-8', errors='replace')
             feature = word.feature
+            raw_reading = (
+                str(feature[9]) if len(feature) > 9 and str(feature[9]) != '*'
+                else str(feature[17]) if len(feature) > 17 and str(feature[17]) != '*'
+                else surface
+            )
             tokens.append({
                 "surface": surface,
-                "reading": str(feature[7]) if len(feature) > 7 and feature[7] != '*' else surface,
+                "reading": katakana_to_hiragana(raw_reading),
                 "pos": str(feature[0]) if len(feature) > 0 else "",
             })
         return {"tokens": tokens}
