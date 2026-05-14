@@ -58,8 +58,41 @@ import {
   triggerTranslation
 } from '@/lib/api';
 import { toast } from 'sonner';
+import axios from 'axios';
+const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
 
 const DEFAULT_SENTENCES_PER_PAGE = 50;
+
+const TokenizedSentence = ({ text, sentenceId, onWordClick, tokenCache, getTokens }) => {
+  const [tokens, setTokens] = React.useState(null);
+
+  React.useEffect(() => {
+    if (tokenCache[sentenceId]) {
+      setTokens(tokenCache[sentenceId]);
+    } else {
+      getTokens(sentenceId, text).then(setTokens);
+    }
+  }, [sentenceId, text]);
+
+  if (!tokens) return <span>{text}</span>;
+
+  return (
+    <>
+      {tokens.map((token, i) => (
+        <span
+          key={i}
+          className="reader-word cursor-pointer hover:bg-primary/10 rounded px-0.5"
+          onClick={(e) => {
+            e.stopPropagation();
+            onWordClick(token.surface, e);
+          }}
+        >
+          {token.surface}
+        </span>
+      ))}
+    </>
+  );
+};
 
 export const ReaderPage = () => {
   const { bookId, chapterId } = useParams();
@@ -96,6 +129,7 @@ export const ReaderPage = () => {
   const [showVocabHighlights, setShowVocabHighlights] = useState(false);
   const [zenzeiiOpen, setZenzeiiOpen] = useState(false);
   const [verticalMode, setVerticalMode] = useState(false);
+  const [tokenCache, setTokenCache] = useState({});
 
   // Customization settings
   const [readerTheme, setReaderTheme] = useState(readerSettings.readerTheme || 'default');
@@ -293,6 +327,18 @@ export const ReaderPage = () => {
   const handleClosePopup = () => {
     setSelectedWord(null);
     setWordData(null);
+  };
+
+  const getTokens = async (sentenceId, text) => {
+    if (tokenCache[sentenceId]) return tokenCache[sentenceId];
+    try {
+      const res = await axios.post(`${API}/tokenize`, { text });
+      const tokens = res.data.tokens || [];
+      setTokenCache(prev => ({ ...prev, [sentenceId]: tokens }));
+      return tokens;
+    } catch {
+      return [{ surface: text, reading: '', pos: '' }];
+    }
   };
 
   const handleChapterChange = (chapId) => {
@@ -740,21 +786,17 @@ export const ReaderPage = () => {
                           }
                         />
                       ) : (
-                        <span
-                          className="reader-word cursor-pointer hover:bg-primary/10 hover:text-primary rounded px-0.5 transition-colors"
-                          onClick={(e) => {
-                            const text = getSentenceText(sentence);
-                            const selection = window.getSelection();
-                            if (selection && selection.toString().trim()) {
-                              handleWordClick(selection.toString().trim(), e, text);
-                            } else {
-                              const firstWord = text.split(/[\s、。！？]/)[0];
-                              if (firstWord) handleWordClick(firstWord, e, text);
-                            }
+                        <TokenizedSentence
+                          text={getSentenceText(sentence)}
+                          sentenceId={sentence.id}
+                          onWordClick={(word, e) => {
+                            const rect = e.target.getBoundingClientRect();
+                            setPopupPosition({ x: rect.left, y: rect.bottom });
+                            handleWordClick(word);
                           }}
-                        >
-                          {getSentenceText(sentence)}
-                        </span>
+                          tokenCache={tokenCache}
+                          getTokens={getTokens}
+                        />
                       )
                     ) : (
                       <span>{getSentenceText(sentence)}</span>
