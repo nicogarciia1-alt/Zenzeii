@@ -63,7 +63,7 @@ const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railw
 
 const DEFAULT_SENTENCES_PER_PAGE = 50;
 
-const TokenizedSentence = ({ text, sentenceId, onWordClick, tokenCache, getTokens, showFurigana }) => {
+const TokenizedSentence = ({ text, sentenceId, onWordClick, tokenCache, getTokens, showFurigana, highlightedSentenceId, highlightedWordIndex }) => {
   const hasKanji = (str) => /[一-龯㐀-䶿]/.test(str);
   const [tokens, setTokens] = React.useState(null);
 
@@ -79,35 +79,51 @@ const TokenizedSentence = ({ text, sentenceId, onWordClick, tokenCache, getToken
 
   return (
     <>
-      {tokens.map((token, i) => (
-        showFurigana && hasKanji(token.surface) && token.reading && token.reading !== token.surface ? (
-          <ruby
-            key={i}
-            className="reader-word cursor-pointer hover:bg-primary/10 rounded px-0.5"
-            style={{ rubyPosition: 'under' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onWordClick(token.surface, e);
-            }}
-          >
-            {token.surface}
-            <rt style={{ fontSize: '0.55em', color: 'hsl(var(--muted-foreground))' }}>
-              {token.reading}
-            </rt>
-          </ruby>
-        ) : (
-          <span
-            key={i}
-            className="reader-word cursor-pointer hover:bg-primary/10 rounded px-0.5"
-            onClick={(e) => {
-              e.stopPropagation();
-              onWordClick(token.surface, e);
-            }}
-          >
-            {token.surface}
-          </span>
-        )
-      ))}
+      {(() => {
+        let charOffset = 0;
+        return tokens.map((token, i) => {
+          const tokenStart = charOffset;
+          charOffset += token.surface.length;
+          const isHighlighted =
+            highlightedSentenceId === sentenceId &&
+            highlightedWordIndex >= tokenStart &&
+            highlightedWordIndex < charOffset;
+
+          const highlightStyle = isHighlighted ? {
+            backgroundColor: 'hsl(var(--primary) / 0.3)',
+            borderRadius: '3px',
+          } : {};
+
+          return showFurigana && hasKanji(token.surface) && token.reading && token.reading !== token.surface ? (
+            <ruby
+              key={i}
+              className="reader-word cursor-pointer hover:bg-primary/10 rounded px-0.5"
+              style={{ rubyPosition: 'under', ...highlightStyle }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onWordClick(token.surface, e);
+              }}
+            >
+              {token.surface}
+              <rt style={{ fontSize: '0.55em', color: 'hsl(var(--muted-foreground))' }}>
+                {token.reading}
+              </rt>
+            </ruby>
+          ) : (
+            <span
+              key={i}
+              className="reader-word cursor-pointer hover:bg-primary/10 rounded px-0.5"
+              style={highlightStyle}
+              onClick={(e) => {
+                e.stopPropagation();
+                onWordClick(token.surface, e);
+              }}
+            >
+              {token.surface}
+            </span>
+          );
+        });
+      })()}
     </>
   );
 };
@@ -899,6 +915,8 @@ export const ReaderPage = () => {
                           tokenCache={tokenCache}
                           getTokens={getTokens}
                           showFurigana={secondaryLayer === 'furigana'}
+                          highlightedSentenceId={highlightedSentenceId}
+                          highlightedWordIndex={highlightedWordIndex}
                         />
                       )
                     ) : (
