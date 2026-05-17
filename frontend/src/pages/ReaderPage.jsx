@@ -130,6 +130,13 @@ export const ReaderPage = () => {
   const [savedWords, setSavedWords] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [hasMore, setHasMore] = useState(true);
+  const [audioMode, setAudioMode] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playButtonVisible, setPlayButtonVisible] = useState(true);
+  const [highlightedWordIndex, setHighlightedWordIndex] = useState(null);
+  const [highlightedSentenceId, setHighlightedSentenceId] = useState(null);
+  const speechRef = useRef(null);
+  const doubleTapRef = useRef(null);
 
   // Dictionary popup state
   const [selectedWord, setSelectedWord] = useState(null);
@@ -359,6 +366,64 @@ export const ReaderPage = () => {
     }
   };
 
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      window.speechSynthesis.cancel();
+      setIsPlaying(false);
+      setHighlightedWordIndex(null);
+      setHighlightedSentenceId(null);
+    } else {
+      startReading();
+    }
+  };
+
+  const startReading = () => {
+    const japaneseSentences = sentences.filter(s =>
+      s.japanese_kanji || s.japanese_original
+    );
+    if (!japaneseSentences.length) return;
+
+    let index = 0;
+    const readNext = () => {
+      if (index >= japaneseSentences.length) {
+        setIsPlaying(false);
+        return;
+      }
+      const sentence = japaneseSentences[index];
+      const text = sentence.japanese_kanji || sentence.japanese_original;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ja-JP';
+      utterance.rate = 0.8;
+
+      utterance.onboundary = (e) => {
+        if (e.name === 'word') {
+          setHighlightedSentenceId(sentence.id);
+          setHighlightedWordIndex(e.charIndex);
+        }
+      };
+
+      utterance.onend = () => {
+        index++;
+        readNext();
+      };
+
+      setHighlightedSentenceId(sentence.id);
+      speechRef.current = utterance;
+      window.speechSynthesis.speak(utterance);
+    };
+
+    setIsPlaying(true);
+    readNext();
+  };
+
+  const handleReaderDoubleTap = () => {
+    const now = Date.now();
+    if (doubleTapRef.current && now - doubleTapRef.current < 300) {
+      setPlayButtonVisible(v => !v);
+    }
+    doubleTapRef.current = now;
+  };
+
   const handleChapterChange = (chapId) => {
     setSentences([]);
     setHasMore(true);
@@ -570,7 +635,7 @@ export const ReaderPage = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-background ${themeClass}`} onClick={handleClosePopup} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className={`min-h-screen bg-background ${themeClass}`} onClick={handleClosePopup} onDoubleClick={handleReaderDoubleTap} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       {/* Top Bar */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
@@ -708,6 +773,27 @@ export const ReaderPage = () => {
             }}
           >
             縦
+          </button>
+          <button
+            onClick={() => {
+              setAudioMode(v => !v);
+              if (isPlaying) {
+                window.speechSynthesis.cancel();
+                setIsPlaying(false);
+              }
+            }}
+            style={{
+              fontFamily: '"EB Garamond", Georgia, serif',
+              fontSize: '0.85rem',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              border: '1px solid hsl(var(--border))',
+              backgroundColor: audioMode ? 'hsl(var(--primary))' : 'transparent',
+              color: audioMode ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))',
+              cursor: 'pointer',
+            }}
+          >
+            音
           </button>
           <div className="flex items-center justify-between gap-4">
             <SecondaryScriptToggle
@@ -931,6 +1017,43 @@ export const ReaderPage = () => {
       >
         文 Zenzeii
       </button>
+
+      {audioMode && playButtonVisible && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '40px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 90,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+          onDoubleClick={() => setPlayButtonVisible(false)}
+        >
+          <button
+            onClick={handlePlayPause}
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              border: '1px solid hsl(var(--border))',
+              backgroundColor: 'hsl(var(--background))',
+              color: 'hsl(var(--foreground))',
+              fontSize: '1.4rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+            }}
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
+        </div>
+      )}
 
       <ZenzeiiChat
         bookTitle={book?.title || ''}
