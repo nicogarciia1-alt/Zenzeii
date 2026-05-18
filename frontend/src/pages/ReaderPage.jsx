@@ -886,7 +886,7 @@ export const ReaderPage = () => {
           >
             {sentences.map((sentence) => {
               const secondaryText = getSecondaryText(sentence);
-              const showSecondary = secondaryLayer !== 'none' && showSecondaryText && secondaryText && sentence.translation_status === 'completed';
+              const showSecondary = secondaryLayer !== 'none' && showSecondaryText && secondaryText && (secondaryLayer === 'english' || sentence.translation_status === 'completed');
               
               return (
                 <div
