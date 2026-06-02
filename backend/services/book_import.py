@@ -651,12 +651,27 @@ def split_long_text_into_sentences(text: str) -> List[str]:
     return [s for s in sentences if len(s) > 30]
 
 
+def _split_into_sentences_paragraphs(text: str) -> List[str]:
+    """Fallback: split by paragraphs. Used when text has no Japanese sentence punctuation."""
+    return split_into_paragraphs(text)
+
+
 def split_into_sentences(text: str) -> List[str]:
     """
-    Split chapter text into readable units (paragraphs preferred).
-    This is the main function called during import.
+    Split chapter text into individual sentences.
+    For Japanese text: splits on sentence-ending punctuation (。！？」).
+    Falls back to paragraph splitting for non-Japanese text.
     """
-    return split_into_paragraphs(text)
+    if not text:
+        return []
+
+    if re.search(r'[。！？」]', text):
+        parts = re.split(r'(?<=[。！？」])', text)
+        result = [p.strip() for p in parts if len(p.strip()) >= 3]
+        if result:
+            return result
+
+    return _split_into_sentences_paragraphs(text)
 
 
 def get_book_cover(book_id: str) -> str:
