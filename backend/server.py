@@ -179,6 +179,8 @@ class UserResponse(BaseModel):
     vocabulary_count: int = 0
     books_read: int = 0
     total_words_read: int = 0
+    streak: int = 0
+    last_read_date: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -437,7 +439,9 @@ async def register(user_data: UserCreate):
         "created_at": now,
         "vocabulary_count": 0,
         "books_read": 0,
-        "total_words_read": 0
+        "total_words_read": 0,
+        "streak": 0,
+        "last_read_date": None
     }
     await db.users.insert_one(user_doc)
     
@@ -1646,6 +1650,16 @@ async def delete_bookmark(bookmark_id: str, current_user: dict = Depends(get_cur
 # READING PROGRESS
 # ========================
 
+def _calculate_streak(current_streak: int, last_read_date) -> tuple:
+    today = datetime.now(timezone.utc).date().isoformat()
+    if last_read_date == today:
+        return current_streak, today
+    if last_read_date:
+        yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+        if last_read_date == yesterday:
+            return current_streak + 1, today
+    return 1, today
+
 @api_router.get("/progress", response_model=List[ReadingProgressResponse])
 async def get_all_progress(current_user: dict = Depends(get_current_user)):
     progress = await db.reading_progress.find({"user_id": current_user["id"]}, {"_id": 0}).sort("last_read", -1).to_list(100)
@@ -1669,7 +1683,7 @@ async def update_progress(progress: ReadingProgressRequest, current_user: dict =
         )
         updated = await db.reading_progress.find_one({"id": existing["id"]}, {"_id": 0})
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"total_words_read": progress.words_read}})
-        return ReadingProgressResponse(**updated)
+        result = ReadingProgressResponse(**updated)
     else:
         progress_id = str(uuid.uuid4())
         progress_doc = {
@@ -1683,7 +1697,15 @@ async def update_progress(progress: ReadingProgressRequest, current_user: dict =
         }
         await db.reading_progress.insert_one(progress_doc)
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"total_words_read": progress.words_read}})
-        return ReadingProgressResponse(**progress_doc)
+        result = ReadingProgressResponse(**progress_doc)
+
+    user = await db.users.find_one({"id": current_user["id"]}, {"streak": 1, "last_read_date": 1})
+    new_streak, new_date = _calculate_streak(user.get("streak", 0), user.get("last_read_date"))
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"streak": new_streak, "last_read_date": new_date}}
+    )
+    return result
 
 # ========================
 # STATS
