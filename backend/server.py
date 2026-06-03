@@ -59,6 +59,35 @@ JWT_EXPIRATION_HOURS = 24
 client = None
 db = None
 
+
+async def ensure_indexes(db):
+    # sentences — most queried collection
+    await db.sentences.create_index([("chapter_id", 1), ("order", 1)])
+    await db.sentences.create_index([("book_id", 1), ("translation_status", 1)])
+    await db.sentences.create_index([("chapter_id", 1), ("translation_status", 1)])
+
+    # reading_progress
+    await db.reading_progress.create_index([("user_id", 1), ("book_id", 1)], unique=True)
+    await db.reading_progress.create_index([("user_id", 1)])
+
+    # books
+    await db.books.create_index([("id", 1)], unique=True)
+    await db.books.create_index([("user_id", 1)])
+
+    # chapters
+    await db.chapters.create_index([("book_id", 1), ("chapter_number", 1)])
+    await db.chapters.create_index([("translation_requested", 1)])
+
+    # users
+    await db.users.create_index([("id", 1)], unique=True)
+    await db.users.create_index([("email", 1)], unique=True)
+
+    # password_resets / email_verifications
+    await db.password_resets.create_index([("token", 1)])
+    await db.email_verifications.create_index([("token", 1)])
+
+    logger.info("MongoDB indexes ensured")
+
 # Global variable to track worker process
 worker_process = None
 
@@ -76,6 +105,8 @@ async def lifespan(app: FastAPI):
     client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
     db = client[db_name]
     logger.info(f"MongoDB client created for DB: {db_name}")
+
+    await ensure_indexes(db)
 
     # Startup: Launch translation worker
     try:
