@@ -1790,6 +1790,28 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
     }
 
 # ========================
+# AI RATE LIMITING
+# ========================
+
+_ai_rate_limit: Dict[str, List[float]] = {}
+_AI_MAX_REQUESTS = 20
+_AI_WINDOW_SECONDS = 60
+
+def _check_ai_rate_limit(user_id: str):
+    import time
+    now = time.time()
+    window_start = now - _AI_WINDOW_SECONDS
+    timestamps = _ai_rate_limit.get(user_id, [])
+    timestamps = [t for t in timestamps if t > window_start]
+    if len(timestamps) >= _AI_MAX_REQUESTS:
+        raise HTTPException(
+            status_code=429,
+            detail=f"AI rate limit exceeded. Max {_AI_MAX_REQUESTS} requests per minute."
+        )
+    timestamps.append(now)
+    _ai_rate_limit[user_id] = timestamps
+
+# ========================
 # AI EXPLAIN
 # ========================
 
@@ -1803,6 +1825,7 @@ async def ai_explain_word(
     current_user: dict = Depends(get_current_user)
 ):
     """Explain a Japanese word in context using GPT-4o-mini."""
+    _check_ai_rate_limit(current_user["id"])
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     if not openai_key:
         raise HTTPException(status_code=503, detail="AI explanation not available")
@@ -1850,6 +1873,7 @@ async def ai_chat(
     current_user: dict = Depends(get_current_user)
 ):
     """Chat with Zenzeii, a scholarly Japanese literature companion."""
+    _check_ai_rate_limit(current_user["id"])
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     if not openai_key:
         raise HTTPException(status_code=503, detail="AI not available")
