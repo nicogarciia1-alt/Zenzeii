@@ -181,6 +181,7 @@ class UserResponse(BaseModel):
     total_words_read: int = 0
     streak: int = 0
     last_read_date: Optional[str] = None
+    email_verified: bool = False
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -423,12 +424,47 @@ def transform_sentence_for_frontend(sentence: dict) -> dict:
 # AUTH ENDPOINTS
 # ========================
 
+async def _send_verification_email(user_id: str, email: str):
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://zenzeii-ci1x.vercel.app")
+    token = secrets.token_urlsafe(32)
+    expiry = datetime.now(timezone.utc) + timedelta(hours=24)
+    await db.email_verifications.insert_one({
+        "token": token,
+        "user_id": user_id,
+        "email": email,
+        "expires_at": expiry.isoformat(),
+        "used": False
+    })
+    if RESEND_API_KEY:
+        import resend
+        resend.api_key = RESEND_API_KEY
+        verify_url = f"{FRONTEND_URL}/verify-email?token={token}"
+        resend.Emails.send({
+            "from": "Zenzeii <onboarding@resend.dev>",
+            "to": email,
+            "subject": "Verify your Zenzeii email",
+            "html": f"""
+            <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; padding: 40px; background: #f5efe0;">
+                <h1 style="font-size: 28px; color: #3d2b1f; margin-bottom: 8px;">禅々 Zenzeii</h1>
+                <p style="color: #3d2b1f; font-size: 16px;">Welcome! Please verify your email address to start reading.</p>
+                <p style="color: #3d2b1f; font-size: 16px;">This link expires in 24 hours.</p>
+                <a href="{verify_url}" style="display: inline-block; margin: 24px 0; padding: 12px 24px; background: #B5294E; color: white; text-decoration: none; font-size: 16px;">Verify Email</a>
+                <p style="color: #888; font-size: 13px;">If you did not create a Zenzeii account, ignore this email.</p>
+            </div>
+            """
+        })
+
+
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
+        if not existing.get("email_verified", False):
+            await _send_verification_email(existing["id"], existing["email"])
+            raise HTTPException(status_code=400, detail="Email already registered but not verified. A new verification email has been sent.")
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     user_doc = {
@@ -441,10 +477,12 @@ async def register(user_data: UserCreate):
         "books_read": 0,
         "total_words_read": 0,
         "streak": 0,
-        "last_read_date": None
+        "last_read_date": None,
+        "email_verified": False
     }
     await db.users.insert_one(user_doc)
-    
+    await _send_verification_email(user_id, user_data.email)
+
     token = create_token(user_id)
     return TokenResponse(
         access_token=token,
@@ -459,7 +497,10 @@ async def login(credentials: UserLogin):
     user = await db.users.find_one({"email": credentials.email})
     if not user or not verify_password(credentials.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
+    if not user.get("email_verified", False):
+        raise HTTPException(status_code=403, detail="Please verify your email before logging in.")
+
     token = create_token(user["id"])
     return TokenResponse(
         access_token=token,
@@ -535,6 +576,24 @@ async def reset_password(request: ResetPasswordRequest):
         {"$set": {"used": True}}
     )
     return {"message": "Password reset successfully"}
+
+@api_router.get("/auth/verify-email")
+async def verify_email(token: str):
+    now = datetime.now(timezone.utc).isoformat()
+    doc = await db.email_verifications.find_one({"token": token, "used": False})
+    if not doc:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    if doc["expires_at"] < now:
+        raise HTTPException(status_code=400, detail="Verification link has expired")
+    await db.users.update_one(
+        {"id": doc["user_id"]},
+        {"$set": {"email_verified": True}}
+    )
+    await db.email_verifications.update_one(
+        {"token": token},
+        {"$set": {"used": True}}
+    )
+    return {"message": "Email verified. You can now log in."}
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
