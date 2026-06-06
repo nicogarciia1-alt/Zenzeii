@@ -768,14 +768,16 @@ async def get_book_sources():
 async def get_available_books(source: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """Get all available books, optionally filtered by source"""
     available = []
-    user_prefix = current_user["id"][:8]
 
     # Gutenberg books (English)
     if source is None or source == "gutenberg":
         for key, info in GUTENBERG_BOOKS.items():
-            existing = await db.books.find_one({"id": f"{user_prefix}-{key}"})
+            book_id = f"gutenberg-{info['gutenberg_id']}"
+            global_book = await db.books.find_one({"id": book_id}, {"_id": 0, "import_status": 1})
+            on_shelf = await db.user_shelves.find_one({"user_id": current_user["id"], "book_id": book_id})
             available.append({
                 "book_key": key,
+                "book_id": book_id,
                 "title": info["title"],
                 "author": info["author"],
                 "gutenberg_id": info.get("gutenberg_id"),
@@ -783,16 +785,19 @@ async def get_available_books(source: Optional[str] = None, current_user: dict =
                 "difficulty": info["difficulty"],
                 "source": "gutenberg",
                 "language": "en",
-                "is_imported": existing is not None,
-                "import_status": existing.get("import_status", "not_started") if existing else "not_started"
+                "is_imported": on_shelf is not None,
+                "import_status": global_book["import_status"] if global_book else "not_started"
             })
 
     # Aozora books (Japanese)
     if source is None or source == "aozora":
         for key, info in AOZORA_BOOKS.items():
-            existing = await db.books.find_one({"id": f"{user_prefix}-{key}"})
+            book_id = f"aozora-{key}"
+            global_book = await db.books.find_one({"id": book_id}, {"_id": 0, "import_status": 1})
+            on_shelf = await db.user_shelves.find_one({"user_id": current_user["id"], "book_id": book_id})
             available.append({
                 "book_key": key,
+                "book_id": book_id,
                 "title": info["title"],
                 "title_en": info.get("title_en"),
                 "author": info["author"],
@@ -802,8 +807,8 @@ async def get_available_books(source: Optional[str] = None, current_user: dict =
                 "difficulty": info["difficulty"],
                 "source": "aozora",
                 "language": "ja",
-                "is_imported": existing is not None,
-                "import_status": existing.get("import_status", "not_started") if existing else "not_started"
+                "is_imported": on_shelf is not None,
+                "import_status": global_book["import_status"] if global_book else "not_started"
             })
 
     return available
