@@ -144,8 +144,16 @@ export const HomePage = () => {
   const handleImportPredefined = async (bookKey, source = 'gutenberg') => {
     setImportingBooks(prev => new Set(prev).add(bookKey));
     try {
-      await importBook({ book_key: bookKey, source });
-      toast.success('Importing... Translations will be prepared in background.');
+      const res = await importBook({ book_key: bookKey, source });
+      const bookId = res.data.book_id || bookKey;
+      if (res.data.status === 'completed') {
+        setImportingBooks(prev => { const n = new Set(prev); n.delete(bookKey); return n; });
+        toast.success('Book added to your library!');
+        fetchData();
+      } else {
+        setImportingBooks(prev => { const n = new Set(prev); n.delete(bookKey); n.add(bookId); return n; });
+        toast.success('Importing... Translations will be prepared in background.');
+      }
       const availableRes = await getAvailableBooks();
       setAvailableBooks(availableRes.data);
     } catch (error) {
@@ -154,11 +162,7 @@ export const HomePage = () => {
       } else {
         toast.error('Failed to start import');
       }
-      setImportingBooks(prev => {
-        const next = new Set(prev);
-        next.delete(bookKey);
-        return next;
-      });
+      setImportingBooks(prev => { const n = new Set(prev); n.delete(bookKey); return n; });
     }
   };
 
