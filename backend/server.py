@@ -1482,7 +1482,8 @@ async def process_upload_fast(book_id: str, text: str, title: str, author: str, 
             "user_id": user_id,
         }
         await db.books.insert_one(book_doc)
-        
+        await _add_to_shelf(user_id, book_id)
+
         clean_text = clean_gutenberg_text(text)
         chapters = split_into_chapters(clean_text, book_id)
         
