@@ -324,6 +324,13 @@ class BookmarkResponse(BaseModel):
     name: str
     created_at: str
 
+class LibraryEntryResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    user_id: str
+    book_id: str
+    added_at: str
+
 class ReadingProgressRequest(BaseModel):
     book_id: str
     chapter_id: str
