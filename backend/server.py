@@ -1128,6 +1128,15 @@ async def process_book_import_gutenberg(
     try:
         logger.info(f"Starting Gutenberg import for {book_id}")
 
+        # Dedup guard — another user may have already imported this global book
+        existing = await db.books.find_one({"id": book_id})
+        if existing and existing.get("import_status") == "completed":
+            logger.info(f"Book {book_id} already exists globally, skipping import")
+            return
+        if existing and existing.get("import_status") in ("importing", "preparing"):
+            logger.info(f"Book {book_id} already importing, skipping duplicate")
+            return
+
         book_doc = {
             "id": book_id,
             "title": title,
@@ -1142,11 +1151,10 @@ async def process_book_import_gutenberg(
             "import_status": "preparing",
             "sentences_count": 0,
             "source": "gutenberg",
-            "book_language": language,  # Source language
+            "book_language": language,
             "gutenberg_id": gutenberg_id,
             "priority": priority,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "user_id": user_id,
         }
         
         await db.books.update_one({"id": book_id}, {"$set": book_doc}, upsert=True)
@@ -1252,18 +1260,27 @@ async def process_book_import_aozora(
     try:
         logger.info(f"Starting Aozora import for {book_id}")
 
-        # Get English title/author from book info — strip user prefix to look up base key
-        base_key = book_id.split("-", 1)[1] if "-" in book_id else book_id
+        # Dedup guard — another user may have already imported this global book
+        existing = await db.books.find_one({"id": book_id})
+        if existing and existing.get("import_status") == "completed":
+            logger.info(f"Book {book_id} already exists globally, skipping import")
+            return
+        if existing and existing.get("import_status") in ("importing", "preparing"):
+            logger.info(f"Book {book_id} already importing, skipping duplicate")
+            return
+
+        # Strip "aozora-" prefix to get the dict key (e.g. "aozora-kokoro" → "kokoro")
+        base_key = book_id.removeprefix("aozora-")
         book_info = AOZORA_BOOKS.get(base_key, {})
         title_en = book_info.get("title_en", title)
         author_en = book_info.get("author_en", author)
 
         book_doc = {
             "id": book_id,
-            "title": title,  # Japanese title
+            "title": title,
             "title_jp": title,
             "title_en": title_en,
-            "author": author,  # Japanese author
+            "author": author,
             "author_jp": author,
             "author_en": author_en,
             "cover_image": get_book_cover(book_id),
@@ -1275,11 +1292,10 @@ async def process_book_import_aozora(
             "import_status": "importing",
             "sentences_count": 0,
             "source": "aozora",
-            "book_language": language,  # Source language is Japanese
+            "book_language": language,
             "aozora_id": aozora_id,
             "priority": priority,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "user_id": user_id,
         }
         
         await db.books.update_one({"id": book_id}, {"$set": book_doc}, upsert=True)
