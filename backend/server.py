@@ -836,17 +836,24 @@ async def search_aozora_books(query: str = Query(..., min_length=1)):
 @api_router.get("/books")
 async def get_books(current_user: dict = Depends(get_current_user)):
     """
-    Get all imported books.
-    Uses safe transform to handle missing fields and prevent crashes.
-    Only returns books with valid import_status (excludes 'failed').
+    Get all books on the current user's shelf.
+    Reads shelf entries first, then fetches the global book documents.
     """
     try:
+        shelf_entries = await db.user_shelves.find(
+            {"user_id": current_user["id"]},
+            {"_id": 0, "book_id": 1}
+        ).to_list(200)
+
+        if not shelf_entries:
+            return []
+
+        book_ids = [e["book_id"] for e in shelf_entries]
         books = await db.books.find(
-            {"user_id": current_user["id"], "import_status": {"$nin": ["failed", "cancelled"]}},
+            {"id": {"$in": book_ids}, "import_status": {"$nin": ["failed", "cancelled"]}},
             {"_id": 0}
-        ).to_list(100)
-        
-        # Safe transform each book
+        ).to_list(200)
+
         return [safe_book_response(b) for b in books]
     except Exception as e:
         logger.error(f"Error fetching books: {e}")
