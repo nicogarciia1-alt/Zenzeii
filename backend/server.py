@@ -1123,22 +1123,27 @@ async def import_book(
     
     return {"message": "Book import started", "book_id": book_id, "status": "importing"}
 
+async def _remove_from_shelf_and_cleanup(user_id: str, book_id: str):
+    """Remove book from user's shelf. Deletes global book data only if no other user has it."""
+    await db.user_shelves.delete_one({"user_id": user_id, "book_id": book_id})
+    other_shelf_entries = await db.user_shelves.count_documents({"book_id": book_id})
+    if other_shelf_entries == 0:
+        await db.sentences.delete_many({"book_id": book_id})
+        await db.chapters.delete_many({"book_id": book_id})
+        await db.books.delete_one({"id": book_id})
+        logger.info(f"Book {book_id} fully deleted — no remaining shelf entries")
+    else:
+        logger.info(f"Book {book_id} removed from shelf; {other_shelf_entries} other user(s) retain it")
+
 @api_router.post("/books/cancel")
 async def cancel_import(request: CancelImportRequest, current_user: dict = Depends(get_current_user)):
-    """Cancel a book import and clean up partial data"""
+    """Remove a book from the user's shelf. Cancels the global import if no other user has it."""
     book = await db.books.find_one({"id": request.book_id})
-    
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    
     if book.get("import_status") == "completed":
         raise HTTPException(status_code=400, detail="Cannot cancel a completed import")
-    
-    await db.books.update_one({"id": request.book_id}, {"$set": {"import_status": "cancelled"}})
-    await db.chapters.delete_many({"book_id": request.book_id})
-    await db.sentences.delete_many({"book_id": request.book_id})
-    await db.books.delete_one({"id": request.book_id})
-    
+    await _remove_from_shelf_and_cleanup(current_user["id"], request.book_id)
     return {"message": "Import cancelled", "book_id": request.book_id}
 
 @api_router.post("/books/prioritize")
@@ -1555,15 +1560,11 @@ async def get_book_status(book_id: str):
 
 @api_router.delete("/books/{book_id}")
 async def delete_book(book_id: str, current_user: dict = Depends(get_current_user)):
-    book = await db.books.find_one({"id": book_id})
-    if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
-    
-    await db.sentences.delete_many({"book_id": book_id})
-    await db.chapters.delete_many({"book_id": book_id})
-    await db.books.delete_one({"id": book_id})
-    
-    return {"message": "Book deleted"}
+    on_shelf = await db.user_shelves.find_one({"user_id": current_user["id"], "book_id": book_id})
+    if not on_shelf:
+        raise HTTPException(status_code=404, detail="Book not found in your library")
+    await _remove_from_shelf_and_cleanup(current_user["id"], book_id)
+    return {"message": "Book removed from library"}
 
 @api_router.post("/books/{book_id}/send-to-kindle")
 async def send_to_kindle(
