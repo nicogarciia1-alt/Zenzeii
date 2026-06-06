@@ -70,9 +70,12 @@ async def ensure_indexes(db):
     await db.reading_progress.create_index([("user_id", 1), ("book_id", 1)], unique=True)
     await db.reading_progress.create_index([("user_id", 1)])
 
-    # books
+    # books — global, no longer scoped by user
     await db.books.create_index([("id", 1)], unique=True)
-    await db.books.create_index([("user_id", 1)])
+
+    # user_shelves — which books each user has added
+    await db.user_shelves.create_index([("user_id", 1), ("book_id", 1)], unique=True)
+    await db.user_shelves.create_index([("user_id", 1)])
 
     # chapters
     await db.chapters.create_index([("book_id", 1), ("chapter_number", 1)])
