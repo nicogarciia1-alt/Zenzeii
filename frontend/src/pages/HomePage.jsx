@@ -187,23 +187,27 @@ export const HomePage = () => {
   };
 
   const handleImportGutenberg = async (result) => {
-    const bookId = `gutenberg-${result.gutenberg_id}`;
-    setImportingBooks(prev => new Set(prev).add(bookId));
+    const tempId = `gutenberg-${result.gutenberg_id}`;
+    setImportingBooks(prev => new Set(prev).add(tempId));
     try {
-      await importBook({
+      const res = await importBook({
         gutenberg_id: result.gutenberg_id,
         title: result.title,
         author: result.author
       });
-      toast.success('Importing... This only takes a few seconds!');
+      const bookId = res.data.book_id || tempId;
+      if (res.data.status === 'completed') {
+        setImportingBooks(prev => { const n = new Set(prev); n.delete(tempId); return n; });
+        toast.success('Book added to your library!');
+        fetchData();
+      } else {
+        setImportingBooks(prev => { const n = new Set(prev); n.delete(tempId); n.add(bookId); return n; });
+        toast.success('Importing... This only takes a few seconds!');
+      }
       setShowImportDialog(false);
     } catch (error) {
       toast.error('Failed to start import');
-      setImportingBooks(prev => {
-        const next = new Set(prev);
-        next.delete(bookId);
-        return next;
-      });
+      setImportingBooks(prev => { const n = new Set(prev); n.delete(tempId); return n; });
     }
   };
 
