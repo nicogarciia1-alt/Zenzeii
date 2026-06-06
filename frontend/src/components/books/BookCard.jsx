@@ -167,7 +167,7 @@ export const BookCard = ({ book, progress, onDelete }) => {
                     data-testid={`delete-book-${book.id}`}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Book
+                    Remove from Library
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -207,10 +207,10 @@ export const BookCard = ({ book, progress, onDelete }) => {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete "{book.title}"?</AlertDialogTitle>
+            <AlertDialogTitle>Remove "{book.title}" from library?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove this book and all its chapters from your library. 
-              This action cannot be undone.
+              This will remove this book from your library. If no other readers have it,
+              it will be deleted permanently.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -226,7 +226,7 @@ export const BookCard = ({ book, progress, onDelete }) => {
               ) : (
                 <Trash2 className="h-4 w-4 mr-2" />
               )}
-              Delete
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
