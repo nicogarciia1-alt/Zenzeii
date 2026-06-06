@@ -1008,25 +1008,38 @@ async def record_import(user_id: str, book_id: str):
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
 
+async def _add_to_shelf(user_id: str, book_id: str):
+    """Add a book to the user's shelf. Silently ignores if already present."""
+    try:
+        await db.user_shelves.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "book_id": book_id,
+            "added_at": datetime.now(timezone.utc).isoformat()
+        })
+    except Exception:
+        pass  # Unique index violation = already on shelf
+
 @api_router.post("/books/import")
 async def import_book(
-    request: ImportBookRequest, 
+    request: ImportBookRequest,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
     """
     Import a book from various sources.
-    Enforces rate limit of 3 books per hour per user.
+    If the book already exists globally, adds it to the user's shelf instantly.
+    Enforces rate limit of 3 new imports per hour per user.
     """
     # Check import limit
     if not await check_import_limit(current_user["id"]):
         raise HTTPException(
-            status_code=429, 
+            status_code=429,
             detail="You have reached the hourly import limit (3 books). Please try again later."
         )
-    
+
     source = request.source or "gutenberg"
-    
+
     if source == "gutenberg":
         if request.book_key and request.book_key in GUTENBERG_BOOKS:
             book_info = GUTENBERG_BOOKS[request.book_key]
@@ -1047,11 +1060,22 @@ async def import_book(
             language = "en"
         else:
             raise HTTPException(status_code=400, detail="Must provide book_key or gutenberg_id")
-        
-        existing = await db.books.find_one({"id": book_id})
+
+        on_shelf = await db.user_shelves.find_one({"user_id": current_user["id"], "book_id": book_id})
+        if on_shelf:
+            existing = await db.books.find_one({"id": book_id}, {"_id": 0, "import_status": 1})
+            return {"message": "Book already in your library", "book_id": book_id,
+                    "status": existing.get("import_status", "completed") if existing else "completed"}
+
+        await _add_to_shelf(current_user["id"], book_id)
+
+        existing = await db.books.find_one({"id": book_id}, {"_id": 0, "import_status": 1})
         if existing and existing.get("import_status") == "completed":
-            return {"message": "Book already imported", "book_id": book_id, "status": "completed"}
-        
+            return {"message": "Book added to your library", "book_id": book_id, "status": "completed"}
+        if existing and existing.get("import_status") in ("importing", "preparing"):
+            return {"message": "Book is being imported", "book_id": book_id,
+                    "status": existing["import_status"]}
+
         await record_import(current_user["id"], book_id)
         background_tasks.add_task(
             process_book_import_gutenberg,
@@ -1072,11 +1096,22 @@ async def import_book(
             language = "ja"
         else:
             raise HTTPException(status_code=400, detail="Must provide valid book_key for Aozora")
-        
-        existing = await db.books.find_one({"id": book_id})
+
+        on_shelf = await db.user_shelves.find_one({"user_id": current_user["id"], "book_id": book_id})
+        if on_shelf:
+            existing = await db.books.find_one({"id": book_id}, {"_id": 0, "import_status": 1})
+            return {"message": "Book already in your library", "book_id": book_id,
+                    "status": existing.get("import_status", "completed") if existing else "completed"}
+
+        await _add_to_shelf(current_user["id"], book_id)
+
+        existing = await db.books.find_one({"id": book_id}, {"_id": 0, "import_status": 1})
         if existing and existing.get("import_status") == "completed":
-            return {"message": "Book already imported", "book_id": book_id, "status": "completed"}
-        
+            return {"message": "Book added to your library", "book_id": book_id, "status": "completed"}
+        if existing and existing.get("import_status") in ("importing", "preparing"):
+            return {"message": "Book is being imported", "book_id": book_id,
+                    "status": existing["import_status"]}
+
         await record_import(current_user["id"], book_id)
         background_tasks.add_task(
             process_book_import_aozora,
