@@ -1018,7 +1018,7 @@ async def import_book(
     if source == "gutenberg":
         if request.book_key and request.book_key in GUTENBERG_BOOKS:
             book_info = GUTENBERG_BOOKS[request.book_key]
-            book_id = f"{current_user['id'][:8]}-{request.book_key}"
+            book_id = f"gutenberg-{book_info['gutenberg_id']}"
             gutenberg_id = book_info["gutenberg_id"]
             title = book_info["title"]
             author = book_info["author"]
@@ -1026,7 +1026,7 @@ async def import_book(
             difficulty = book_info.get("difficulty", "intermediate")
             language = "en"
         elif request.gutenberg_id:
-            book_id = f"{current_user['id'][:8]}-gutenberg-{request.gutenberg_id}"
+            book_id = f"gutenberg-{request.gutenberg_id}"
             gutenberg_id = request.gutenberg_id
             title = request.title or f"Book {request.gutenberg_id}"
             author = request.author or "Unknown"
@@ -1050,7 +1050,7 @@ async def import_book(
     elif source == "aozora":
         if request.book_key and request.book_key in AOZORA_BOOKS:
             book_info = AOZORA_BOOKS[request.book_key]
-            book_id = f"{current_user['id'][:8]}-{request.book_key}"
+            book_id = f"aozora-{request.book_key}"
             aozora_id = book_info["aozora_id"]
             file_path = book_info["file_path"]
             title = book_info["title"]
@@ -1386,7 +1386,7 @@ async def upload_book(
     except UnicodeDecodeError:
         text = content.decode('latin-1')
 
-    book_id = f"{current_user['id'][:8]}-upload-{str(uuid.uuid4())[:8]}"
+    book_id = f"upload-{current_user['id'][:8]}-{str(uuid.uuid4())[:8]}"
     background_tasks.add_task(process_upload_fast, book_id, text, title, author, current_user["id"])
 
     return {"message": "Upload started", "book_id": book_id, "status": "importing"}
