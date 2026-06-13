@@ -480,15 +480,17 @@ async def _send_verification_email(user_id: str, email: str):
         "expires_at": expiry.isoformat(),
         "used": False
     })
+    logger.info("RESEND_API_KEY present: %s", bool(os.environ.get("RESEND_API_KEY")))
     if RESEND_API_KEY:
         import resend
         resend.api_key = RESEND_API_KEY
         verify_url = f"{FRONTEND_URL}/verify-email?token={token}"
-        resend.Emails.send({
-            "from": "Zenzeii <onboarding@resend.dev>",
-            "to": email,
-            "subject": "Verify your Zenzeii email",
-            "html": f"""
+        try:
+            resend.Emails.send({
+                "from": "Zenzeii <onboarding@resend.dev>",
+                "to": email,
+                "subject": "Verify your Zenzeii email",
+                "html": f"""
             <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; padding: 40px; background: #f5efe0;">
                 <h1 style="font-size: 28px; color: #3d2b1f; margin-bottom: 8px;">禅々 Zenzeii</h1>
                 <p style="color: #3d2b1f; font-size: 16px;">Welcome! Please verify your email address to start reading.</p>
@@ -497,7 +499,9 @@ async def _send_verification_email(user_id: str, email: str):
                 <p style="color: #888; font-size: 13px;">If you did not create a Zenzeii account, ignore this email.</p>
             </div>
             """
-        })
+            })
+        except Exception as e:
+            logger.error(f"Failed to send verification email to {email}: {e}")
 
 
 @api_router.post("/auth/register", response_model=TokenResponse)
@@ -584,11 +588,12 @@ async def forgot_password(request: ForgotPasswordRequest):
         import resend
         resend.api_key = RESEND_API_KEY
         reset_url = f"{FRONTEND_URL}/reset-password?token={reset_token}"
-        resend.Emails.send({
-            "from": "Zenzeii <onboarding@resend.dev>",
-            "to": request.email,
-            "subject": "Reset your Zenzeii password",
-            "html": f"""
+        try:
+            resend.Emails.send({
+                "from": "Zenzeii <onboarding@resend.dev>",
+                "to": request.email,
+                "subject": "Reset your Zenzeii password",
+                "html": f"""
             <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; padding: 40px; background: #f5efe0;">
                 <h1 style="font-size: 28px; color: #3d2b1f; margin-bottom: 8px;">禅々 Zenzeii</h1>
                 <p style="color: #3d2b1f; font-size: 16px;">You requested a password reset.</p>
@@ -597,7 +602,9 @@ async def forgot_password(request: ForgotPasswordRequest):
                 <p style="color: #888; font-size: 13px;">If you did not request this, ignore this email.</p>
             </div>
             """
-        })
+            })
+        except Exception as e:
+            logger.error(f"Failed to send password reset email to {request.email}: {e}")
     return {"message": "If this email exists, a reset link has been sent."}
 
 @api_router.post("/auth/reset-password")
