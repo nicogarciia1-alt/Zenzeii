@@ -97,7 +97,10 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await saveWord({
+      const type = wordData.word.length === 1 &&
+        /[一-鿿㐀-䶿豈-﫿]/.test(wordData.word)
+          ? 'kanji' : 'word';
+      const res = await saveWord({
         word: wordData.word,
         reading: wordData.reading || '',
         romaji: wordData.romaji || '',
@@ -105,10 +108,11 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
         parts_of_speech: wordData.parts_of_speech || [],
         example_sentence: wordData.example_sentence,
         example_translation: wordData.example_translation,
+        type,
       });
       setSaved(true);
       toast.success('Word saved to vocabulary!');
-      onWordSaved && onWordSaved(wordData);
+      onWordSaved && onWordSaved(res.data);
     } catch (error) {
       if (error.response?.status === 400) {
         toast.info('Word already in your vocabulary');
