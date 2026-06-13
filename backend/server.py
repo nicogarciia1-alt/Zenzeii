@@ -480,7 +480,6 @@ async def _send_verification_email(user_id: str, email: str):
         "expires_at": expiry.isoformat(),
         "used": False
     })
-    logger.info("RESEND_API_KEY present: %s", bool(os.environ.get("RESEND_API_KEY")))
     if RESEND_API_KEY:
         import resend
         resend.api_key = RESEND_API_KEY
