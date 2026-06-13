@@ -8,41 +8,74 @@
  * Call once per savedWords change (useMemo in the consumer).
  *
  * @param {Array} savedWords  – array of SavedWordResponse objects from the API
- * @returns {{ words: string[], kanji: Set<string> }}
- *   words  – multi-character saved words, sorted longest-first for greedy matching
- *   kanji  – single CJK characters saved as standalone vocabulary entries
+ * @returns {{ formEntries: Array<{form: string, word: string}>, kanjiSet: Set<string> }}
+ *   formEntries – flat list of {form, word} pairs for all word-type entries,
+ *                 sorted longest-first for greedy matching
+ *   kanjiSet    – single CJK characters saved as standalone kanji entries
  */
 export function buildVocabIndex(savedWords) {
   if (!savedWords || savedWords.length === 0) {
-    return { words: [], kanji: new Set() };
+    return { formEntries: [], kanjiSet: new Set() };
   }
 
-  const words = savedWords
-    .map(w => w.word)
-    .filter(w => w && w.length > 1)
-    .sort((a, b) => b.length - a.length); // longest first — prevents partial shadowing
+  const formEntries = [];
+  const kanjiSet = new Set();
 
-  const kanji = new Set(
-    savedWords
-      .map(w => w.word)
-      .filter(w => w && w.length === 1 && isCJK(w))
-  );
+  for (const w of savedWords) {
+    if (!w.word) continue;
 
-  return { words, kanji };
+    const isKanji =
+      w.type === 'kanji' ||
+      (!w.type && w.word.length === 1 && isCJK(w.word));
+
+    if (isKanji) {
+      kanjiSet.add(w.word);
+      continue;
+    }
+
+    // Word entry — collect all available forms, newest fields take priority,
+    // fall back to legacy reading/romaji fields for pre-redesign records
+    const candidates = [
+      w.kanji_form    || w.word,
+      w.hiragana_form || w.reading  || null,
+      w.katakana_form               || null,
+      w.romaji_form   || w.romaji   || null,
+    ].filter(f => f && f.length > 0);
+
+    // Deduplicate forms for this entry
+    for (const form of new Set(candidates)) {
+      formEntries.push({ form, word: w.word });
+    }
+  }
+
+  // Longest-first so the greedy scanner always prefers longer matches
+  formEntries.sort((a, b) => b.form.length - a.form.length);
+
+  return { formEntries, kanjiSet };
 }
 
 /**
- * Segment a Japanese text string into highlighted and normal parts.
+ * Segment a text string into highlighted and normal parts.
  *
  * @param {string} text
- * @param {{ words: string[], kanji: Set<string> }} vocabIndex
- * @returns {Array<{ text: string, type: 'normal' | 'word' | 'kanji' }>}
+ * @param {{ formEntries: Array<{form, word}>, kanjiSet: Set<string> }} vocabIndex
+ * @param {{ showWords?: boolean, showKanji?: boolean }} options
+ * @returns {Array<{ text: string, type: 'normal' | 'word' | 'kanji' | 'word-and-kanji' }>}
+ *
+ * Segment types:
+ *   'normal'        – no highlight
+ *   'word'          – part of a saved word match
+ *   'kanji'         – standalone saved kanji character
+ *   'word-and-kanji'– character that is both inside a word match AND a saved kanji
  */
-export function segmentText(text, vocabIndex) {
+export function segmentText(text, vocabIndex, { showWords = true, showKanji = true } = {}) {
   if (!text) return [{ text: '', type: 'normal' }];
 
-  const { words, kanji } = vocabIndex;
-  if (words.length === 0 && kanji.size === 0) {
+  const { formEntries, kanjiSet } = vocabIndex;
+  const hasWords = showWords && formEntries.length > 0;
+  const hasKanji = showKanji && kanjiSet.size > 0;
+
+  if (!hasWords && !hasKanji) {
     return [{ text, type: 'normal' }];
   }
 
@@ -52,26 +85,44 @@ export function segmentText(text, vocabIndex) {
   while (i < text.length) {
     let matched = false;
 
-    // Try longest multi-character word match first
-    for (const word of words) {
-      if (
-        i + word.length <= text.length &&
-        text.slice(i, i + word.length) === word
-      ) {
-        segments.push({ text: word, type: 'word' });
-        i += word.length;
-        matched = true;
-        break;
+    if (hasWords) {
+      for (const { form } of formEntries) {
+        if (
+          i + form.length <= text.length &&
+          text.slice(i, i + form.length) === form
+        ) {
+          if (hasKanji) {
+            // Walk the matched span char-by-char to surface word-and-kanji overlaps.
+            // Merge consecutive characters of the same sub-type into one segment.
+            let subtext = '';
+            let subtype = null;
+            for (const char of form) {
+              const charType = kanjiSet.has(char) ? 'word-and-kanji' : 'word';
+              if (charType === subtype) {
+                subtext += char;
+              } else {
+                if (subtext) segments.push({ text: subtext, type: subtype });
+                subtext = char;
+                subtype = charType;
+              }
+            }
+            if (subtext) segments.push({ text: subtext, type: subtype });
+          } else {
+            segments.push({ text: form, type: 'word' });
+          }
+
+          i += form.length;
+          matched = true;
+          break;
+        }
       }
     }
 
     if (!matched) {
       const char = text[i];
-
-      if (kanji.has(char)) {
+      if (hasKanji && kanjiSet.has(char)) {
         segments.push({ text: char, type: 'kanji' });
       } else {
-        // Merge consecutive normal characters into one segment
         const last = segments[segments.length - 1];
         if (last && last.type === 'normal') {
           last.text += char;
