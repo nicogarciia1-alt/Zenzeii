@@ -1485,7 +1485,7 @@ async def process_upload_fast(book_id: str, text: str, title: str, author: str, 
             "sentences_count": 0,
             "source": "upload",
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "user_id": user_id,
+            "uploaded_by": user_id,
         }
         await db.books.insert_one(book_doc)
         await _add_to_shelf(user_id, book_id)
