@@ -167,7 +167,8 @@ export const ReaderPage = () => {
   const [scriptMode, setScriptMode] = useState(readerSettings.scriptMode || 'kanji');
   const [secondaryLayer, setSecondaryLayer] = useState(readerSettings.secondaryLayer || 'none');
   const [showSecondaryText, setShowSecondaryText] = useState(true);
-  const [showVocabHighlights, setShowVocabHighlights] = useState(false);
+  const [showWordHighlights, setShowWordHighlights] = useState(false);
+  const [showKanjiHighlights, setShowKanjiHighlights] = useState(false);
   const [zenzeiiOpen, setZenzeiiOpen] = useState(false);
   const [verticalMode, setVerticalMode] = useState(false);
   const [tokenCache, setTokenCache] = useState({});
@@ -819,19 +820,34 @@ export const ReaderPage = () => {
               show={showSecondaryText}
               onToggleShow={() => setShowSecondaryText(prev => !prev)}
             />
-            <button
-              onClick={() => setShowVocabHighlights(prev => !prev)}
-              className={[
-                'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium shrink-0 transition-colors border',
-                showVocabHighlights
-                  ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted border-transparent',
-              ].join(' ')}
-              title={showVocabHighlights ? 'Hide vocabulary highlights' : 'Highlight saved vocabulary'}
-            >
-              <Highlighter className="h-3.5 w-3.5" />
-              Vocab
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowWordHighlights(prev => !prev)}
+                className={[
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium shrink-0 transition-colors border',
+                  showWordHighlights
+                    ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted border-transparent',
+                ].join(' ')}
+                title={showWordHighlights ? 'Hide word highlights' : 'Highlight saved words'}
+              >
+                <Highlighter className="h-3.5 w-3.5" />
+                Words
+              </button>
+              <button
+                onClick={() => setShowKanjiHighlights(prev => !prev)}
+                className={[
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium shrink-0 transition-colors border',
+                  showKanjiHighlights
+                    ? 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-700'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted border-transparent',
+                ].join(' ')}
+                title={showKanjiHighlights ? 'Hide kanji highlights' : 'Highlight saved kanji'}
+              >
+                <Highlighter className="h-3.5 w-3.5" />
+                漢字
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -898,10 +914,12 @@ export const ReaderPage = () => {
                   {/* Main text */}
                   <div className={`${scriptMode !== 'english' && scriptMode !== 'romaji' ? 'jp-text' : ''}`}>
                     {scriptMode !== 'english' ? (
-                      showVocabHighlights ? (
+                      (showWordHighlights || showKanjiHighlights) ? (
                         <HighlightedText
                           text={getSentenceText(sentence)}
                           vocabIndex={vocabIndex}
+                          showWords={showWordHighlights}
+                          showKanji={showKanjiHighlights}
                           onWordClick={(word, e) =>
                             handleWordClick(word, e, getSentenceText(sentence))
                           }
