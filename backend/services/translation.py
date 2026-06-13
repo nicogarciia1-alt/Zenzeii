@@ -185,6 +185,24 @@ def translate_to_japanese(text: str) -> Dict[str, str]:
     return _to_readings(japanese)
 
 
+def get_word_forms(text: str) -> Dict[str, str]:
+    """
+    Return all four script forms for a word using pykakasi only — no translation.
+    Used at vocabulary save time to store kanji/hiragana/katakana/romaji for matching.
+    For non-Japanese input, pykakasi returns the original string in all fields.
+    Returns: { kanji_form, hiragana_form, katakana_form, romaji_form }
+    """
+    if not text or not text.strip():
+        return {"kanji_form": "", "hiragana_form": "", "katakana_form": "", "romaji_form": ""}
+    readings = _to_readings(text)
+    return {
+        "kanji_form":    text,
+        "hiragana_form": readings["hiragana"],
+        "katakana_form": readings["katakana"],
+        "romaji_form":   readings["romaji"],
+    }
+
+
 async def translate_batch_for_worker(
     sentence_ids: List[str],
     english_texts: List[str],
