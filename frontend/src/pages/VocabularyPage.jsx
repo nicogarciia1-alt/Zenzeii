@@ -47,6 +47,7 @@ export const VocabularyPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editNotes, setEditNotes] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   // Flashcard state
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -124,12 +125,15 @@ export const VocabularyPage = () => {
     }
   };
 
-  const filteredVocabulary = vocabulary.filter(word =>
-    word.word.includes(searchQuery) ||
-    word.reading.includes(searchQuery) ||
-    word.romaji.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    word.meanings.some(m => m.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredVocabulary = vocabulary.filter(word => {
+    if (typeFilter !== 'all' && (word.type || 'word') !== typeFilter) return false;
+    return (
+      word.word.includes(searchQuery) ||
+      word.reading.includes(searchQuery) ||
+      word.romaji.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      word.meanings.some(m => m.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+  });
 
   const getMasteryStars = (level) => {
     return Array(5).fill(0).map((_, i) => (
@@ -188,6 +192,31 @@ export const VocabularyPage = () => {
               />
             </div>
 
+            {/* Type Filter */}
+            <div className="flex gap-1 mb-6">
+              {[
+                { value: 'all',   label: 'All'   },
+                { value: 'word',  label: 'Words' },
+                { value: 'kanji', label: '漢字'  },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setTypeFilter(value)}
+                  className={`px-3 py-1.5 text-sm rounded border transition-colors ${
+                    typeFilter === value
+                      ? value === 'kanji'
+                        ? 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800'
+                        : value === 'word'
+                        ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800'
+                        : 'bg-secondary/20 text-secondary-foreground border-border'
+                      : 'bg-transparent text-muted-foreground border-border hover:bg-muted'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             {/* Word Cards */}
             {filteredVocabulary.length === 0 ? (
               <div className="text-center py-16">
@@ -208,7 +237,14 @@ export const VocabularyPage = () => {
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h3 className="text-2xl font-serif text-foreground">{word.word}</h3>
+                          <div className="flex items-baseline gap-2">
+                            <h3 className="text-2xl font-serif text-foreground">{word.word}</h3>
+                            {word.type === 'kanji' && (
+                              <Badge className="text-[10px] px-1.5 py-0 border bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800">
+                                漢字
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-sm text-muted-foreground">{word.reading}</p>
                         </div>
                         <div className="flex items-center gap-1">
