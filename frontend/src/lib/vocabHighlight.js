@@ -138,7 +138,7 @@ export function segmentText(text, vocabIndex, { showWords = true, showKanji = tr
 }
 
 /** True if char is in a CJK Unicode block */
-function isCJK(char) {
+export function isCJK(char) {
   const code = char.charCodeAt(0);
   return (
     (code >= 0x4e00 && code <= 0x9fff) ||  // CJK Unified Ideographs
