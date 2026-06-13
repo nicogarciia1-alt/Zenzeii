@@ -40,7 +40,8 @@ from services.book_import import (
 )
 from services.translation import (
     translate_title_simple,
-    translate_author_simple
+    translate_author_simple,
+    get_word_forms
 )
 
 # Import rate limiting constants
@@ -286,6 +287,7 @@ class SaveWordRequest(BaseModel):
     example_sentence: Optional[str] = None
     example_translation: Optional[str] = None
     notes: Optional[str] = ""
+    type: Optional[str] = "word"
 
 class SavedWordResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -303,6 +305,11 @@ class SavedWordResponse(BaseModel):
     next_review: str
     times_reviewed: int
     created_at: str
+    type: str = "word"
+    kanji_form: Optional[str] = None
+    hiragana_form: Optional[str] = None
+    katakana_form: Optional[str] = None
+    romaji_form: Optional[str] = None
 
 class UpdateSavedWordRequest(BaseModel):
     notes: Optional[str] = None
@@ -1711,10 +1718,16 @@ async def save_word(word_data: SaveWordRequest, current_user: dict = Depends(get
     
     word_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
+    entry_type = word_data.type or "word"
+    if entry_type == "word":
+        forms = get_word_forms(word_data.word)
+    else:
+        forms = {"kanji_form": word_data.word, "hiragana_form": None, "katakana_form": None, "romaji_form": None}
     word_doc = {
         "id": word_id,
         "user_id": current_user["id"],
         "word": word_data.word,
+        "type": entry_type,
         "reading": word_data.reading,
         "romaji": word_data.romaji,
         "meanings": word_data.meanings,
@@ -1725,7 +1738,8 @@ async def save_word(word_data: SaveWordRequest, current_user: dict = Depends(get
         "mastery_level": 0,
         "next_review": now.isoformat(),
         "times_reviewed": 0,
-        "created_at": now.isoformat()
+        "created_at": now.isoformat(),
+        **forms
     }
     await db.saved_words.insert_one(word_doc)
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"vocabulary_count": 1}})
