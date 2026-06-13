@@ -21,7 +21,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("translation_worker")
 
 MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-DB_NAME = os.environ.get('DB_NAME', 'test_database')
+DB_NAME = os.environ.get('DB_NAME')
+if not DB_NAME:
+    raise RuntimeError("DB_NAME environment variable is required but not set")
 
 # Worker configuration
 MAX_CONCURRENT_BATCHES = 2  # Limit concurrent translations
@@ -188,7 +190,7 @@ async def worker_loop():
     # Semaphore to limit concurrent translations
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
     
-    logger.info(f"Translation worker started (max concurrency: {MAX_CONCURRENT_BATCHES})")
+    logger.info(f"Translation worker started — connecting to database: {DB_NAME} (max concurrency: {MAX_CONCURRENT_BATCHES})")
     
     while not shutdown_event.is_set():
         try:
