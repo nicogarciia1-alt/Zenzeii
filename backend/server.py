@@ -60,6 +60,7 @@ JWT_EXPIRATION_HOURS = 24
 
 # Stripe config — api_key set once at module load; price IDs read from env
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+logger.info("DEBUG stripe key len=%d", len(os.environ.get("STRIPE_SECRET_KEY", "")))
 STRIPE_PRICE_PREMIUM_MONTHLY = os.environ.get("STRIPE_PRICE_PREMIUM_MONTHLY", "")
 STRIPE_PRICE_FOUNDING_MEMBER = os.environ.get("STRIPE_PRICE_FOUNDING_MEMBER", "")
 
