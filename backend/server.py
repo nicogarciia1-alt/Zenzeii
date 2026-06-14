@@ -113,6 +113,14 @@ async def lifespan(app: FastAPI):
 
     await ensure_indexes(db)
 
+    # Founding member counter — create only if absent; $setOnInsert is a no-op if doc exists
+    await db.app_config.update_one(
+        {"_id": "founding_member"},
+        {"$setOnInsert": {"total_spots": 15, "spots_remaining": 15}},
+        upsert=True
+    )
+    logger.info("app_config.founding_member initialized")
+
     # Startup: Launch translation worker
     try:
         worker_script = ROOT_DIR / 'translation_worker.py'
