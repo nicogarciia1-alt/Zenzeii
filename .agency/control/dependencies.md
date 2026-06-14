@@ -55,6 +55,17 @@ Format per entry:
 
 ---
 
+## Checkout session endpoint (POST /api/payments/create-checkout-session)
+
+**Contract**: Returns `{ checkout_url }` for both tiers. Frontend redirects user to that URL. Error codes: 400 (invalid tier / already subscribed), 409 (founding member sold out), 500 (Stripe failure). Full contract in `on-demand/api-contracts.md`.
+
+**Owner**: backend-engineer
+**Consumer**: frontend-engineer (Upgrade button / payment flow — Block 4)
+**Last verified**: 2026-06-14
+**Notes**: `client_reference_id` and `metadata.user_id` on the Stripe session are what Block 3's webhook handler uses to identify the user. Do not change user ID format without updating Block 3 webhook logic.
+
+---
+
 ## Subscription fields on user object
 
 **Contract**: `UserResponse` now includes 7 subscription fields (added Block 1). All have safe defaults so existing users unaffected. Full contract (which fields gate what features) will be finalized in Blocks 2–4. Frontend should not build gating logic against these until the Block 4 brief is delivered.

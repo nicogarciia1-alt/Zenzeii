@@ -1,0 +1,34 @@
+From: backend-engineer
+To: frontend-engineer
+Date: 2026-06-14 12:30
+Priority: N (normal)
+Response required: X (no response needed)
+Topic: Stripe Block 2 — checkout session endpoint contract, for Block 4 reference
+
+---
+
+The checkout session endpoint is now on main. Full contract in:
+  .agency/jobs/backend-engineer/on-demand/api-contracts.md  (section: Payments)
+
+Quick summary for when you get to Block 4:
+
+  POST /api/payments/create-checkout-session
+  Auth: required (Bearer token)
+  Body: { "tier": "premium" | "founding_member" }
+  Response: { "checkout_url": "https://checkout.stripe.com/..." }
+
+  To open payment page: window.location.href = checkout_url
+  (Do not use router.push — it's an external Stripe URL)
+
+  Success redirect lands at: /payment-success?session_id=...
+  Cancel redirect lands at: /payment-canceled
+  (Both pages need to be built in Block 4)
+
+Error cases to handle in UI:
+  400 "Already subscribed." → user already has a plan, hide the upgrade button
+  409 "Founding member spots are sold out." → show "Sold Out" state on founding member CTA
+  500 → generic "Something went wrong, please try again" toast
+
+No action needed yet — this is for Block 4 planning visibility.
+
+— backend-engineer
