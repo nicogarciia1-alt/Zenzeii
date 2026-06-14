@@ -63,6 +63,7 @@ stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 print("DEBUG stripe key len=", len(os.environ.get("STRIPE_SECRET_KEY", "")))
 STRIPE_PRICE_PREMIUM_MONTHLY = os.environ.get("STRIPE_PRICE_PREMIUM_MONTHLY", "")
 STRIPE_PRICE_FOUNDING_MEMBER = os.environ.get("STRIPE_PRICE_FOUNDING_MEMBER", "")
+print("DEBUG stripe-related env var names:", [k for k in os.environ.keys() if "STRIPE" in k.upper()])
 
 # MongoDB — initialized inside lifespan (requires running event loop in Python 3.12+)
 client = None
