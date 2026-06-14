@@ -94,6 +94,7 @@ async def ensure_indexes(db):
 
 # Global variable to track worker process
 worker_process = None
+tagger_instance = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -128,6 +129,16 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Translation worker script not found: {worker_script}")
     except Exception as e:
         logger.error(f"Failed to start translation worker: {e}")
+
+    # Startup: Initialize fugashi tagger
+    global tagger_instance
+    try:
+        import fugashi
+        tagger_instance = fugashi.Tagger()
+        logger.info("Fugashi tagger initialized")
+    except Exception as e:
+        logger.error(f"Fugashi tagger failed to initialize: {e}")
+        tagger_instance = None
 
     yield  # App is running
 
@@ -2053,6 +2064,9 @@ async def ai_chat(
 
 @api_router.post("/tokenize")
 async def tokenize_text(request: TokenizeRequest):
+    if tagger_instance is None:
+        raise HTTPException(status_code=503, detail="Tokenizer not available")
+
     def katakana_to_hiragana(text):
         return ''.join(
             chr(ord(c) - 0x60) if 'ァ' <= c <= 'ヶ' else c
@@ -2060,11 +2074,9 @@ async def tokenize_text(request: TokenizeRequest):
         )
 
     try:
-        import fugashi
-        tagger = fugashi.Tagger()
         text = request.text
         tokens = []
-        for word in tagger(text):
+        for word in tagger_instance(text):
             surface = word.surface
             if isinstance(surface, bytes):
                 surface = surface.decode('utf-8', errors='replace')
@@ -2081,7 +2093,11 @@ async def tokenize_text(request: TokenizeRequest):
             })
         return {"tokens": tokens}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(
+            "Tokenize failed — text_len=%d, error=%s: %s",
+            len(request.text), type(e).__name__, e
+        )
+        raise HTTPException(status_code=500, detail="Tokenization failed")
 
 
 class TTSRequest(BaseModel):
