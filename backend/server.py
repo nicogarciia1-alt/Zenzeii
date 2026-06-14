@@ -19,6 +19,8 @@ import jwt
 import httpx
 import asyncio
 import secrets
+import stripe
+from pymongo import ReturnDocument
 
 # Import services
 from services.book_import import (
@@ -55,6 +57,11 @@ load_dotenv(ROOT_DIR / '.env')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+
+# Stripe config — api_key set once at module load; price IDs read from env
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PRICE_PREMIUM_MONTHLY = os.environ.get("STRIPE_PRICE_PREMIUM_MONTHLY", "")
+STRIPE_PRICE_FOUNDING_MEMBER = os.environ.get("STRIPE_PRICE_FOUNDING_MEMBER", "")
 
 # MongoDB — initialized inside lifespan (requires running event loop in Python 3.12+)
 client = None
