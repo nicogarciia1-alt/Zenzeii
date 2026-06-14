@@ -1,6 +1,6 @@
 # db-schema.md — MongoDB Collections
 
-**last_verified**: 2026-06-14 by backend-engineer (Block 1 Stripe foundation)
+**last_verified**: 2026-06-14 by backend-engineer (Block 3 Stripe webhook)
 
 ---
 
@@ -225,6 +225,24 @@ Global application configuration. Single-document per config key.
 |---|---|---|
 | `"founding_member"` | `total_spots: int`, `spots_remaining: int` | Initialized at app startup via `$setOnInsert` in `lifespan`. Initial values: `total_spots=15, spots_remaining=15`. |
 
-**Write contract**: `spots_remaining` must only be decremented atomically on confirmed Stripe payment, with a guard against going below zero. Decrement logic is NOT yet implemented (Block 2/3). The `$setOnInsert` in lifespan is idempotent — it will not overwrite an existing document.
+**Write contract**: `spots_remaining` decremented atomically in Block 2 checkout (on checkout start), returned atomically in Block 3 webhook (on `checkout.session.expired`). Both operations use field-level guards (`$gt: 0` for decrement, `$expr $lt spots_remaining total_spots` for increment). The `$setOnInsert` in lifespan is idempotent.
 
-**Consumer**: Frontend "X spots left" display (Block 4) will read from this document via a backend endpoint (to be added in Block 2/3).
+**Consumer**: Frontend "X spots left" display (Block 4) will read from this document via a backend endpoint (to be added in Block 4).
+
+---
+
+## stripe_events
+
+Webhook idempotency log. Prevents double-processing of Stripe webhook retries.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | str | Stripe event ID (e.g. `evt_...`) — used as natural dedup key |
+| `type` | str | Stripe event type (e.g. `checkout.session.completed`) |
+| `processed_at` | str (ISO8601) | When the event was successfully handled |
+
+**Write pattern**: document inserted AFTER successful handler execution, not before. This ensures a handler failure leaves no dedupe record so Stripe's retry will be re-processed.
+
+**Read pattern**: `find_one({"_id": event_id})` at webhook entry — if doc exists, return 200 immediately without re-running handler.
+
+**No TTL index set** (keep all records for auditability). If collection grows large, TTL can be added later — not needed for launch.

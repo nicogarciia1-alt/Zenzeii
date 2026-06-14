@@ -2,7 +2,7 @@
 
 All endpoints live under `/api`. Auth-required endpoints expect `Authorization: Bearer <jwt>` header.
 
-**last_verified**: 2026-06-14 by backend-engineer (Block 2 Stripe checkout)
+**last_verified**: 2026-06-14 by backend-engineer (Block 3 Stripe webhook)
 
 ---
 
@@ -96,6 +96,35 @@ All endpoints live under `/api`. Auth-required endpoints expect `Authorization: 
 - On 400 "Already subscribed": this shouldn't normally be reachable if you gate the button on `subscription_tier`, but handle gracefully
 - On 500: show generic retry message
 - The `checkout_url` is a full Stripe-hosted URL — do `window.location.href = checkout_url` (not router navigation)
+
+---
+
+### POST /api/webhooks/stripe
+**Auth**: none (signature-verified — `stripe-signature` header checked against `STRIPE_WEBHOOK_SECRET`)
+**Body**: raw bytes (Stripe event payload — do NOT parse as JSON before passing to signature verifier)
+**Response**: `{ "status": "ok" }` or `{ "status": "already_processed" }` on successful handling
+
+**Always returns 200** for any event we don't explicitly handle (logged as "unhandled event type").
+
+**Errors**:
+
+| Status | Condition |
+|---|---|
+| 400 | Invalid or missing Stripe signature |
+| 500 | Handler threw an unexpected exception (dedupe record NOT written — Stripe will retry) |
+
+**Events handled**:
+
+| Event | Effect |
+|---|---|
+| `checkout.session.completed` | Updates user: `subscription_tier`, `subscription_status: "active"`, `stripe_customer_id`, `stripe_subscription_id` (if subscription mode), `subscribed_at` |
+| `checkout.session.expired` | If `tier == "founding_member"`: increments `app_config.founding_member.spots_remaining` by 1 (bounded by `total_spots`) |
+| `customer.subscription.updated` | Sets `subscription_status: "canceled"` (if `cancel_at_period_end: true`) or `"active"` (if reversed). Does NOT change `subscription_tier` — access continues until period end. |
+| `customer.subscription.deleted` | Sets `subscription_tier: "free"`, `subscription_status: "none"`, clears `stripe_subscription_id` |
+
+**Idempotency**: each event is deduplicated by `event.id` stored in the `stripe_events` collection. Re-delivered events return 200 immediately without re-processing.
+
+**Not called by frontend** — this is a Stripe → backend server-to-server call.
 
 ---
 
