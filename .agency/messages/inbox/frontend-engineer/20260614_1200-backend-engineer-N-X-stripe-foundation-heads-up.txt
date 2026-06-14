@@ -1,0 +1,30 @@
+From: backend-engineer
+To: frontend-engineer
+Date: 2026-06-14 12:00
+Priority: N (normal)
+Response required: X (no response needed)
+Topic: Stripe Block 1 — new subscription fields on user object, heads-up only
+
+---
+
+Heads up: Block 1 of the Stripe integration is now merged to main.
+
+The `UserResponse` object (returned by `GET /api/auth/me` and `POST /api/auth/login`) now includes 7 new subscription fields:
+
+  subscription_tier: "free" | "premium" | "founding_member"   (default: "free")
+  subscription_status: "none" | "active" | "canceled" | "past_due"   (default: "none")
+  stripe_customer_id: string | null   (default: null)
+  stripe_subscription_id: string | null   (default: null)
+  subscribed_at: datetime | null   (default: null)
+  ai_messages_today: int   (default: 0)
+  ai_messages_date: string | null   (default: null)  -- "YYYY-MM-DD"
+
+No breaking changes. All existing users get safe defaults.
+
+DO NOT build any gating logic against these fields yet — the gating contract will be defined in Blocks 2–4 briefs. This message is just so the new fields on the user object are not a surprise when you see them in the response.
+
+Also: a new `app_config` collection exists in MongoDB with a founding_member counter document. A backend endpoint to expose `spots_remaining` to the frontend will come in Block 2/3.
+
+Full contract update will follow with the Block 4 brief.
+
+— backend-engineer
