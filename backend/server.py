@@ -425,6 +425,9 @@ class TranslateRequest(BaseModel):
     chapter_id: str
     start_position: int = 1
 
+class CreateCheckoutSessionRequest(BaseModel):
+    tier: str
+
 # ========================
 # AUTH HELPERS
 # ========================
@@ -2154,6 +2157,60 @@ async def text_to_speech(request: TTSRequest, current_user: dict = Depends(get_c
     except Exception as e:
         logger.error(f"TTS error: {e}")
         raise HTTPException(status_code=500, detail="TTS failed")
+
+
+# ========================
+# PAYMENTS ENDPOINTS
+# ========================
+
+@api_router.post("/payments/create-checkout-session")
+async def create_checkout_session(
+    request: CreateCheckoutSessionRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    if request.tier not in ("premium", "founding_member"):
+        raise HTTPException(status_code=400, detail="Invalid tier. Must be 'premium' or 'founding_member'.")
+
+    if current_user.get("subscription_tier") in ("premium", "founding_member"):
+        raise HTTPException(status_code=400, detail="Already subscribed. You already have an active plan.")
+
+    if not stripe.api_key:
+        logger.error("STRIPE_SECRET_KEY not configured")
+        raise HTTPException(status_code=503, detail="Payment system not available.")
+
+    reserved_founding_spot = False
+    if request.tier == "founding_member":
+        result = await db.app_config.find_one_and_update(
+            {"_id": "founding_member", "spots_remaining": {"$gt": 0}},
+            {"$inc": {"spots_remaining": -1}},
+            return_document=ReturnDocument.AFTER
+        )
+        if result is None:
+            raise HTTPException(status_code=409, detail="Founding member spots are sold out.")
+        reserved_founding_spot = True
+
+    price_id = STRIPE_PRICE_PREMIUM_MONTHLY if request.tier == "premium" else STRIPE_PRICE_FOUNDING_MEMBER
+    mode = "subscription" if request.tier == "premium" else "payment"
+
+    try:
+        session = await asyncio.to_thread(
+            stripe.checkout.Session.create,
+            mode=mode,
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url="https://zenzeii.com/payment-success?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url="https://zenzeii.com/payment-canceled",
+            client_reference_id=current_user["id"],
+            metadata={"tier": request.tier, "user_id": current_user["id"]},
+        )
+        return {"checkout_url": session.url}
+    except Exception as e:
+        logger.error(f"Stripe checkout session failed for user {current_user['id']}: {type(e).__name__}")
+        if reserved_founding_spot:
+            await db.app_config.update_one(
+                {"_id": "founding_member"},
+                {"$inc": {"spots_remaining": 1}}
+            )
+        raise HTTPException(status_code=500, detail="Payment session could not be created. Please try again.")
 
 
 # ========================
