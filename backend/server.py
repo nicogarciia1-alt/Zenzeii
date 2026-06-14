@@ -231,6 +231,13 @@ class UserResponse(BaseModel):
     streak: int = 0
     last_read_date: Optional[str] = None
     email_verified: bool = False
+    subscription_tier: str = "free"
+    subscription_status: str = "none"
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    subscribed_at: Optional[datetime] = None
+    ai_messages_today: int = 0
+    ai_messages_date: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -543,7 +550,14 @@ async def register(user_data: UserCreate):
         "total_words_read": 0,
         "streak": 0,
         "last_read_date": None,
-        "email_verified": False
+        "email_verified": False,
+        "subscription_tier": "free",
+        "subscription_status": "none",
+        "stripe_customer_id": None,
+        "stripe_subscription_id": None,
+        "subscribed_at": None,
+        "ai_messages_today": 0,
+        "ai_messages_date": None,
     }
     await db.users.insert_one(user_doc)
     await _send_verification_email(user_id, user_data.email)
