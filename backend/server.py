@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, File, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, File, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -2222,5 +2222,116 @@ async def root():
     return {"message": "Japanese Reading App API", "version": "3.0.0"}
 
 app.include_router(api_router)
+
+# ========================
+# STRIPE WEBHOOK
+# ========================
+# Registered on `app` (not api_router) — Stripe posts to /api/webhooks/stripe directly.
+# No JWT auth: signature verification is the security boundary.
+
+async def _handle_checkout_completed(session: dict):
+    tier = session.get("metadata", {}).get("tier")
+    user_id = (
+        session.get("metadata", {}).get("user_id")
+        or session.get("client_reference_id")
+    )
+    if not user_id:
+        logger.warning("checkout.session.completed: no user_id in metadata or client_reference_id")
+        return
+    update = {
+        "subscription_tier": tier,
+        "subscription_status": "active",
+        "stripe_customer_id": session.get("customer"),
+        "subscribed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # stripe_subscription_id only present for subscription mode (premium); absent for payment mode (founding_member)
+    if session.get("subscription"):
+        update["stripe_subscription_id"] = session["subscription"]
+    result = await db.users.update_one({"id": user_id}, {"$set": update})
+    if result.matched_count == 0:
+        logger.warning(f"checkout.session.completed: user {user_id} not found in DB")
+
+
+async def _handle_checkout_expired(session: dict):
+    tier = session.get("metadata", {}).get("tier")
+    if tier != "founding_member":
+        return
+    # Return the reserved spot — $expr guard ensures spots_remaining never exceeds total_spots
+    await db.app_config.update_one(
+        {"_id": "founding_member", "$expr": {"$lt": ["$spots_remaining", "$total_spots"]}},
+        {"$inc": {"spots_remaining": 1}}
+    )
+    logger.info("checkout.session.expired: founding_member spot returned to pool")
+
+
+async def _handle_subscription_updated(subscription: dict):
+    sub_id = subscription.get("id")
+    cancel_at_period_end = subscription.get("cancel_at_period_end", False)
+    # cancel_at_period_end=True: user canceled, but access continues until period ends
+    # cancel_at_period_end=False: cancellation reversed (re-activated) or normal renewal
+    new_status = "canceled" if cancel_at_period_end else "active"
+    result = await db.users.update_one(
+        {"stripe_subscription_id": sub_id},
+        {"$set": {"subscription_status": new_status}}
+    )
+    if result.matched_count == 0:
+        logger.warning(f"customer.subscription.updated: no user found for subscription {sub_id}")
+
+
+async def _handle_subscription_deleted(subscription: dict):
+    sub_id = subscription.get("id")
+    result = await db.users.update_one(
+        {"stripe_subscription_id": sub_id},
+        {"$set": {
+            "subscription_tier": "free",
+            "subscription_status": "none",
+            "stripe_subscription_id": None,
+        }}
+    )
+    if result.matched_count == 0:
+        logger.warning(f"customer.subscription.deleted: no user found for subscription {sub_id}")
+
+
+@app.post("/api/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    # Idempotency — Stripe retries on non-2xx; skip if this event_id was already processed
+    existing = await db.stripe_events.find_one({"_id": event["id"]})
+    if existing:
+        return {"status": "already_processed"}
+
+    event_type = event["type"]
+    try:
+        if event_type == "checkout.session.completed":
+            await _handle_checkout_completed(event["data"]["object"])
+        elif event_type == "checkout.session.expired":
+            await _handle_checkout_expired(event["data"]["object"])
+        elif event_type == "customer.subscription.updated":
+            await _handle_subscription_updated(event["data"]["object"])
+        elif event_type == "customer.subscription.deleted":
+            await _handle_subscription_deleted(event["data"]["object"])
+        else:
+            logger.info(f"Stripe webhook: unhandled event type {event_type!r} — acknowledged")
+    except Exception as e:
+        logger.error(f"Stripe webhook handler error for event {event['id']} ({event_type}): {type(e).__name__}: {e}")
+        # Do NOT insert dedupe record — let Stripe retry this delivery
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
+
+    # Insert dedupe record AFTER successful processing (not before) so retries work on handler failures
+    await db.stripe_events.insert_one({
+        "_id": event["id"],
+        "type": event_type,
+        "processed_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"status": "ok"}
+
 
 # Note: shutdown handled by lifespan context manager
