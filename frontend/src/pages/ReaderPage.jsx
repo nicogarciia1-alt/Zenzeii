@@ -944,7 +944,7 @@ export const ReaderPage = () => {
                   </div>
 
                   {/* Secondary layer - smaller, lighter text */}
-                  {showSecondary && !(secondaryLayer === 'furigana' && !showVocabHighlights && scriptMode !== 'english') && (
+                  {showSecondary && !(secondaryLayer === 'furigana' && !(showWordHighlights || showKanjiHighlights) && scriptMode !== 'english') && (
                     <div 
                       className={`mt-1 text-muted-foreground/70 ${
                         secondaryLayer === 'english' ? '' : 'jp-text'
