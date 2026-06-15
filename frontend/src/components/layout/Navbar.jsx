@@ -138,6 +138,14 @@ export const Navbar = () => {
                   >
                     ✦ Edit Profile
                   </button>
+                  {user?.subscription_tier === 'free' && (
+                    <button
+                      onClick={() => { setMenuOpen(false); navigate('/pricing'); }}
+                      style={{ display: 'block', width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '15px', color: '#B5294E', fontFamily: 'EB Garamond, serif' }}
+                    >
+                      ✦ Upgrade to Premium
+                    </button>
+                  )}
                   <button
                     onClick={() => { setMenuOpen(false); setReportOpen(true); }}
                     style={{ display: 'block', width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '15px', color: 'var(--foreground)', fontFamily: 'EB Garamond, serif' }}
