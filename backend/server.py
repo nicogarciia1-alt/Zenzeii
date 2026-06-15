@@ -19,6 +19,7 @@ import jwt
 import httpx
 import asyncio
 import secrets
+import json
 import stripe
 from pymongo import ReturnDocument
 
@@ -2299,9 +2300,15 @@ async def stripe_webhook(request: Request):
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        # construct_event used solely for signature verification — return value discarded.
+        # Stripe SDK v7+ returns typed model objects (not plain dicts) which lack .get().
+        stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except (ValueError, stripe.error.SignatureVerificationError):
         raise HTTPException(status_code=400, detail="Invalid signature")
+
+    # Re-parse the verified payload as plain Python dicts so all handlers can use
+    # standard .get() calls regardless of Stripe SDK version.
+    event = json.loads(payload)
 
     # Idempotency — Stripe retries on non-2xx; skip if this event_id was already processed
     existing = await db.stripe_events.find_one({"_id": event["id"]})
