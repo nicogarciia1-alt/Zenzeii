@@ -2249,7 +2249,6 @@ async def _handle_checkout_completed(session: dict):
     if session.get("subscription"):
         update["stripe_subscription_id"] = session["subscription"]
     result = await db.users.update_one({"id": user_id}, {"$set": update})
-    logger.info(f"DEBUG checkout.session.completed: matched={result.matched_count}, modified={result.modified_count}, user_id={user_id}")
     if result.matched_count == 0:
         logger.warning(f"checkout.session.completed: user {user_id} not found in DB")
 
