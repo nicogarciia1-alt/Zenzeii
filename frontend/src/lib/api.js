@@ -67,3 +67,7 @@ export const explainWord = (word, contextSentence) =>
 
 export const textToSpeech = (text, voice = 'nova') =>
   axios.post(`${API}/tts`, { text, voice }, { responseType: 'arraybuffer' });
+
+// Payments API
+export const createCheckoutSession = (tier) =>
+  axios.post(`${API}/payments/create-checkout-session`, { tier });

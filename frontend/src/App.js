@@ -14,6 +14,7 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
 import ZenzeiiLibraryPage from "@/pages/ZenzeiiLibraryPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
+import PricingPage from "@/pages/PricingPage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -53,6 +54,7 @@ function AppRoutes() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
