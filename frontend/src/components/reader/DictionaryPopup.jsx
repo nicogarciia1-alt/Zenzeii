@@ -5,15 +5,14 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { saveWord, explainWord, textToSpeech } from '@/lib/api';
 import { isCJK } from '@/lib/vocabHighlight';
-import { CATEGORY_COLORS, getWordCategory } from '@/lib/categoryColors';
+import { CATEGORY_COLORS, getWordCategory, posToCategory } from '@/lib/categoryColors';
 import { toast } from 'sonner';
 
-export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], onWordSaved, contextSentence = '' }) => {
+export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], onWordSaved, contextSentence = '', pos = '' }) => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(
     savedWords.some(w => w.word === wordData?.word)
   );
-  const [selectedCategory, setSelectedCategory] = useState('other');
 
   // Drag-to-move state — initialised once from the clamped position prop
   const [dragPos, setDragPos] = useState(() => ({
@@ -133,7 +132,7 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
   const isKanji = wordData.word.length === 1 && /[一-鿿㐀-䶿豈-﫿]/.test(wordData.word);
   const savedWordEntry = savedWords.find(w => w.word === wordData.word);
   const displayCategory = saved
-    ? (savedWordEntry ? getWordCategory(savedWordEntry) : (isKanji ? 'kanji' : selectedCategory))
+    ? (savedWordEntry ? getWordCategory(savedWordEntry) : (isKanji ? 'kanji' : posToCategory(pos)))
     : null;
   const displayColors = displayCategory ? CATEGORY_COLORS[displayCategory] : null;
 
@@ -152,7 +151,7 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
         example_sentence: wordData.example_sentence,
         example_translation: wordData.example_translation,
         type,
-        ...(type === 'word' && { category: selectedCategory }),
+        ...(type === 'word' && { category: posToCategory(pos) }),
       });
       setSaved(true);
       toast.success('Word saved to vocabulary!');
@@ -334,28 +333,6 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
               )}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Category Picker — word saves only */}
-      {!isKanji && !saved && (
-        <div className="mb-3">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">Category</p>
-          <div className="flex flex-wrap gap-1">
-            {['verb', 'noun', 'adjective', 'expression', 'other'].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-2 py-0.5 rounded-full border text-xs transition-colors ${
-                  selectedCategory === cat
-                    ? `${CATEGORY_COLORS[cat].badge} border`
-                    : 'bg-transparent text-muted-foreground border-border hover:bg-muted'
-                }`}
-              >
-                {CATEGORY_COLORS[cat].label}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 

@@ -101,7 +101,7 @@ const TokenizedSentence = ({ text, sentenceId, onWordClick, tokenCache, getToken
               style={{ rubyPosition: 'under', ...highlightStyle }}
               onClick={(e) => {
                 e.stopPropagation();
-                onWordClick(token.surface, e);
+                onWordClick(token.surface, token.pos, e);
               }}
             >
               {token.surface}
@@ -116,7 +116,7 @@ const TokenizedSentence = ({ text, sentenceId, onWordClick, tokenCache, getToken
               style={highlightStyle}
               onClick={(e) => {
                 e.stopPropagation();
-                onWordClick(token.surface, e);
+                onWordClick(token.surface, token.pos, e);
               }}
             >
               {token.surface}
@@ -157,6 +157,7 @@ export const ReaderPage = () => {
   // Dictionary popup state
   const [selectedWord, setSelectedWord] = useState(null);
   const [wordData, setWordData] = useState(null);
+  const [wordPos, setWordPos] = useState('');
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [lookingUp, setLookingUp] = useState(false);
   const [contextSentence, setContextSentence] = useState('');
@@ -340,13 +341,14 @@ export const ReaderPage = () => {
     }
   };
 
-  const handleWordClick = useCallback(async (word, event, sentenceText = '') => {
+  const handleWordClick = useCallback(async (word, pos, event, sentenceText = '') => {
     if (scriptMode === 'english') return;
 
     event.stopPropagation();
     const rect = event.target.getBoundingClientRect();
     setPopupPosition({ x: rect.left, y: rect.bottom });
     setSelectedWord(word);
+    setWordPos(pos || '');
     setContextSentence(sentenceText);
     setLookingUp(true);
 
@@ -921,15 +923,15 @@ export const ReaderPage = () => {
                           showWords={showWordHighlights}
                           showKanji={showKanjiHighlights}
                           onWordClick={(word, e) =>
-                            handleWordClick(word, e, getSentenceText(sentence))
+                            handleWordClick(word, '', e, getSentenceText(sentence))
                           }
                         />
                       ) : (
                         <TokenizedSentence
                           text={getSentenceText(sentence)}
                           sentenceId={sentence.id}
-                          onWordClick={(word, e) => {
-                            handleWordClick(word, e);
+                          onWordClick={(word, pos, e) => {
+                            handleWordClick(word, pos, e);
                           }}
                           tokenCache={tokenCache}
                           getTokens={getTokens}
@@ -1030,6 +1032,7 @@ export const ReaderPage = () => {
               savedWords={savedWords}
               onWordSaved={handleWordSaved}
               contextSentence={contextSentence}
+              pos={wordPos}
             />
           )}
         </>
