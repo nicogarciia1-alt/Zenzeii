@@ -1,6 +1,6 @@
 # db-schema.md — MongoDB Collections
 
-**last_verified**: 2026-06-14 by backend-engineer (Block 3 Stripe webhook)
+**last_verified**: 2026-06-16 by backend-engineer (vocabulary categories + stats placeholders)
 
 ---
 
@@ -145,6 +145,7 @@ Per-user book ownership.
 | `user_id` | str | |
 | `word` | str | |
 | `type` | str | `"word"` \| `"kanji"` |
+| `category` | str\|null | `"verb"` \| `"noun"` \| `"adjective"` \| `"expression"` \| `"other"` \| `null`; null treated as `"other"` in UI; not set on kanji records |
 | `reading` | str | |
 | `romaji` | str | |
 | `meanings` | list[str] | |
@@ -154,12 +155,17 @@ Per-user book ownership.
 | `notes` | str | |
 | `mastery_level` | int | 0–5 |
 | `next_review` | str (ISO8601) | Spaced repetition |
-| `times_reviewed` | int | |
+| `times_reviewed` | int | Incremented by review endpoint |
+| `correct_count` | int | `0` — placeholder for future stats; not yet incremented by any endpoint |
+| `incorrect_count` | int | `0` — placeholder for future stats; not yet incremented by any endpoint |
+| `last_reviewed` | str\|null (ISO8601) | `null` — placeholder for future stats; not yet written by any endpoint |
 | `created_at` | str (ISO8601) | |
 | `kanji_form` | str\|null | |
 | `hiragana_form` | str\|null | |
 | `katakana_form` | str\|null | |
 | `romaji_form` | str\|null | |
+
+**Notes on `category`**: field is optional and purely additive. Existing records without `category` have `null` — `SavedWordResponse` defaults to `None`, frontend treats `null`/`None` as `"other"`. No migration needed. Kanji records (`type: "kanji"`) do not have a `category` field — their visual identity is determined by `type` alone.
 
 ---
 
