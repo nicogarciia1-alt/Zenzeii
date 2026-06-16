@@ -262,8 +262,7 @@ export const VocabularyPage = () => {
                   const category = getWordCategory(word);
                   const colors = CATEGORY_COLORS[category];
                   return (
-                  <Card key={word.id} className={`overflow-hidden border-border ${colors.bg}`} data-testid={`vocab-card-${word.id}`}>
-                    <div className={`h-1.5 ${colors.strip}`} />
+                  <Card key={word.id} className={`border-border ${colors.bg}`} data-testid={`vocab-card-${word.id}`}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -419,13 +418,12 @@ export const VocabularyPage = () => {
 
                 {/* Flashcard */}
                 <Card
-                  className={`min-h-[300px] cursor-pointer transition-all duration-300 overflow-hidden border-border ${
+                  className={`min-h-[300px] cursor-pointer transition-all duration-300 border-border ${
                     showAnswer ? 'bg-muted' : currentColors.bg
                   }`}
                   onClick={() => setShowAnswer(!showAnswer)}
                   data-testid="flashcard"
                 >
-                  <div className={`h-1.5 ${currentColors.strip}`} />
                   <CardContent className="p-8 flex flex-col">
                     <div className="flex justify-end mb-2">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded border ${currentColors.badge}`}>
