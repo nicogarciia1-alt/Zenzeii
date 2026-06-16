@@ -322,6 +322,7 @@ class SaveWordRequest(BaseModel):
     example_translation: Optional[str] = None
     notes: Optional[str] = ""
     type: Optional[str] = "word"
+    category: Optional[str] = None  # "verb" | "noun" | "adjective" | "expression" | "other" | None
 
 class SavedWordResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -340,6 +341,10 @@ class SavedWordResponse(BaseModel):
     times_reviewed: int
     created_at: str
     type: str = "word"
+    category: Optional[str] = None
+    correct_count: int = 0
+    incorrect_count: int = 0
+    last_reviewed: Optional[str] = None
     kanji_form: Optional[str] = None
     hiragana_form: Optional[str] = None
     katakana_form: Optional[str] = None
@@ -1779,9 +1784,13 @@ async def save_word(word_data: SaveWordRequest, current_user: dict = Depends(get
         "example_sentence": word_data.example_sentence,
         "example_translation": word_data.example_translation,
         "notes": word_data.notes or "",
+        "category": word_data.category,
         "mastery_level": 0,
         "next_review": now.isoformat(),
         "times_reviewed": 0,
+        "correct_count": 0,
+        "incorrect_count": 0,
+        "last_reviewed": None,
         "created_at": now.isoformat(),
         **forms
     }

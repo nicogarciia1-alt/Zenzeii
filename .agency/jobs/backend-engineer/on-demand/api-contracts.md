@@ -2,7 +2,7 @@
 
 All endpoints live under `/api`. Auth-required endpoints expect `Authorization: Bearer <jwt>` header.
 
-**last_verified**: 2026-06-14 by backend-engineer (Block 3 Stripe webhook)
+**last_verified**: 2026-06-16 by backend-engineer (vocabulary categories + stats placeholders)
 
 ---
 
@@ -215,6 +215,53 @@ All endpoints live under `/api`. Auth-required endpoints expect `Authorization: 
 **Auth**: required
 **Body**: `SaveWordRequest`
 **Errors**: 400 (word already saved)
+
+`SaveWordRequest` shape:
+```json
+{
+  "word": "...",
+  "reading": "...",
+  "romaji": "...",
+  "meanings": ["..."],
+  "parts_of_speech": ["..."],
+  "example_sentence": null,
+  "example_translation": null,
+  "notes": "",
+  "type": "word",
+  "category": "verb"
+}
+```
+`category`: optional, `"verb" | "noun" | "adjective" | "expression" | "other" | null`. Defaults to `null` (treated as `"other"` in UI). Omit entirely for kanji saves — category is not used for `type: "kanji"`.
+
+`SavedWordResponse` shape (as of vocabulary categories feature):
+```json
+{
+  "id": "uuid",
+  "user_id": "uuid",
+  "word": "...",
+  "reading": "...",
+  "romaji": "...",
+  "meanings": ["..."],
+  "parts_of_speech": ["..."],
+  "example_sentence": null,
+  "example_translation": null,
+  "notes": "",
+  "type": "word",
+  "category": "verb",
+  "mastery_level": 0,
+  "next_review": "ISO8601",
+  "times_reviewed": 0,
+  "correct_count": 0,
+  "incorrect_count": 0,
+  "last_reviewed": null,
+  "created_at": "ISO8601",
+  "kanji_form": null,
+  "hiragana_form": null,
+  "katakana_form": null,
+  "romaji_form": null
+}
+```
+`correct_count`, `incorrect_count`, `last_reviewed`: stats placeholder fields — present in DB documents but not yet written by any endpoint. Reserved for a future stats pass.
 
 ### PUT /api/vocabulary/{word_id}
 **Auth**: required
