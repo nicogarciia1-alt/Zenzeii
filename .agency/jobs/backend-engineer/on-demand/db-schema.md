@@ -1,6 +1,6 @@
 # db-schema.md — MongoDB Collections
 
-**last_verified**: 2026-06-16 by backend-engineer (vocabulary categories + stats placeholders)
+**last_verified**: 2026-06-16 by backend-engineer (audiobook mode — audio fields + new collections)
 
 ---
 
@@ -28,6 +28,8 @@ Primary user document. Stored in the `users` collection.
 | `subscribed_at` | datetime\|null | `null` | Timestamp of subscription creation |
 | `ai_messages_today` | int | `0` | Free-tier daily AI cap counter (logic in future block) |
 | `ai_messages_date` | str\|null | `null` | "YYYY-MM-DD" — used to detect day rollover for cap reset |
+| `audio_minutes_balance` | float | `0.0` | Audio minutes remaining; decremented on chapter generation |
+| `audio_minutes_purchased` | float | `0.0` | Lifetime total purchased (analytics only, never decremented) |
 
 **Indexes**: `(id, unique)`, `(email, unique)`
 
@@ -252,3 +254,40 @@ Webhook idempotency log. Prevents double-processing of Stripe webhook retries.
 **Read pattern**: `find_one({"_id": event_id})` at webhook entry — if doc exists, return 200 immediately without re-running handler.
 
 **No TTL index set** (keep all records for auditability). If collection grows large, TTL can be added later — not needed for launch.
+
+---
+
+## audio_packs
+
+Pack definitions for audio minute purchases. Seeded at startup via `$setOnInsert` in `lifespan` — idempotent.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | str | Pack slug: `"starter_10"` \| `"standard_30"` \| `"library_60"` |
+| `name` | str | Display name: `"Starter"` \| `"Standard"` \| `"Library"` |
+| `minutes` | int | Minutes granted on purchase: `10` \| `30` \| `60` |
+| `price_eur` | float | `1.99` \| `4.99` \| `7.99` |
+
+**Stripe Price IDs** are stored as Railway env vars (`STRIPE_PRICE_AUDIO_STARTER`, etc.) and read into `AUDIO_PACK_PRICE_IDS` map at module load — not stored in this collection.
+
+---
+
+## audio_cache
+
+Generated audio metadata per chapter. Prevents re-generating (and re-charging) the same chapter twice.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | str | `chapter_id` — natural dedup key |
+| `chapter_id` | str | Redundant with `_id`, kept for query clarity |
+| `book_id` | str\|null | FK → books.id |
+| `r2_key` | str | R2 object key: `"chapters/<chapter_id>.mp3"` |
+| `r2_url` | str | Full public URL served to frontend |
+| `duration_minutes` | float | Actual MP3 duration (measured by mutagen) |
+| `voice_id` | str | ElevenLabs voice ID used for generation |
+| `generated_at` | str (ISO8601) | Timestamp of generation |
+| `character_count` | int | Length of source Japanese text |
+
+**Cache hit**: `GET /api/audio/chapter/{chapter_id}` checks this collection first. On hit: returns `url` + `duration_minutes` immediately, no ElevenLabs call, no balance deduction.
+
+**Indexes**: `(_id, unique)` (natural). Optional future: `(book_id)` for chapter list indicators.
