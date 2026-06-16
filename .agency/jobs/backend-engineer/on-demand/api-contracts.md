@@ -2,7 +2,7 @@
 
 All endpoints live under `/api`. Auth-required endpoints expect `Authorization: Bearer <jwt>` header.
 
-**last_verified**: 2026-06-16 by backend-engineer (vocabulary categories + stats placeholders)
+**last_verified**: 2026-06-16 by backend-engineer (audiobook mode endpoints added)
 
 ---
 
@@ -296,6 +296,59 @@ All endpoints live under `/api`. Auth-required endpoints expect `Authorization: 
 ### GET /api/stats
 **Auth**: required
 **Response**: `{ vocabulary_count, books_in_progress, total_words_read, mastery_distribution }`
+
+---
+
+## Audio
+
+### GET /api/audio/balance
+**Auth**: required
+**Response**: `{ "audio_minutes_balance": 23.5 }`
+
+### POST /api/audio/purchase
+**Auth**: required
+**Body**: `{ "pack_id": "starter_10" | "standard_30" | "library_60" }`
+**Response**: `{ "checkout_url": "https://checkout.stripe.com/..." }`
+
+| Status | Condition |
+|---|---|
+| 400 | Invalid `pack_id` |
+| 503 | `STRIPE_SECRET_KEY` or audio Price ID not configured |
+| 500 | Stripe API failure |
+
+Pack definitions (minutes / price):
+- `starter_10` → 10 min / €1.99
+- `standard_30` → 30 min / €4.99
+- `library_60` → 60 min / €7.99
+
+On successful payment, webhook fires `checkout.session.completed` with `metadata.purchase_type: "audio_pack"` → credits `audio_minutes_balance` and `audio_minutes_purchased` atomically via `$inc`.
+
+### GET /api/audio/chapter/{chapter_id}
+**Auth**: required
+**Response**: `{ "url": "https://...", "duration_minutes": 8.3, "cached": true|false }`
+
+**Cache hit** (`cached: true`): returns immediately, no balance deduction, no ElevenLabs call.
+
+**Cache miss** (`cached: false`): generates via ElevenLabs, uploads to R2, caches result, deducts balance.
+
+**Operation order on cache miss** (protects user):
+1. Check cache
+2. Check credentials available (503 if not)
+3. Check balance sufficiency — 402 if insufficient, **but only after measuring real duration**
+4. Generate audio (ElevenLabs)
+5. Measure duration (mutagen)
+6. Re-check balance against real duration — 402 if now insufficient
+7. Upload to R2
+8. Insert `audio_cache` document
+9. Deduct balance (last — user already has audio)
+
+| Status | Condition |
+|---|---|
+| 402 | Insufficient `audio_minutes_balance` |
+| 404 | Chapter not found or has no sentences |
+| 422 | Chapter has no Japanese text to narrate |
+| 502 | ElevenLabs generation failed or R2 upload failed |
+| 503 | ElevenLabs key, R2 credentials, or voice ID not configured |
 
 ---
 
