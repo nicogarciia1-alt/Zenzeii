@@ -48,7 +48,7 @@ export const VocabularyPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editNotes, setEditNotes] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('all');
 
   // Flashcard state
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -126,8 +126,28 @@ export const VocabularyPage = () => {
     }
   };
 
+  const FILTER_TABS = [
+    { value: 'all',        label: 'All' },
+    { value: 'word',       label: 'Words' },
+    { value: 'kanji',      label: '漢字' },
+    { value: 'verb',       label: 'Verbs' },
+    { value: 'noun',       label: 'Nouns' },
+    { value: 'adjective',  label: 'Adjectives' },
+    { value: 'particle',   label: 'Particles' },
+    { value: 'expression', label: 'Expressions' },
+    { value: 'other',      label: 'Other' },
+  ];
+
   const filteredVocabulary = vocabulary.filter(word => {
-    if (typeFilter !== 'all' && (word.type || 'word') !== typeFilter) return false;
+    const wordType = word.type || 'word';
+    if (activeFilter === 'word') {
+      if (wordType !== 'word') return false;
+    } else if (activeFilter === 'kanji') {
+      if (wordType !== 'kanji') return false;
+    } else if (activeFilter !== 'all') {
+      if (wordType !== 'word') return false;
+      if (getWordCategory(word) !== activeFilter) return false;
+    }
     return (
       word.word.includes(searchQuery) ||
       word.reading.includes(searchQuery) ||
@@ -195,29 +215,30 @@ export const VocabularyPage = () => {
               />
             </div>
 
-            {/* Type Filter */}
-            <div className="flex gap-1 mb-6">
-              {[
-                { value: 'all',   label: 'All'   },
-                { value: 'word',  label: 'Words' },
-                { value: 'kanji', label: '漢字'  },
-              ].map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => setTypeFilter(value)}
-                  className={`px-3 py-1.5 text-sm rounded border transition-colors ${
-                    typeFilter === value
-                      ? value === 'kanji'
-                        ? 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800'
-                        : value === 'word'
-                        ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800'
-                        : 'bg-secondary/20 text-secondary-foreground border-border'
-                      : 'bg-transparent text-muted-foreground border-border hover:bg-muted'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap gap-1 mb-6">
+              {FILTER_TABS.map(({ value, label }) => {
+                const isActive = activeFilter === value;
+                let activeClass = 'bg-secondary/20 text-secondary-foreground border-border';
+                if (isActive) {
+                  if (value === 'word') {
+                    activeClass = 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800';
+                  } else if (CATEGORY_COLORS[value]) {
+                    activeClass = CATEGORY_COLORS[value].badge;
+                  }
+                }
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setActiveFilter(value)}
+                    className={`px-3 py-1.5 text-sm rounded border transition-colors ${
+                      isActive ? activeClass : 'bg-transparent text-muted-foreground border-border hover:bg-muted'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Word Cards */}
@@ -230,6 +251,8 @@ export const VocabularyPage = () => {
                 <p className="text-muted-foreground">
                   {vocabulary.length === 0
                     ? 'Click on words while reading to save them'
+                    : activeFilter !== 'all' && activeFilter !== 'word' && activeFilter !== 'kanji' && !searchQuery
+                    ? `No ${FILTER_TABS.find(t => t.value === activeFilter)?.label.toLowerCase()} saved yet`
                     : 'Try a different search term'}
                 </p>
               </div>
