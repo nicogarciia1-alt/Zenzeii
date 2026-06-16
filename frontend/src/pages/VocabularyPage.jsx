@@ -31,6 +31,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import Layout from '@/components/layout/Layout';
+import { CATEGORY_COLORS, getWordCategory } from '@/lib/categoryColors';
 import {
   getVocabulary,
   deleteSavedWord,
@@ -155,6 +156,8 @@ export const VocabularyPage = () => {
   }
 
   const currentReviewWord = reviewWords[currentCardIndex];
+  const currentCategory = currentReviewWord ? getWordCategory(currentReviewWord) : 'other';
+  const currentColors = CATEGORY_COLORS[currentCategory];
 
   return (
     <Layout>
@@ -232,18 +235,20 @@ export const VocabularyPage = () => {
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="vocab-list">
-                {filteredVocabulary.map((word) => (
-                  <Card key={word.id} className="border-border" data-testid={`vocab-card-${word.id}`}>
+                {filteredVocabulary.map((word) => {
+                  const category = getWordCategory(word);
+                  const colors = CATEGORY_COLORS[category];
+                  return (
+                  <Card key={word.id} className={`overflow-hidden border-border ${colors.bg}`} data-testid={`vocab-card-${word.id}`}>
+                    <div className={`h-1.5 ${colors.strip}`} />
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <div className="flex items-baseline gap-2">
                             <h3 className="text-2xl font-serif text-foreground">{word.word}</h3>
-                            {word.type === 'kanji' && (
-                              <Badge className="text-[10px] px-1.5 py-0 border bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800">
-                                漢字
-                              </Badge>
-                            )}
+                            <Badge className={`text-[10px] px-1.5 py-0 border ${colors.badge}`}>
+                              {colors.label}
+                            </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">{word.reading}</p>
                         </div>
@@ -350,7 +355,8 @@ export const VocabularyPage = () => {
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             )}
           </TabsContent>
@@ -390,47 +396,55 @@ export const VocabularyPage = () => {
 
                 {/* Flashcard */}
                 <Card
-                  className={`min-h-[300px] cursor-pointer transition-all duration-300 ${
-                    showAnswer ? 'bg-muted' : ''
+                  className={`min-h-[300px] cursor-pointer transition-all duration-300 overflow-hidden border-border ${
+                    showAnswer ? 'bg-muted' : currentColors.bg
                   }`}
                   onClick={() => setShowAnswer(!showAnswer)}
                   data-testid="flashcard"
                 >
-                  <CardContent className="p-8 flex flex-col items-center justify-center min-h-[300px]">
-                    {!showAnswer ? (
-                      // Front of card
-                      <div className="text-center">
-                        <h2 className="text-5xl font-serif text-foreground mb-4">
-                          {currentReviewWord?.word}
-                        </h2>
-                        <p className="text-lg text-muted-foreground">
-                          {currentReviewWord?.reading}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-8">
-                          Tap to reveal meaning
-                        </p>
-                      </div>
-                    ) : (
-                      // Back of card
-                      <div className="text-center space-y-4">
-                        <h2 className="text-3xl font-serif text-foreground">
-                          {currentReviewWord?.word}
-                        </h2>
-                        <p className="text-lg text-secondary font-mono">
-                          {currentReviewWord?.romaji}
-                        </p>
-                        <div className="space-y-1">
-                          {currentReviewWord?.meanings.slice(0, 3).map((m, i) => (
-                            <p key={i} className="text-lg text-foreground">{m}</p>
-                          ))}
+                  <div className={`h-1.5 ${currentColors.strip}`} />
+                  <CardContent className="p-8 flex flex-col">
+                    <div className="flex justify-end mb-2">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${currentColors.badge}`}>
+                        {currentColors.label}
+                      </span>
+                    </div>
+                    <div className="flex-1 flex flex-col items-center justify-center">
+                      {!showAnswer ? (
+                        // Front of card
+                        <div className="text-center">
+                          <h2 className="text-5xl font-serif text-foreground mb-4">
+                            {currentReviewWord?.word}
+                          </h2>
+                          <p className="text-lg text-muted-foreground">
+                            {currentReviewWord?.reading}
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-8">
+                            Tap to reveal meaning
+                          </p>
                         </div>
-                        {currentReviewWord?.example_sentence && (
-                          <div className="mt-4 p-3 bg-background rounded">
-                            <p className="text-sm jp-text">{currentReviewWord.example_sentence}</p>
+                      ) : (
+                        // Back of card
+                        <div className="text-center space-y-4">
+                          <h2 className="text-3xl font-serif text-foreground">
+                            {currentReviewWord?.word}
+                          </h2>
+                          <p className="text-lg text-secondary font-mono">
+                            {currentReviewWord?.romaji}
+                          </p>
+                          <div className="space-y-1">
+                            {currentReviewWord?.meanings.slice(0, 3).map((m, i) => (
+                              <p key={i} className="text-lg text-foreground">{m}</p>
+                            ))}
                           </div>
-                        )}
-                      </div>
-                    )}
+                          {currentReviewWord?.example_sentence && (
+                            <div className="mt-4 p-3 bg-background rounded">
+                              <p className="text-sm jp-text">{currentReviewWord.example_sentence}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
 
