@@ -23,3 +23,6 @@ reportlab>=4.0.0
 fugashi>=1.3.0
 unidic-lite>=1.0.0
 stripe
+elevenlabs
+mutagen
+boto3

@@ -63,6 +63,28 @@ JWT_EXPIRATION_HOURS = 24
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PRICE_PREMIUM_MONTHLY = os.environ.get("STRIPE_PRICE_PREMIUM_MONTHLY", "")
 STRIPE_PRICE_FOUNDING_MEMBER = os.environ.get("STRIPE_PRICE_FOUNDING_MEMBER", "")
+STRIPE_PRICE_AUDIO_STARTER = os.environ.get("STRIPE_PRICE_AUDIO_STARTER", "")
+STRIPE_PRICE_AUDIO_STANDARD = os.environ.get("STRIPE_PRICE_AUDIO_STANDARD", "")
+STRIPE_PRICE_AUDIO_LIBRARY = os.environ.get("STRIPE_PRICE_AUDIO_LIBRARY", "")
+
+# Cloudflare R2 config
+R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "")
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "")
+R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "zenzeii-audio")
+R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "")
+
+# ElevenLabs config
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
+ELEVENLABS_LITERARY_VOICE = os.environ.get("ELEVENLABS_VOICE_LITERARY", "")
+ELEVENLABS_STORY_VOICE = os.environ.get("ELEVENLABS_VOICE_STORY", "")
+
+# Audio pack definitions — mirrors audio_packs collection seeded at startup
+AUDIO_PACK_PRICE_IDS = {
+    "starter_10":   STRIPE_PRICE_AUDIO_STARTER,
+    "standard_30":  STRIPE_PRICE_AUDIO_STANDARD,
+    "library_60":   STRIPE_PRICE_AUDIO_LIBRARY,
+}
 
 # MongoDB — initialized inside lifespan (requires running event loop in Python 3.12+)
 client = None
@@ -128,6 +150,20 @@ async def lifespan(app: FastAPI):
         upsert=True
     )
     logger.info("app_config.founding_member initialized")
+
+    # Audio packs — seed definitions; $setOnInsert is a no-op if doc already exists
+    audio_packs_seed = [
+        {"_id": "starter_10",  "name": "Starter",  "minutes": 10, "price_eur": 1.99},
+        {"_id": "standard_30", "name": "Standard", "minutes": 30, "price_eur": 4.99},
+        {"_id": "library_60",  "name": "Library",  "minutes": 60, "price_eur": 7.99},
+    ]
+    for pack in audio_packs_seed:
+        await db.audio_packs.update_one(
+            {"_id": pack["_id"]},
+            {"$setOnInsert": {k: v for k, v in pack.items() if k != "_id"}},
+            upsert=True
+        )
+    logger.info("audio_packs collection initialized")
 
     # Startup: Launch translation worker
     try:
@@ -254,6 +290,8 @@ class UserResponse(BaseModel):
     subscribed_at: Optional[datetime] = None
     ai_messages_today: int = 0
     ai_messages_date: Optional[str] = None
+    audio_minutes_balance: float = 0.0
+    audio_minutes_purchased: float = 0.0
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -434,6 +472,9 @@ class TranslateRequest(BaseModel):
 class CreateCheckoutSessionRequest(BaseModel):
     tier: str
 
+class AudioPurchaseRequest(BaseModel):
+    pack_id: str  # "starter_10" | "standard_30" | "library_60"
+
 # ========================
 # AUTH HELPERS
 # ========================
@@ -582,6 +623,8 @@ async def register(user_data: UserCreate):
         "subscribed_at": None,
         "ai_messages_today": 0,
         "ai_messages_date": None,
+        "audio_minutes_balance": 0.0,
+        "audio_minutes_purchased": 0.0,
     }
     await db.users.insert_one(user_doc)
     await _send_verification_email(user_id, user_data.email)
@@ -2224,6 +2267,169 @@ async def create_checkout_session(
 
 
 # ========================
+# AUDIO ENDPOINTS
+# ========================
+
+@api_router.get("/audio/balance")
+async def get_audio_balance(current_user: dict = Depends(get_current_user)):
+    return {"audio_minutes_balance": current_user.get("audio_minutes_balance", 0.0)}
+
+
+@api_router.post("/audio/purchase")
+async def purchase_audio_pack(
+    request: AudioPurchaseRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    if request.pack_id not in AUDIO_PACK_PRICE_IDS:
+        raise HTTPException(status_code=400, detail="Invalid pack_id. Must be 'starter_10', 'standard_30', or 'library_60'.")
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Payment system not available.")
+    price_id = AUDIO_PACK_PRICE_IDS[request.pack_id]
+    if not price_id:
+        raise HTTPException(status_code=503, detail="Audio pack not yet available.")
+    try:
+        session = await asyncio.to_thread(
+            stripe.checkout.Session.create,
+            mode="payment",
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url="https://zenzeii.com/payment-success?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url="https://zenzeii.com/payment-canceled",
+            client_reference_id=current_user["id"],
+            metadata={"purchase_type": "audio_pack", "pack_id": request.pack_id, "user_id": current_user["id"]},
+        )
+    except Exception as e:
+        logger.error(f"Audio pack checkout session failed for user {current_user['id']}: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail="Payment session could not be created. Please try again.")
+    return {"checkout_url": session.url}
+
+
+@api_router.get("/audio/chapter/{chapter_id}")
+async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_current_user)):
+    # 1. Check cache first — no balance deduction if audio already exists
+    cached = await db.audio_cache.find_one({"_id": chapter_id})
+    if cached:
+        return {
+            "url": cached["r2_url"],
+            "duration_minutes": cached["duration_minutes"],
+            "cached": True,
+        }
+
+    # 2. Not cached — check credentials before touching balance
+    if not ELEVENLABS_API_KEY:
+        raise HTTPException(status_code=503, detail="Audio generation not available.")
+    if not R2_ACCOUNT_ID or not R2_PUBLIC_URL:
+        raise HTTPException(status_code=503, detail="Audio storage not available.")
+
+    voice_id = ELEVENLABS_LITERARY_VOICE or ELEVENLABS_STORY_VOICE
+    if not voice_id:
+        raise HTTPException(status_code=503, detail="No voice configured for audio generation.")
+
+    # 3. Check user balance
+    balance = current_user.get("audio_minutes_balance", 0.0)
+
+    # 4. Fetch chapter sentences and assemble text
+    sentences = await db.sentences.find(
+        {"chapter_id": chapter_id},
+        {"_id": 0, "japanese_original": 1, "kanji_text": 1, "order": 1}
+    ).sort("order", 1).to_list(length=None)
+
+    if not sentences:
+        raise HTTPException(status_code=404, detail="Chapter not found or has no sentences.")
+
+    chapter_text = "\n".join(
+        s.get("japanese_original") or s.get("kanji_text") or ""
+        for s in sentences
+        if s.get("japanese_original") or s.get("kanji_text")
+    ).strip()
+
+    if not chapter_text:
+        raise HTTPException(status_code=422, detail="Chapter has no Japanese text to narrate.")
+
+    # 5. Generate audio via ElevenLabs
+    try:
+        from elevenlabs.client import ElevenLabs as ElevenLabsClient
+        el_client = ElevenLabsClient(api_key=ELEVENLABS_API_KEY)
+        audio_generator = await asyncio.to_thread(
+            el_client.text_to_speech.convert,
+            voice_id=voice_id,
+            text=chapter_text,
+            model_id="eleven_multilingual_v2",
+        )
+        audio_bytes = b"".join(audio_generator)
+    except Exception as e:
+        logger.error(f"ElevenLabs generation failed for chapter {chapter_id}: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=502, detail="Audio generation failed. Please try again.")
+
+    # 6. Measure duration
+    try:
+        from mutagen.mp3 import MP3
+        from io import BytesIO
+        mp3_info = MP3(BytesIO(audio_bytes))
+        duration_minutes = mp3_info.info.length / 60.0
+    except Exception as e:
+        logger.warning(f"mutagen duration measurement failed for chapter {chapter_id}: {e} — estimating")
+        duration_minutes = len(chapter_text) / 800.0  # rough fallback: ~800 chars/min
+
+    # 7. Check balance is sufficient now that we know the real duration
+    if balance < duration_minutes:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient audio minutes. This chapter requires {duration_minutes:.1f} min; your balance is {balance:.1f} min."
+        )
+
+    # 8. Upload to R2 (before balance deduction — user loses nothing if upload fails)
+    r2_key = f"chapters/{chapter_id}.mp3"
+    r2_url = f"{R2_PUBLIC_URL.rstrip('/')}/{r2_key}"
+    try:
+        import boto3
+        from botocore.client import Config
+        r2 = boto3.client(
+            "s3",
+            endpoint_url=f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+            aws_access_key_id=R2_ACCESS_KEY_ID,
+            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+            config=Config(signature_version="s3v4"),
+        )
+        await asyncio.to_thread(
+            r2.put_object,
+            Bucket=R2_BUCKET_NAME,
+            Key=r2_key,
+            Body=audio_bytes,
+            ContentType="audio/mpeg",
+        )
+    except Exception as e:
+        logger.error(f"R2 upload failed for chapter {chapter_id}: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=502, detail="Audio storage failed. Please try again.")
+
+    # 9. Insert cache document
+    chapter_doc = await db.chapters.find_one({"id": chapter_id}, {"book_id": 1})
+    await db.audio_cache.insert_one({
+        "_id": chapter_id,
+        "chapter_id": chapter_id,
+        "book_id": chapter_doc["book_id"] if chapter_doc else None,
+        "r2_key": r2_key,
+        "r2_url": r2_url,
+        "duration_minutes": round(duration_minutes, 3),
+        "voice_id": voice_id,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "character_count": len(chapter_text),
+    })
+
+    # 10. Deduct balance (last step — user already has the audio at this point)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"audio_minutes_balance": -duration_minutes}}
+    )
+
+    logger.info(f"Audio generated for chapter {chapter_id}: {duration_minutes:.2f} min, {len(chapter_text)} chars")
+    return {
+        "url": r2_url,
+        "duration_minutes": round(duration_minutes, 3),
+        "cached": False,
+    }
+
+
+# ========================
 # ROOT
 # ========================
 
@@ -2240,6 +2446,11 @@ app.include_router(api_router)
 # No JWT auth: signature verification is the security boundary.
 
 async def _handle_checkout_completed(session: dict):
+    purchase_type = session.get("metadata", {}).get("purchase_type")
+    if purchase_type == "audio_pack":
+        await _handle_audio_pack_completed(session)
+        return
+    # Default: subscription/founding_member purchase
     tier = session.get("metadata", {}).get("tier")
     user_id = (
         session.get("metadata", {}).get("user_id")
@@ -2260,6 +2471,30 @@ async def _handle_checkout_completed(session: dict):
     result = await db.users.update_one({"id": user_id}, {"$set": update})
     if result.matched_count == 0:
         logger.warning(f"checkout.session.completed: user {user_id} not found in DB")
+
+
+async def _handle_audio_pack_completed(session: dict):
+    pack_id = session.get("metadata", {}).get("pack_id")
+    user_id = (
+        session.get("metadata", {}).get("user_id")
+        or session.get("client_reference_id")
+    )
+    if not user_id or not pack_id:
+        logger.warning(f"audio_pack checkout.session.completed: missing user_id or pack_id in metadata")
+        return
+    pack = await db.audio_packs.find_one({"_id": pack_id})
+    if not pack:
+        logger.error(f"audio_pack checkout.session.completed: pack '{pack_id}' not found in audio_packs collection")
+        return
+    minutes = pack["minutes"]
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"audio_minutes_balance": minutes, "audio_minutes_purchased": minutes}}
+    )
+    if result.matched_count == 0:
+        logger.warning(f"audio_pack checkout.session.completed: user {user_id} not found in DB")
+    else:
+        logger.info(f"audio_pack: added {minutes} min to user {user_id} (pack: {pack_id})")
 
 
 async def _handle_checkout_expired(session: dict):
