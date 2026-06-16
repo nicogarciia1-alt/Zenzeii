@@ -112,10 +112,6 @@ export const VocabularyPage = () => {
         setCurrentCardIndex(currentCardIndex + 1);
         setShowAnswer(false);
       } else {
-        toast.success('Review session complete!');
-        // Refresh review words
-        const reviewRes = await getReviewWords();
-        setReviewWords(reviewRes.data);
         setCurrentCardIndex(0);
         setShowAnswer(false);
       }
@@ -387,11 +383,7 @@ export const VocabularyPage = () => {
           <TabsContent value="review">
             {reviewWords.length === 0 ? (
               <div className="text-center py-16">
-                <Check className="h-16 w-16 mx-auto text-success mb-4" />
-                <h2 className="text-xl font-serif text-foreground mb-2">All caught up!</h2>
-                <p className="text-muted-foreground">
-                  No words due for review. Keep reading to add more vocabulary!
-                </p>
+                <p className="text-muted-foreground">No words due for review.</p>
               </div>
             ) : (
               <div className="max-w-xl mx-auto">
