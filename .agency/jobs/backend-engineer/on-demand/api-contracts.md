@@ -231,7 +231,7 @@ All endpoints live under `/api`. Auth-required endpoints expect `Authorization: 
   "category": "verb"
 }
 ```
-`category`: optional, `"verb" | "noun" | "adjective" | "expression" | "other" | null`. Defaults to `null` (treated as `"other"` in UI). Omit entirely for kanji saves — category is not used for `type: "kanji"`.
+`category`: optional, `"verb" | "noun" | "adjective" | "particle" | "expression" | "other" | null`. Defaults to `null` (treated as `"other"` in UI). Omit entirely for kanji saves — category is not used for `type: "kanji"`. Values are auto-assigned from MeCab UniDic `feature[0]` via `posToCategory()` in the frontend; not user-selected.
 
 `SavedWordResponse` shape (as of vocabulary categories feature):
 ```json
