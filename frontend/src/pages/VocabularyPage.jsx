@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   BookOpen,
@@ -54,10 +54,19 @@ export const VocabularyPage = () => {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [reviewDeck, setReviewDeck] = useState([]);
+  const deckInitialized = useRef(false);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (vocabulary.length > 0 && !deckInitialized.current) {
+      deckInitialized.current = true;
+      setReviewDeck([...vocabulary].sort(() => Math.random() - 0.5));
+    }
+  }, [vocabulary]);
 
   const fetchData = async () => {
     try {
@@ -98,20 +107,20 @@ export const VocabularyPage = () => {
   };
 
   const handleReviewAnswer = async (correct) => {
-    if (reviewWords.length === 0) return;
+    if (reviewDeck.length === 0) return;
 
     setReviewing(true);
-    const currentWord = reviewWords[currentCardIndex];
+    const currentWord = reviewDeck[currentCardIndex];
 
     try {
       await submitReview(currentWord.id, correct);
       toast.success(correct ? 'Great job!' : 'Keep practicing!');
 
-      // Move to next card or finish
-      if (currentCardIndex < reviewWords.length - 1) {
+      if (currentCardIndex < reviewDeck.length - 1) {
         setCurrentCardIndex(currentCardIndex + 1);
         setShowAnswer(false);
       } else {
+        setReviewDeck([...vocabulary].sort(() => Math.random() - 0.5));
         setCurrentCardIndex(0);
         setShowAnswer(false);
       }
@@ -171,7 +180,7 @@ export const VocabularyPage = () => {
     );
   }
 
-  const currentReviewWord = reviewWords[currentCardIndex];
+  const currentReviewWord = reviewDeck[currentCardIndex];
   const currentCategory = currentReviewWord ? getWordCategory(currentReviewWord) : 'other';
   const currentColors = CATEGORY_COLORS[currentCategory];
 
@@ -258,7 +267,7 @@ export const VocabularyPage = () => {
                   const category = getWordCategory(word);
                   const colors = CATEGORY_COLORS[category];
                   return (
-                  <Card key={word.id} className={`border-border ${colors.bg}`} data-testid={`vocab-card-${word.id}`}>
+                  <Card key={word.id} className={`border border-black dark:border-gray-400 ${colors.bg}`} data-testid={`vocab-card-${word.id}`}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -381,19 +390,19 @@ export const VocabularyPage = () => {
 
           {/* Review Tab */}
           <TabsContent value="review">
-            {reviewWords.length === 0 ? (
+            {vocabulary.length === 0 ? (
               <div className="text-center py-16">
-                <p className="text-muted-foreground">No words due for review.</p>
+                <p className="text-muted-foreground">Save some words while reading to start reviewing them.</p>
               </div>
             ) : (
               <div className="max-w-xl mx-auto">
                 {/* Progress */}
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm text-muted-foreground">
-                    Card {currentCardIndex + 1} of {reviewWords.length}
+                    Card {currentCardIndex + 1} of {reviewDeck.length}
                   </span>
                   <div className="flex gap-1">
-                    {reviewWords.map((_, i) => (
+                    {reviewDeck.map((_, i) => (
                       <div
                         key={i}
                         className={`w-2 h-2 rounded-full ${
@@ -410,7 +419,7 @@ export const VocabularyPage = () => {
 
                 {/* Flashcard */}
                 <Card
-                  className={`min-h-[300px] cursor-pointer transition-all duration-300 border-border ${
+                  className={`min-h-[300px] cursor-pointer transition-all duration-300 border border-black dark:border-gray-400 ${
                     showAnswer ? 'bg-muted' : currentColors.bg
                   }`}
                   onClick={() => setShowAnswer(!showAnswer)}
@@ -506,12 +515,12 @@ export const VocabularyPage = () => {
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      if (currentCardIndex < reviewWords.length - 1) {
+                      if (currentCardIndex < reviewDeck.length - 1) {
                         setCurrentCardIndex(currentCardIndex + 1);
                         setShowAnswer(false);
                       }
                     }}
-                    disabled={currentCardIndex === reviewWords.length - 1}
+                    disabled={currentCardIndex === reviewDeck.length - 1}
                   >
                     Skip
                     <ChevronRight className="h-4 w-4 ml-1" />
