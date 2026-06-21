@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
 import AuthScreen from '../screens/auth/AuthScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ReaderScreen from '../screens/reader/ReaderScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -25,7 +27,6 @@ function LoadingScreen() {
   );
 }
 
-// My Books tab: HomeScreen with Reader pushed on top
 function MyBooksNavigator() {
   return (
     <MyBooksStack.Navigator screenOptions={{ headerShown: false }}>
@@ -36,7 +37,6 @@ function MyBooksNavigator() {
   );
 }
 
-// Bottom tab navigator — My Books / Vocabulary / Zenzeii / Library
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -65,26 +65,10 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen
-        name="MyBooks"
-        component={MyBooksNavigator}
-        options={{ title: 'My Books' }}
-      />
-      <Tab.Screen
-        name="Vocabulary"
-        component={VocabularyScreen}
-        options={{ title: 'Vocabulary' }}
-      />
-      <Tab.Screen
-        name="Zenzeii"
-        component={ZenzeiiChatScreen}
-        options={{ title: 'Zenzeii' }}
-      />
-      <Tab.Screen
-        name="Library"
-        component={LibraryScreen}
-        options={{ title: 'Library' }}
-      />
+      <Tab.Screen name="MyBooks"    component={MyBooksNavigator} options={{ title: 'My Books' }} />
+      <Tab.Screen name="Vocabulary" component={VocabularyScreen} options={{ title: 'Vocabulary' }} />
+      <Tab.Screen name="Zenzeii"    component={ZenzeiiChatScreen} options={{ title: 'Zenzeii' }} />
+      <Tab.Screen name="Library"    component={LibraryScreen}     options={{ title: 'Library' }} />
     </Tab.Navigator>
   );
 }
@@ -92,15 +76,40 @@ function MainTabs() {
 export default function AppNavigator() {
   const { isAuthenticated, loading } = useAuth();
 
-  if (loading) return <LoadingScreen />;
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('z:onboarding_done').then(v => {
+      setHasSeenOnboarding(!!v);
+      setOnboardingChecked(true);
+    });
+  }, []);
+
+  const handleOnboardingComplete = useCallback(() => {
+    setHasSeenOnboarding(true);
+  }, []);
+
+  if (loading || !onboardingChecked) return <LoadingScreen />;
 
   return (
     <NavigationContainer>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
           <RootStack.Screen name="Main" component={MainTabs} />
+        ) : hasSeenOnboarding ? (
+          <RootStack.Screen
+            name="Auth"
+            component={AuthScreen}
+            options={{ animation: 'fade' }}
+          />
         ) : (
-          <RootStack.Screen name="Auth" component={AuthScreen} />
+          <RootStack.Screen
+            name="Onboarding"
+            options={{ animation: 'fade' }}
+          >
+            {(props) => <OnboardingScreen {...props} onComplete={handleOnboardingComplete} />}
+          </RootStack.Screen>
         )}
       </RootStack.Navigator>
     </NavigationContainer>
