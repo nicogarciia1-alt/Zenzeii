@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { SubscriptionProvider } from './src/contexts/SubscriptionContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { flushQueue } from './src/lib/offlineQueue';
 
@@ -24,8 +25,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <StatusBar style="dark" backgroundColor="#FFFFFF" />
-        <AppNavigator />
+        <SubscriptionProvider>
+          <StatusBar style="dark" backgroundColor="#FFFFFF" />
+          <AppNavigator />
+        </SubscriptionProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

@@ -1,0 +1,59 @@
+{
+  "identifier" : "zenzeii_products",
+  "nonConsumableProducts" : [
+    {
+      "displayPrice" : "19.99",
+      "familySharable" : false,
+      "internalID" : "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "localizations" : [
+        {
+          "description" : "One-time purchase granting founder-level access to Zenzeii, early feature access, and the Founder badge.",
+          "displayName" : "Founding Member",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.zenzeii.app.founder_member",
+      "referenceName" : "Founding Member",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [ ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "localizations" : [ ],
+      "name" : "Zenzeii Premium",
+      "subscriptions" : [
+        {
+          "adHocOfferCodeRedemption" : false,
+          "displayPrice" : "5.99",
+          "familySharable" : false,
+          "groupNumber" : 1,
+          "internalID" : "c3d4e5f6-a7b8-9012-cdef-123456789012",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Full access to Zenzeii premium reading features.",
+              "displayName" : "Premium Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.zenzeii.app.premium_monthly",
+          "referenceName" : "Premium Monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "subscriptionGroupID" : "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 2,
+    "minor" : 0
+  }
+}
