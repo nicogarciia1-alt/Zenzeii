@@ -574,7 +574,7 @@ export default function ReaderScreen({ navigation, route }) {
         {totalSentences > 0 ? `  ·  ${sentences.length} / ${totalSentences} sentences` : ''}
       </Text>
       {translatedCount < totalSentences && totalSentences > 0 && (
-        <Text style={styles.translationBadge}>
+        <Text style={[styles.translationBadge, { color: activeTheme.muted }]}>
           {book?.book_language === 'ja' ? 'EN' : 'JP'} translation {translatedCount}/{totalSentences}
         </Text>
       )}
@@ -654,15 +654,17 @@ export default function ReaderScreen({ navigation, route }) {
           )}
           <TouchableOpacity
             onPress={() => setTocOpen(true)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={styles.iconButton}
+            accessibilityLabel="Table of contents"
+            accessibilityRole="button"
           >
             <Ionicons name="list-outline" size={22} color={activeTheme.muted} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setSettingsOpen(true)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={styles.iconButton}
+            accessibilityLabel="Reading settings"
+            accessibilityRole="button"
           >
             <Ionicons name="settings-outline" size={21} color={activeTheme.muted} />
           </TouchableOpacity>
@@ -689,6 +691,9 @@ export default function ReaderScreen({ navigation, route }) {
                     : { backgroundColor: 'transparent', borderColor: activeTheme.border },
                 ]}
                 activeOpacity={0.7}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={mode.label}
               >
                 <Text style={[styles.chipText, { color: active ? '#FFFFFF' : activeTheme.muted }]}>
                   {mode.label}
@@ -717,6 +722,9 @@ export default function ReaderScreen({ navigation, route }) {
                       : { backgroundColor: 'transparent', borderColor: activeTheme.border },
                   ]}
                   activeOpacity={0.7}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={opt.label}
                 >
                   <Text style={[styles.chipSmText, { color: active ? activeTheme.bg : activeTheme.muted }]}>
                     {opt.label}
@@ -728,8 +736,9 @@ export default function ReaderScreen({ navigation, route }) {
           {secondaryLayer !== 'none' && (
             <TouchableOpacity
               onPress={() => setShowSecondaryText(v => !v)}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               style={styles.eyeButton}
+              accessibilityLabel={showSecondaryText ? 'Hide secondary text' : 'Show secondary text'}
+              accessibilityRole="button"
             >
               <Ionicons
                 name={showSecondaryText ? 'eye-outline' : 'eye-off-outline'}
@@ -801,7 +810,12 @@ export default function ReaderScreen({ navigation, route }) {
         <SafeAreaView style={styles.modalRoot} edges={['top']}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Chapters</Text>
-            <TouchableOpacity onPress={() => setTocOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => setTocOpen(false)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="Close chapters"
+              accessibilityRole="button"
+            >
               <Ionicons name="close" size={22} color={C.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -869,7 +883,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   topBar: {
-    height: 48,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 4,
@@ -884,7 +898,7 @@ const styles = StyleSheet.create({
   bookTitleText: { fontSize: 13, fontWeight: '600' },
   chapterLabelText: { fontSize: 11, marginTop: 1 },
   topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  iconButton: { padding: 8 },
+  iconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 
   scriptBar: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -893,7 +907,7 @@ const styles = StyleSheet.create({
   scriptChipsRow: { paddingHorizontal: 12, gap: 6 },
   secondaryRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   secondaryChipsRow: { paddingHorizontal: 12, gap: 5 },
-  eyeButton: { paddingHorizontal: 10, paddingVertical: 4 },
+  eyeButton: { paddingHorizontal: 10, minHeight: 44, justifyContent: 'center' },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1 },
   chipText: { fontSize: 13, fontWeight: '500', fontFamily: 'NotoSerifJP' },
   chipSm: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 5, borderWidth: 1 },
@@ -931,7 +945,7 @@ const styles = StyleSheet.create({
   },
   chapterNavBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingVertical: 8, paddingHorizontal: 4,
+    paddingVertical: 8, paddingHorizontal: 4, minHeight: 44,
   },
   chapterNavBtnDisabled: { opacity: 0.35 },
   chapterNavText: { fontSize: 15, fontWeight: '500' },
@@ -953,7 +967,7 @@ const styles = StyleSheet.create({
 
   modalRoot: { flex: 1, backgroundColor: '#FFFFFF' },
   modalHeader: {
-    height: 56, flexDirection: 'row', alignItems: 'center',
+    minHeight: 56, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
   },

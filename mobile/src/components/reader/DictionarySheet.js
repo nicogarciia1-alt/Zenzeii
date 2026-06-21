@@ -237,7 +237,7 @@ export default function DictionarySheet({
       statusBarTranslucent
     >
       <View style={styles.container}>
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} accessibilityLabel="Close dictionary" />
 
         <View style={[styles.sheet, { maxHeight: SCREEN_HEIGHT * 0.72 }]}>
           <View style={styles.handle} />
@@ -264,6 +264,8 @@ export default function DictionarySheet({
               onPress={onClose}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.closeButton}
+              accessibilityLabel="Close dictionary"
+              accessibilityRole="button"
             >
               <Ionicons name="close" size={22} color={C.textSecondary} />
             </TouchableOpacity>
@@ -307,6 +309,8 @@ export default function DictionarySheet({
                             isSaving && styles.kanjiChipSaving,
                           ]}
                           activeOpacity={0.7}
+                          accessibilityLabel={`Save kanji ${char}`}
+                          accessibilityState={{ disabled: isSaved || isSaving }}
                         >
                           <Text style={[styles.kanjiChipText, isSaved && styles.kanjiChipTextSaved]}>
                             {char}
@@ -466,7 +470,7 @@ const styles = StyleSheet.create({
   breakdownPlain: { fontFamily: 'NotoSerifJP', fontSize: 15, color: C.textMuted },
   kanjiChip: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, paddingVertical: 3,
+    paddingHorizontal: 8, paddingVertical: 6,
     borderRadius: 5, borderWidth: 1, borderColor: C.border, backgroundColor: '#FFFFFF',
   },
   kanjiChipSaved: { backgroundColor: '#EFF6FF', borderColor: '#BAE6FD' },

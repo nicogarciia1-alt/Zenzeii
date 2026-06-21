@@ -52,6 +52,9 @@ function SegmentedControl({ options, value, onSelect }) {
               active && styles.segBtnActive,
             ]}
             activeOpacity={0.7}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={opt.label}
           >
             <Text style={[styles.segBtnText, active && styles.segBtnTextActive]}>
               {opt.label}
@@ -90,6 +93,8 @@ export default function SettingsSheet({
           <TouchableOpacity
             onPress={onClose}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Close reading settings"
+            accessibilityRole="button"
           >
             <Ionicons name="close" size={22} color={C.textSecondary} />
           </TouchableOpacity>
@@ -107,12 +112,16 @@ export default function SettingsSheet({
           <View style={styles.themeRow}>
             {READER_THEMES.map(theme => {
               const isSelected = readerTheme === theme.value;
+              const themeName = theme.value === 'default' ? 'Auto' : theme.name;
               return (
                 <TouchableOpacity
                   key={theme.value}
                   onPress={() => onThemeChange(theme.value)}
                   style={[styles.themeSwatch, isSelected && styles.themeSwatchSelected]}
                   activeOpacity={0.7}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={`${themeName} theme`}
                 >
                   {/* Colour swatch — default gets a half-light / half-dark split
                       mirroring the web's linear-gradient(135deg, #f5f5f5 50%, #1a1a2e 50%) */}
@@ -152,6 +161,9 @@ export default function SettingsSheet({
                 onPress={() => onFontFamilyChange(opt.value)}
                 style={styles.fontRow}
                 activeOpacity={0.6}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={opt.label}
               >
                 <View style={styles.fontRowLeft}>
                   <Text style={styles.fontRowLabel}>{opt.label}</Text>
@@ -279,11 +291,12 @@ const styles = StyleSheet.create({
 
   // ── Header ──────────────────────────────────────────────────────────────────
   header: {
-    height: 56,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.border,
   },

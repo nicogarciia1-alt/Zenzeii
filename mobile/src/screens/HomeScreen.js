@@ -145,7 +145,9 @@ function BookCardMenu({ bookId, dl, isDownloaded, isOnline, onDownload, onDelete
         ref={btnRef}
         style={styles.menuTrigger}
         onPress={handleOpen}
-        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityLabel="Book options"
+        accessibilityRole="button"
       >
         <Ionicons name="ellipsis-vertical" size={14} color="#FFFFFF" />
       </TouchableOpacity>
@@ -156,6 +158,7 @@ function BookCardMenu({ bookId, dl, isDownloaded, isOnline, onDownload, onDelete
           style={StyleSheet.absoluteFillObject}
           onPress={close}
           activeOpacity={1}
+          accessibilityLabel="Close menu"
         />
         <View style={[styles.menuCard, { top: pos.top, right: pos.right }]}>
 
@@ -465,6 +468,8 @@ export default function HomeScreen({ navigation }) {
           <TouchableOpacity
             onPress={() => setMenuOpen(true)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Open settings"
+            accessibilityRole="button"
           >
             <Ionicons name="settings-outline" size={22} color={C.textMuted} />
           </TouchableOpacity>
