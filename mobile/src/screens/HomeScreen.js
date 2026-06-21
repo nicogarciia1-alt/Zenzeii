@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getBooks, getProgress, getAvailableBooks, importBook, getBookStatus,
-  getBook, getChapters, getSentences, getSentencesCount,
+  getBook, getChapters, getSentences, getSentencesCount, deleteBook,
 } from '../lib/api';
 import {
   storeBookMeta, storeBookChapters, storeChapterSentences, markBookDownloaded,
-  isBookDownloaded, getDownloadedBookIds,
+  getDownloadedBookIds,
   storeBooksList, getCachedBooksList,
   storeProgressMap, getCachedProgressMap,
 } from '../lib/offlineStorage';
@@ -54,7 +54,7 @@ const C = {
   success: '#2E7D4A',
 };
 
-// ── Settings dropdown ──────────────────────────────────────────────────────────
+// ── Settings dropdown ─────────────────────────────────────────────────────────
 
 function SettingsDropdown({ visible, onClose, dropdownTop, logout, navigation }) {
   const items = [
@@ -73,66 +73,120 @@ function SettingsDropdown({ visible, onClose, dropdownTop, logout, navigation })
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={onClose} activeOpacity={1} />
-      <View style={[styles.dropdown, { top: dropdownTop }]}>
+      <View style={[styles.settingsDropdown, { top: dropdownTop }]}>
         {items.map((item, i) => (
-          <TouchableOpacity key={i} style={styles.dropdownItem} onPress={item.onPress}>
-            <Text style={[styles.dropdownItemText, { color: item.color }]}>{item.label}</Text>
+          <TouchableOpacity key={i} style={styles.settingsDropdownItem} onPress={item.onPress}>
+            <Text style={[styles.settingsDropdownText, { color: item.color }]}>{item.label}</Text>
           </TouchableOpacity>
         ))}
-        <View style={styles.dropdownDivider} />
-        <TouchableOpacity style={styles.dropdownItem} onPress={() => { onClose(); logout(); }}>
-          <Text style={[styles.dropdownItemText, { color: C.menuDanger }]}>✦ Log Out</Text>
+        <View style={styles.menuSeparator} />
+        <TouchableOpacity style={styles.settingsDropdownItem} onPress={() => { onClose(); logout(); }}>
+          <Text style={[styles.settingsDropdownText, { color: C.menuDanger }]}>✦ Log Out</Text>
         </TouchableOpacity>
       </View>
     </Modal>
   );
 }
 
-// ── Download overlay rendered inside each book cover ─────────────────────────
-// dl = { status: 'downloading'|'done'|'error', chapsDone, chapsTotal } | null
+// ── Book card overflow menu (⋮) ───────────────────────────────────────────────
+// Mirrors web's DropdownMenu: always-visible dark trigger, white card dropdown.
+// Positioned via measureInWindow so the card drops from the button's actual location.
 
-function DownloadOverlay({ dl, bookId, isOnline, isDownloaded, onDownload }) {
-  if (dl?.status === 'downloading') {
-    const label = dl.chapsTotal > 1
-      ? `${dl.chapsDone} / ${dl.chapsTotal}`
-      : 'Downloading…';
-    return (
-      <View style={styles.dlProgressOverlay}>
-        <ActivityIndicator size="small" color="#FFFFFF" />
-        <Text style={styles.dlProgressText}>{label}</Text>
-      </View>
+function BookCardMenu({ bookId, dl, isDownloaded, isOnline, onDownload, onDelete }) {
+  const btnRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
+
+  const handleOpen = () => {
+    btnRef.current?.measureInWindow((x, y, w, h) => {
+      setPos({ top: y + h + 4, right: SCREEN_WIDTH - x - w });
+      setOpen(true);
+    });
+  };
+
+  const close = () => setOpen(false);
+
+  const isActivelyDownloading = dl?.status === 'downloading';
+  const isDone = isDownloaded || dl?.status === 'done';
+  const dlDisabled = isDone || isActivelyDownloading || !isOnline;
+
+  const dlLabel = isDone
+    ? 'Available Offline'
+    : isActivelyDownloading
+    ? 'Downloading…'
+    : !isOnline
+    ? 'Download for Offline'
+    : 'Download for Offline';
+
+  const dlIconName = isDone ? 'cloud-done' : 'cloud-download-outline';
+  const dlIconColor = isDone ? C.success : dlDisabled ? C.textMuted : C.textPrimary;
+
+  const handleDownload = () => {
+    close();
+    onDownload(bookId);
+  };
+
+  const handleDelete = () => {
+    close();
+    Alert.alert(
+      'Remove from Library',
+      'This will remove the book from your library.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => onDelete(bookId) },
+      ]
     );
-  }
+  };
 
-  if (dl?.status === 'done' || isDownloaded) {
-    return (
-      <View style={[styles.dlCornerBadge, { backgroundColor: 'rgba(46,125,74,0.85)' }]}>
-        <Ionicons name="cloud-done" size={12} color="#FFFFFF" />
-      </View>
-    );
-  }
-
-  if (dl?.status === 'error') {
-    return (
-      <View style={[styles.dlCornerBadge, { backgroundColor: 'rgba(180,40,40,0.85)' }]}>
-        <Ionicons name="cloud-offline-outline" size={12} color="#FFFFFF" />
-      </View>
-    );
-  }
-
-  if (isOnline) {
-    return (
+  return (
+    <>
+      {/* Always-visible trigger — matches web's bg-black/40 circle button */}
       <TouchableOpacity
-        style={styles.dlCornerBtn}
-        onPress={() => onDownload(bookId)}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        ref={btnRef}
+        style={styles.menuTrigger}
+        onPress={handleOpen}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       >
-        <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />
+        <Ionicons name="ellipsis-vertical" size={14} color="#FFFFFF" />
       </TouchableOpacity>
-    );
-  }
 
-  return null;
+      {/* Dropdown — rendered in a transparent Modal at measured position */}
+      <Modal visible={open} transparent animationType="none" onRequestClose={close}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          onPress={close}
+          activeOpacity={1}
+        />
+        <View style={[styles.menuCard, { top: pos.top, right: pos.right }]}>
+
+          {/* Download for Offline */}
+          <TouchableOpacity
+            style={[styles.menuItem, dlDisabled && styles.menuItemDisabled]}
+            onPress={dlDisabled ? undefined : handleDownload}
+            disabled={dlDisabled}
+          >
+            {isActivelyDownloading ? (
+              <ActivityIndicator size="small" color={C.textMuted} style={styles.menuItemIcon} />
+            ) : (
+              <Ionicons name={dlIconName} size={15} color={dlIconColor} style={styles.menuItemIcon} />
+            )}
+            <Text style={[styles.menuItemText, dlDisabled && { color: C.textMuted }]}>
+              {dlLabel}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.menuSeparator} />
+
+          {/* Remove from Library */}
+          <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+            <Ionicons name="trash-outline" size={15} color={C.menuDanger} style={styles.menuItemIcon} />
+            <Text style={[styles.menuItemText, { color: C.menuDanger }]}>Remove from Library</Text>
+          </TouchableOpacity>
+
+        </View>
+      </Modal>
+    </>
+  );
 }
 
 // ── Main screen ───────────────────────────────────────────────────────────────
@@ -150,22 +204,18 @@ export default function HomeScreen({ navigation }) {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Download state per bookId: { status: 'downloading'|'done'|'error', chapsDone, chapsTotal }
   const [downloadStates, setDownloadStates] = useState({});
-  // Set of bookIds confirmed downloaded in AsyncStorage
   const [downloadedIds, setDownloadedIds] = useState(new Set());
 
   const dropdownTop = insets.top + TOP_BAR_HEIGHT;
 
-  // ── Load which books are already downloaded ──────────────────────────────────
+  // ── Load persisted download index ────────────────────────────────────────────
 
   useEffect(() => {
-    getDownloadedBookIds().then(ids => {
-      setDownloadedIds(new Set(ids));
-    });
+    getDownloadedBookIds().then(ids => setDownloadedIds(new Set(ids)));
   }, []);
 
-  // ── Data fetching (each fallback to its own cache) ────────────────────────────
+  // ── Data fetching (each falls back to its own cache) ─────────────────────────
 
   const fetchBooks = useCallback(async () => {
     try {
@@ -196,9 +246,7 @@ export default function HomeScreen({ navigation }) {
     try {
       const { data } = await getAvailableBooks();
       setAvailableBooks(Array.isArray(data) ? data : []);
-    } catch {
-      // Available books are browse-only; no offline fallback needed
-    }
+    } catch {}
   }, []);
 
   const fetchAll = useCallback(async (isRefresh = false) => {
@@ -236,8 +284,6 @@ export default function HomeScreen({ navigation }) {
   }, [books]);
 
   // ── Download a book for offline use ──────────────────────────────────────────
-  // Fetches all chapters and all sentences (regardless of how many chapters the
-  // book has — single giant chapter and many small chapters are handled the same).
 
   const handleDownloadBook = useCallback(async (bookId) => {
     setDownloadStates(prev => ({
@@ -262,10 +308,6 @@ export default function HomeScreen({ navigation }) {
 
       for (let i = 0; i < chapters.length; i++) {
         const chap = chapters[i];
-
-        // Determine total sentence count then paginate until we have all of them.
-        // A single-chapter book with thousands of sentences is handled identically
-        // to a book with many short chapters.
         const countRes = await getSentencesCount(chap.id);
         const total = countRes.data.count || 0;
         let all = [];
@@ -287,6 +329,7 @@ export default function HomeScreen({ navigation }) {
       setDownloadedIds(prev => new Set([...prev, bookId]));
     } catch {
       setDownloadStates(prev => ({ ...prev, [bookId]: { status: 'error' } }));
+      Alert.alert('Download failed', 'Could not download book. Please try again.');
       setTimeout(() => {
         setDownloadStates(prev => {
           const next = { ...prev };
@@ -294,6 +337,19 @@ export default function HomeScreen({ navigation }) {
           return next;
         });
       }, 3000);
+    }
+  }, []);
+
+  // ── Delete a book ─────────────────────────────────────────────────────────────
+
+  const handleDeleteBook = useCallback(async (bookId) => {
+    try {
+      await deleteBook(bookId);
+      setBooks(prev => prev.filter(b => b.id !== bookId));
+      setDownloadStates(prev => { const n = { ...prev }; delete n[bookId]; return n; });
+      setDownloadedIds(prev => { const n = new Set(prev); n.delete(bookId); return n; });
+    } catch {
+      Alert.alert('Error', 'Could not remove book. Please try again.');
     }
   }, []);
 
@@ -337,7 +393,6 @@ export default function HomeScreen({ navigation }) {
 
   const ListHeader = (
     <View>
-      {/* Offline banner */}
       {!isOnline && (
         <View style={styles.offlineBanner}>
           <Ionicons name="cloud-offline-outline" size={14} color={C.offlineText} />
@@ -427,7 +482,7 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* ── Scrollable book grid ── */}
+      {/* ── Book grid ── */}
       <FlatList
         data={books}
         numColumns={2}
@@ -469,14 +524,25 @@ export default function HomeScreen({ navigation }) {
                   </View>
                 )}
 
-                {/* Download button / badge / progress — only for completed books */}
-                {isCompleted && (
-                  <DownloadOverlay
-                    dl={dl}
+                {/* Active download: full-cover overlay with progress */}
+                {isCompleted && dl?.status === 'downloading' && (
+                  <View style={styles.dlProgressOverlay}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.dlProgressText}>
+                      {dl.chapsTotal > 1 ? `${dl.chapsDone} / ${dl.chapsTotal}` : 'Downloading…'}
+                    </Text>
+                  </View>
+                )}
+
+                {/* ⋮ menu — always visible on completed books not currently downloading */}
+                {isCompleted && dl?.status !== 'downloading' && (
+                  <BookCardMenu
                     bookId={book.id}
-                    isOnline={isOnline}
+                    dl={dl}
                     isDownloaded={downloaded}
+                    isOnline={isOnline}
                     onDownload={handleDownloadBook}
+                    onDelete={handleDeleteBook}
                   />
                 )}
               </View>
@@ -502,11 +568,7 @@ export default function HomeScreen({ navigation }) {
         contentContainerStyle={books.length === 0 ? styles.emptyContainer : styles.gridContent}
         columnWrapperStyle={styles.columnWrapper}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => fetchAll(true)}
-            tintColor={C.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={() => fetchAll(true)} tintColor={C.primary} />
         }
       />
 
@@ -572,7 +634,7 @@ const styles = StyleSheet.create({
   offlineBannerText: { fontSize: 13, color: C.offlineText, fontWeight: '500' },
 
   // ── Settings dropdown ──
-  dropdown: {
+  settingsDropdown: {
     position: 'absolute', right: 12,
     backgroundColor: C.surface,
     borderWidth: 1, borderColor: C.border, borderRadius: 4,
@@ -580,9 +642,46 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1, shadowRadius: 12,
     elevation: 8, minWidth: 180, zIndex: 100,
   },
-  dropdownItem: { paddingHorizontal: 16, paddingVertical: 11 },
-  dropdownItemText: { fontSize: 15, fontFamily: 'Georgia' },
-  dropdownDivider: { height: StyleSheet.hairlineWidth, backgroundColor: C.border },
+  settingsDropdownItem: { paddingHorizontal: 16, paddingVertical: 11 },
+  settingsDropdownText: { fontSize: 15, fontFamily: 'Georgia' },
+
+  // ── Book card overflow menu (⋮) ──
+  // Trigger: matches web's h-8 w-8 bg-black/40 button
+  menuTrigger: {
+    position: 'absolute', top: 6, right: 6,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.40)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  // Dropdown card: matches web's DropdownMenuContent (white, rounded, shadow, border)
+  menuCard: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+    minWidth: 190,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  menuItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  menuItemDisabled: { opacity: 0.5 },
+  menuItemIcon: { marginRight: 10 },
+  menuItemText: {
+    fontSize: 14,
+    color: C.textPrimary,
+    fontFamily: 'Georgia',
+  },
+  menuSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: C.border,
+  },
 
   // ── Importing strip ──
   importingStrip: {
@@ -636,25 +735,12 @@ const styles = StyleSheet.create({
     height: 3, backgroundColor: 'rgba(255,255,255,0.3)',
   },
   progressFill: { height: '100%', backgroundColor: C.primary },
-
-  // Download button (cloud icon, top-right of cover)
-  dlCornerBtn: {
-    position: 'absolute', top: 6, right: 6,
-    backgroundColor: 'rgba(0,0,0,0.50)',
-    borderRadius: 12, padding: 5,
-  },
-  // Downloading overlay (full cover)
   dlProgressOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center', justifyContent: 'center', gap: 6,
   },
   dlProgressText: { color: '#FFFFFF', fontSize: 11, fontWeight: '600' },
-  // Downloaded / error badge (top-right corner)
-  dlCornerBadge: {
-    position: 'absolute', top: 6, right: 6,
-    borderRadius: 12, padding: 4,
-  },
 
   cardTitle: {
     fontSize: 13, fontFamily: 'Georgia', fontWeight: '600',
