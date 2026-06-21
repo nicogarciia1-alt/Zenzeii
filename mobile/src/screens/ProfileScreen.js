@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { getStats, getProgress, getVocabulary, getBooks } from '../lib/api';
 
 const C = {
@@ -57,6 +58,7 @@ function StatCard({ icon, label, value, sub }) {
 
 export default function ProfileScreen({ navigation }) {
   const { user } = useAuth();
+  const { isPremium, isFounder } = useSubscription();
   const [stats, setStats] = useState(null);
   const [progress, setProgress] = useState([]);
   const [vocabulary, setVocabulary] = useState([]);
@@ -157,6 +159,41 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.editLink}>Edit profile — coming in Phase 1</Text>
           </View>
         </View>
+
+        {/* ── Subscription card ── */}
+        {isFounder ? (
+          <View style={[styles.subCard, styles.subCardFounder]}>
+            <Ionicons name="shield-checkmark" size={18} color={C.primary} />
+            <View style={styles.subCardText}>
+              <Text style={styles.subCardTitle}>Founding Member</Text>
+              <Text style={styles.subCardSub}>Lifetime access · Thank you for your support.</Text>
+            </View>
+          </View>
+        ) : isPremium ? (
+          <View style={[styles.subCard, styles.subCardPremium]}>
+            <Ionicons name="star" size={18} color={C.primary} />
+            <View style={styles.subCardText}>
+              <Text style={styles.subCardTitle}>Premium</Text>
+              <Text style={styles.subCardSub}>Active subscription</Text>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.subCardFree}
+            onPress={() => navigation.navigate('Paywall')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Upgrade to Premium"
+          >
+            <View style={styles.subCardFreeLeft}>
+              <Text style={styles.subCardFreeTitle}>Free plan</Text>
+              <Text style={styles.subCardFreeSub}>Upgrade to unlock everything</Text>
+            </View>
+            <View style={styles.subCardUpgradeBtn}>
+              <Text style={styles.subCardUpgradeBtnText}>Go Premium</Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* ── Stats grid — 2×2 on mobile (web is 1×4 on desktop) ── */}
         <View style={styles.statsGrid}>
@@ -328,6 +365,72 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: C.textMuted,
     fontStyle: 'italic',
+  },
+
+  // ── Subscription card ──
+  subCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  subCardFounder: {
+    backgroundColor: C.primaryFaint,
+    borderColor: C.primary,
+  },
+  subCardPremium: {
+    backgroundColor: C.primaryFaint,
+    borderColor: C.border,
+  },
+  subCardText: { flex: 1 },
+  subCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.textPrimary,
+    marginBottom: 1,
+  },
+  subCardSub: {
+    fontSize: 12,
+    color: C.textMuted,
+  },
+  subCardFree: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+  },
+  subCardFreeLeft: { flex: 1 },
+  subCardFreeTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.textPrimary,
+    marginBottom: 1,
+  },
+  subCardFreeSub: {
+    fontSize: 12,
+    color: C.textMuted,
+  },
+  subCardUpgradeBtn: {
+    backgroundColor: C.primary,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginLeft: 10,
+  },
+  subCardUpgradeBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 
   // ── Stats grid — 2×2 (web is 4 across on desktop, same 4 cards) ──

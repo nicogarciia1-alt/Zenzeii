@@ -11,6 +11,7 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ReaderScreen from '../screens/reader/ReaderScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import PaywallScreen from '../screens/PaywallScreen';
 import VocabularyScreen from '../screens/VocabularyScreen';
 import LibraryScreen from '../screens/LibraryScreen';
 import ZenzeiiChatScreen from '../screens/ZenzeiiChatScreen';
@@ -33,6 +34,11 @@ function MyBooksNavigator() {
       <MyBooksStack.Screen name="Home" component={HomeScreen} />
       <MyBooksStack.Screen name="Reader" component={ReaderScreen} />
       <MyBooksStack.Screen name="Profile" component={ProfileScreen} />
+      <MyBooksStack.Screen
+        name="Paywall"
+        component={PaywallScreen}
+        options={{ presentation: 'modal' }}
+      />
     </MyBooksStack.Navigator>
   );
 }

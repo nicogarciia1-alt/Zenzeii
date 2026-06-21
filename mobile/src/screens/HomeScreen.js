@@ -15,6 +15,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import {
   getBooks, getProgress, getAvailableBooks, importBook, getBookStatus,
   getBook, getChapters, getSentences, getSentencesCount, deleteBook,
@@ -56,12 +57,19 @@ const C = {
 
 // ── Settings dropdown ─────────────────────────────────────────────────────────
 
-function SettingsDropdown({ visible, onClose, dropdownTop, logout, navigation }) {
+function SettingsDropdown({ visible, onClose, dropdownTop, logout, navigation, isPremium, isFounder }) {
+  const tierLabel = isFounder ? 'Founding Member' : isPremium ? 'Premium' : null;
   const items = [
     {
       label: '✦ View Profile',
       onPress: () => { onClose(); navigation.navigate('Profile'); },
       color: C.textPrimary,
+    },
+    {
+      label: tierLabel ? `✦ ${tierLabel} ✓` : '✦ Go Premium',
+      onPress: tierLabel ? undefined : () => { onClose(); navigation.navigate('Paywall'); },
+      color: tierLabel ? C.success : C.primary,
+      disabled: !!tierLabel,
     },
     {
       label: '✦ Report Problem',
@@ -75,7 +83,12 @@ function SettingsDropdown({ visible, onClose, dropdownTop, logout, navigation })
       <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={onClose} activeOpacity={1} />
       <View style={[styles.settingsDropdown, { top: dropdownTop }]}>
         {items.map((item, i) => (
-          <TouchableOpacity key={i} style={styles.settingsDropdownItem} onPress={item.onPress}>
+          <TouchableOpacity
+            key={i}
+            style={[styles.settingsDropdownItem, item.disabled && { opacity: 0.7 }]}
+            onPress={item.disabled ? undefined : item.onPress}
+            disabled={item.disabled}
+          >
             <Text style={[styles.settingsDropdownText, { color: item.color }]}>{item.label}</Text>
           </TouchableOpacity>
         ))}
@@ -196,6 +209,7 @@ function BookCardMenu({ bookId, dl, isDownloaded, isOnline, onDownload, onDelete
 
 export default function HomeScreen({ navigation }) {
   const { logout, user } = useAuth();
+  const { isPremium, isFounder } = useSubscription();
   const insets = useSafeAreaInsets();
   const isOnline = useIsOnline();
 
@@ -590,6 +604,8 @@ export default function HomeScreen({ navigation }) {
         dropdownTop={dropdownTop}
         logout={logout}
         navigation={navigation}
+        isPremium={isPremium}
+        isFounder={isFounder}
       />
     </SafeAreaView>
   );
