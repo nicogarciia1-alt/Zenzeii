@@ -20,6 +20,13 @@ import {
   getSentences, getSentencesCount, triggerTranslation, updateProgress, tokenize,
   getBookProgress,
 } from '../../lib/api';
+import {
+  getCachedBookMeta, getCachedBookChapters, getCachedChapterSentences,
+  getCachedBookProgress, storeBookProgress,
+  getCachedVocab, storeVocab,
+} from '../../lib/offlineStorage';
+import { enqueue } from '../../lib/offlineQueue';
+import { useIsOnline } from '../../hooks/useNetInfo';
 import DictionarySheet from '../../components/reader/DictionarySheet';
 import SettingsSheet from '../../components/reader/SettingsSheet';
 import { buildVocabIndex, segmentText } from '../../lib/vocabHighlight';
@@ -35,33 +42,20 @@ const C = {
   textSecondary: '#595959',
   textMuted: '#8C8C8C',
   border: '#E5E5E5',
+  offlineBg: '#FFF8E1',
+  offlineText: '#7A5200',
 };
 
-// ── Vocab highlight styles — hex/rgba of web's Tailwind classes ───────────────
-// word           → bg-amber-200/60  text-amber-900
-// kanji          → bg-sky-200/60    text-sky-900
-// word-and-kanji → amber bg + sky underline (decoration-sky-500 decoration-2)
+// ── Vocab highlight styles ────────────────────────────────────────────────────
 const HIGHLIGHT = {
-  word: {
-    backgroundColor: 'rgba(253, 230, 138, 0.6)',
-    color: '#78350f',
-    borderRadius: 3,
-  },
-  kanji: {
-    backgroundColor: 'rgba(186, 230, 253, 0.6)',
-    color: '#0c4a6e',
-    borderRadius: 3,
-  },
+  word: { backgroundColor: 'rgba(253, 230, 138, 0.6)', color: '#78350f', borderRadius: 3 },
+  kanji: { backgroundColor: 'rgba(186, 230, 253, 0.6)', color: '#0c4a6e', borderRadius: 3 },
   'word-and-kanji': {
-    backgroundColor: 'rgba(253, 230, 138, 0.6)',
-    color: '#78350f',
-    borderRadius: 3,
-    textDecorationLine: 'underline',
-    textDecorationColor: '#0ea5e9',
+    backgroundColor: 'rgba(253, 230, 138, 0.6)', color: '#78350f', borderRadius: 3,
+    textDecorationLine: 'underline', textDecorationColor: '#0ea5e9',
   },
 };
 
-// ── Script modes — mirrors web's ScriptToggle ─────────────────────────────────
 const SCRIPT_MODES = [
   { value: 'kanji',    label: '漢字' },
   { value: 'hiragana', label: 'ひらがな' },
@@ -70,9 +64,7 @@ const SCRIPT_MODES = [
   { value: 'english',  label: 'EN' },
 ];
 
-// (FONT_SIZE_MAP, LINE_HEIGHT_MAP, FONT_FAMILY_MAP imported from readerConstants)
-
-// ── Pure helpers — mirrored from web's ReaderPage ────────────────────────────
+// ── Pure helpers ─────────────────────────────────────────────────────────────
 
 function getSentenceText(sentence, scriptMode) {
   const isJaSrc = sentence.source_language === 'ja';
@@ -122,8 +114,6 @@ function getSecondaryOptions(scriptMode) {
 }
 
 // ── SentenceItem ─────────────────────────────────────────────────────────────
-// Defined outside ReaderScreen so FlatList renderItem is stable across renders.
-// Tokenization is lazy: fires when the item mounts, caches in parent's ref.
 
 const SentenceItem = React.memo(function SentenceItem({
   sentence, scriptMode, secondaryLayer, showSecondaryText,
@@ -148,7 +138,6 @@ const SentenceItem = React.memo(function SentenceItem({
     && !!secondaryText
     && (secondaryLayer === 'english' || sentence.translation_status === 'completed');
 
-  // Lazy tokenization — fires once when sentence scrolls into view
   useEffect(() => {
     if (!isJaScript || !mainText) return;
     let cancelled = false;
@@ -163,8 +152,6 @@ const SentenceItem = React.memo(function SentenceItem({
     return () => { cancelled = true; };
   }, [sentence.id, mainText, isJaScript]);
 
-  // Map each character position in mainText to its segment type.
-  // Recomputes whenever the sentence text, vocab index, or highlight toggles change.
   const charTypeMap = useMemo(() => {
     if (!isJaScript || !mainText || !vocabIndex) return null;
     if (!showWordHighlights && !showKanjiHighlights) return null;
@@ -187,8 +174,6 @@ const SentenceItem = React.memo(function SentenceItem({
     lineHeight: fontSizePx * lineHeightMult,
   };
 
-  // Render tokenized text with vocab highlight styles overlaid.
-  // charPos tracks our position in mainText so we can look up the char type map.
   const renderTokens = () => {
     let charPos = 0;
     return tokens.map((token, i) => {
@@ -209,12 +194,9 @@ const SentenceItem = React.memo(function SentenceItem({
 
   return (
     <View style={[styles.sentenceBlock, pending && styles.sentencePending]}>
-      {/* Primary script text */}
       <Text style={[styles.sentenceText, textStyle]}>
         {isJaScript && tokens ? renderTokens() : mainText}
       </Text>
-
-      {/* Secondary layer (furigana as hiragana row, english, kanji) */}
       {showSecondary && (
         <Text
           style={[
@@ -238,14 +220,13 @@ const SentenceItem = React.memo(function SentenceItem({
 
 export default function ReaderScreen({ navigation, route }) {
   const { bookId, bookTitle: initialTitle } = route.params || {};
+  const isOnline = useIsOnline();
 
-  // ── Font loading ────────────────────────────────────────────────────────────
   const [fontsLoaded] = useFonts({
     'NotoSerifJP': NotoSerifJP_400Regular,
     'NotoSerifJP-Bold': NotoSerifJP_700Bold,
   });
 
-  // ── Book / chapter state ────────────────────────────────────────────────────
   const [book, setBook] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [currentChapter, setCurrentChapter] = useState(null);
@@ -253,8 +234,8 @@ export default function ReaderScreen({ navigation, route }) {
   const [bookmarks, setBookmarks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [offlineOnly, setOfflineOnly] = useState(false); // opened from cache, no network
 
-  // ── Sentence state ──────────────────────────────────────────────────────────
   const [sentences, setSentences] = useState([]);
   const [totalSentences, setTotalSentences] = useState(0);
   const [translatedCount, setTranslatedCount] = useState(0);
@@ -262,17 +243,14 @@ export default function ReaderScreen({ navigation, route }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [sentencesLoading, setSentencesLoading] = useState(false);
 
-  // ── Dictionary state ────────────────────────────────────────────────────────
   const [dictOpen, setDictOpen] = useState(false);
   const [selectedWord, setSelectedWord] = useState('');
   const [wordPos, setWordPos] = useState('');
   const [contextSentence, setContextSentence] = useState('');
 
-  // ── UI state ────────────────────────────────────────────────────────────────
   const [tocOpen, setTocOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // ── Reader settings ─────────────────────────────────────────────────────────
   const [readerTheme, setReaderTheme] = useState('default');
   const [fontFamily, setFontFamily] = useState('noto-serif');
   const [fontSize, setFontSize] = useState('lg');
@@ -284,28 +262,25 @@ export default function ReaderScreen({ navigation, route }) {
   const [showKanjiHighlights, setShowKanjiHighlights] = useState(true);
   const [sentencesPerPage, setSentencesPerPage] = useState(50);
 
-  // ── Derived values ──────────────────────────────────────────────────────────
   const activeTheme = READER_THEMES.find(t => t.value === readerTheme) || READER_THEMES[0];
   const activeFontFamily = FONT_FAMILY_MAP[fontFamily] || 'NotoSerifJP';
   const fontSizePx = FONT_SIZE_MAP[fontSize] || 20;
   const lineHeightMult = LINE_HEIGHT_MAP[lineHeight] || 1.8;
   const secondaryOptions = getSecondaryOptions(scriptMode);
 
-  // ── Token cache — keyed by sentence.id, survives chapter switches ───────────
   const tokenCacheRef = useRef({});
-
-  // ── Resume refs — consumed once on first chapter load, never cause re-renders
   const flatListRef = useRef(null);
   const resumeSentenceIdRef = useRef(null);
 
-  // ── Vocab index — rebuilt whenever savedWords changes; drives highlight overlay
   const vocabIndex = useMemo(() => buildVocabIndex(savedWords), [savedWords]);
 
-  // ── Book + initial chapter ──────────────────────────────────────────────────
+  // ── Book + initial chapter ────────────────────────────────────────────────
   const fetchBookData = useCallback(async () => {
     if (!bookId) { setLoadError(true); setLoading(false); return; }
     setLoading(true);
     setLoadError(false);
+    setOfflineOnly(false);
+
     try {
       const [bookRes, chaptersRes, vocabRes, bookmarksRes, progressRes] = await Promise.all([
         getBook(bookId),
@@ -316,24 +291,44 @@ export default function ReaderScreen({ navigation, route }) {
       ]);
       setBook(bookRes.data);
       setChapters(chaptersRes.data);
-      setSavedWords(vocabRes.data);
+
+      const vocab = vocabRes.data;
+      setSavedWords(vocab);
+      storeVocab(vocab); // keep vocab cache fresh for next offline session
+
       setBookmarks(bookmarksRes.data.filter(b => b.book_id === bookId));
 
       const chapterList = chaptersRes.data;
       const progress = progressRes?.data;
-
-      // Resume at the saved chapter if progress exists; otherwise start at chapter 1
       const savedChapter = progress?.chapter_id
         ? chapterList.find(c => c.id === progress.chapter_id)
         : null;
       if (chapterList.length > 0) setCurrentChapter(savedChapter || chapterList[0]);
-
-      // Stash sentence_id so loadChapterSentences can scroll to it after first load
-      if (progress?.sentence_id) {
-        resumeSentenceIdRef.current = progress.sentence_id;
-      }
+      if (progress?.sentence_id) resumeSentenceIdRef.current = progress.sentence_id;
     } catch {
-      setLoadError(true);
+      // Network unavailable — try offline cache
+      const [cachedMeta, cachedChapters, cachedVocab] = await Promise.all([
+        getCachedBookMeta(bookId),
+        getCachedBookChapters(bookId),
+        getCachedVocab(),
+      ]);
+
+      if (cachedMeta && cachedChapters) {
+        setBook(cachedMeta);
+        setChapters(cachedChapters);
+        setSavedWords(cachedVocab || []);
+        setBookmarks([]);
+        setOfflineOnly(true);
+
+        const progress = await getCachedBookProgress(bookId);
+        const savedChapter = progress?.chapter_id
+          ? cachedChapters.find(c => c.id === progress.chapter_id)
+          : null;
+        if (cachedChapters.length > 0) setCurrentChapter(savedChapter || cachedChapters[0]);
+        if (progress?.sentence_id) resumeSentenceIdRef.current = progress.sentence_id;
+      } else {
+        setLoadError(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -341,7 +336,10 @@ export default function ReaderScreen({ navigation, route }) {
 
   useEffect(() => { fetchBookData(); }, [fetchBookData]);
 
-  // ── Load sentences for a chapter ───────────────────────────────────────────
+  // ── Load sentences for a chapter ─────────────────────────────────────────
+  // Always tries the API first. If that fails (network down), serves from the
+  // downloaded sentence cache. Works the same whether the book has one large
+  // chapter or many small ones — the cache stores all sentences per chapter.
   const loadChapterSentences = useCallback(async (chapId) => {
     setSentencesLoading(true);
     setSentences([]);
@@ -362,17 +360,20 @@ export default function ReaderScreen({ navigation, route }) {
       triggerTranslation(chapId, 1).catch(() => {});
 
       if (sentencesRes.data.length > 0) {
-        updateProgress({
+        const progressPayload = {
           book_id: bookId,
           chapter_id: chapId,
           sentence_id: sentencesRes.data[0].id,
           words_read: sentencesRes.data.length * 5,
-        }).catch(() => {});
+        };
+        updateProgress(progressPayload)
+          .then(() => storeBookProgress(bookId, { chapter_id: chapId, sentence_id: sentencesRes.data[0].id }))
+          .catch(() => {
+            enqueue('updateProgress', progressPayload);
+            storeBookProgress(bookId, { chapter_id: chapId, sentence_id: sentencesRes.data[0].id });
+          });
       }
 
-      // Scroll to the saved sentence if it's within the loaded batch.
-      // resumeSentenceIdRef is consumed here (set to null) so chapter switches
-      // don't re-trigger the scroll.
       const resumeId = resumeSentenceIdRef.current;
       if (resumeId) {
         resumeSentenceIdRef.current = null;
@@ -384,13 +385,31 @@ export default function ReaderScreen({ navigation, route }) {
         }
       }
     } catch {
-      // Non-fatal — sentence list shows empty state
+      // Fall back to downloaded cache for this chapter
+      const cached = await getCachedChapterSentences(chapId);
+      if (cached && cached.length > 0) {
+        setSentences(cached);
+        setTotalSentences(cached.length);
+        setHasMore(false); // all sentences are in the cache; no pagination needed
+        setTranslatedCount(cached.filter(s => s.translation_status === 'completed').length);
+
+        const resumeId = resumeSentenceIdRef.current;
+        if (resumeId) {
+          resumeSentenceIdRef.current = null;
+          const idx = cached.findIndex(s => s.id === resumeId);
+          if (idx > 0) {
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({ index: idx, animated: false, viewPosition: 0 });
+            }, 250);
+          }
+        }
+      }
     } finally {
       setSentencesLoading(false);
     }
   }, [bookId, sentencesPerPage]);
 
-  // ── Paginate — load next batch ─────────────────────────────────────────────
+  // ── Paginate ─────────────────────────────────────────────────────────────
   const loadMoreSentences = useCallback(async () => {
     if (!currentChapter || loadingMore || !hasMore) return;
     setLoadingMore(true);
@@ -403,18 +422,25 @@ export default function ReaderScreen({ navigation, route }) {
       });
       triggerTranslation(currentChapter.id, sentences.length + res.data.length).catch(() => {});
       if (res.data.length > 0) {
-        updateProgress({
+        const last = res.data[res.data.length - 1];
+        const progressPayload = {
           book_id: bookId,
           chapter_id: currentChapter.id,
-          sentence_id: res.data[res.data.length - 1].id,
+          sentence_id: last.id,
           words_read: res.data.length * 5,
-        }).catch(() => {});
+        };
+        updateProgress(progressPayload)
+          .then(() => storeBookProgress(bookId, { chapter_id: currentChapter.id, sentence_id: last.id }))
+          .catch(() => {
+            enqueue('updateProgress', progressPayload);
+            storeBookProgress(bookId, { chapter_id: currentChapter.id, sentence_id: last.id });
+          });
       }
     } catch {}
     finally { setLoadingMore(false); }
   }, [currentChapter, loadingMore, hasMore, sentences.length, totalSentences, bookId, sentencesPerPage]);
 
-  // ── Per-sentence tokenization (cached) ─────────────────────────────────────
+  // ── Per-sentence tokenization (in-memory cache, session only) ────────────
   const onGetTokens = useCallback(async (sentenceId, text) => {
     if (tokenCacheRef.current[sentenceId]) return tokenCacheRef.current[sentenceId];
     try {
@@ -423,26 +449,25 @@ export default function ReaderScreen({ navigation, route }) {
       tokenCacheRef.current[sentenceId] = tokens;
       return tokens;
     } catch {
+      // Tokenize API unavailable (offline or error) — fall back to whole-text token
       const fallback = [{ surface: text, reading: '', pos: '' }];
       tokenCacheRef.current[sentenceId] = fallback;
       return fallback;
     }
   }, []);
 
-  // ── Chapter selection — loads sentences; closes TOC ────────────────────────
+  // ── Chapter selection ─────────────────────────────────────────────────────
   const handleChapterSelect = useCallback((chapter) => {
     setCurrentChapter(chapter);
     setTocOpen(false);
   }, []);
 
-  // ── Script mode change — resets secondary layer if now invalid ─────────────
   const handleScriptModeChange = useCallback((mode) => {
     setScriptMode(mode);
     const validValues = getSecondaryOptions(mode).map(o => o.value);
     setSecondaryLayer(prev => validValues.includes(prev) ? prev : 'none');
   }, []);
 
-  // ── Word tap → open dictionary sheet ───────────────────────────────────────
   const handleTokenPress = useCallback((surface, pos, sentenceText) => {
     setSelectedWord(surface);
     setWordPos(pos || '');
@@ -452,18 +477,17 @@ export default function ReaderScreen({ navigation, route }) {
 
   const handleCloseDict = useCallback(() => setDictOpen(false), []);
 
-  // Adds a saved word to the local savedWords list so "already saved" stays accurate
   const handleWordSaved = useCallback((savedWord) => {
     setSavedWords(prev => [...prev, savedWord]);
   }, []);
 
-  // ── Fire sentence load whenever the active chapter changes ─────────────────
   useEffect(() => {
     if (currentChapter?.id) loadChapterSentences(currentChapter.id);
   }, [currentChapter?.id]);
 
-  // ── Poll for in-progress translations (3 s, mirrors web) ───────────────────
+  // ── Poll for in-progress translations (online only) ───────────────────────
   useEffect(() => {
+    if (offlineOnly) return; // cached sentences won't be updated by the server
     if (scriptMode === 'english' || !currentChapter || sentences.length === 0) return;
     const needsTranslation = sentences.some(s => s.translation_status !== 'completed');
     if (!needsTranslation) return;
@@ -478,9 +502,9 @@ export default function ReaderScreen({ navigation, route }) {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [scriptMode, currentChapter, sentences.length]);
+  }, [scriptMode, currentChapter, sentences.length, offlineOnly]);
 
-  // ── Shared back bar (loading / error states) ────────────────────────────────
+  // ── Shared back bar ───────────────────────────────────────────────────────
   const BackBar = () => (
     <View style={[styles.topBar, { borderBottomColor: C.border }]}>
       <TouchableOpacity
@@ -494,7 +518,6 @@ export default function ReaderScreen({ navigation, route }) {
     </View>
   );
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
   if (loading || !fontsLoaded) {
     return (
       <SafeAreaView style={[styles.shell, { backgroundColor: C.appBg }]} edges={['top']}>
@@ -504,22 +527,31 @@ export default function ReaderScreen({ navigation, route }) {
     );
   }
 
-  // ── Error ───────────────────────────────────────────────────────────────────
   if (loadError) {
+    const notDownloaded = !isOnline;
     return (
       <SafeAreaView style={[styles.shell, { backgroundColor: C.appBg }]} edges={['top']}>
         <BackBar />
         <View style={styles.centered}>
-          <Text style={styles.errorTitle}>Couldn't load book</Text>
-          <TouchableOpacity onPress={fetchBookData} style={styles.retryButton}>
-            <Text style={styles.retryText}>Try again</Text>
-          </TouchableOpacity>
+          <Text style={styles.errorTitle}>
+            {notDownloaded
+              ? "This book isn't available offline"
+              : "Couldn't load book"}
+          </Text>
+          <Text style={styles.errorBody}>
+            {notDownloaded
+              ? 'Download it from your library while connected to read offline.'
+              : ''}
+          </Text>
+          {!notDownloaded && (
+            <TouchableOpacity onPress={fetchBookData} style={styles.retryButton}>
+              <Text style={styles.retryText}>Try again</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </SafeAreaView>
     );
   }
-
-  // ── Derived renders ─────────────────────────────────────────────────────────
 
   const chapterLabel = currentChapter
     ? `Ch. ${currentChapter.chapter_number} · ${currentChapter.title_jp || currentChapter.title}`
@@ -527,10 +559,9 @@ export default function ReaderScreen({ navigation, route }) {
 
   const currentChapterIndex = chapters.findIndex(c => c.id === currentChapter?.id);
 
-  // Chapter header — renders above the sentence list in the FlatList
   const chapterHeader = (
     <View style={styles.chapterHeader}>
-      <Text style={[styles.chapterTitle, { color: activeTheme.text }]} testID="chapter-title">
+      <Text style={[styles.chapterTitle, { color: activeTheme.text }]}>
         {currentChapter?.title_jp || currentChapter?.title || ''}
       </Text>
       {currentChapter?.title_jp && currentChapter.title !== currentChapter.title_jp && (
@@ -550,7 +581,6 @@ export default function ReaderScreen({ navigation, route }) {
     </View>
   );
 
-  // Chapter nav footer — renders after all sentences are loaded
   const chapterFooter = (
     <View style={styles.chapterFooter}>
       {hasMore ? (
@@ -574,11 +604,9 @@ export default function ReaderScreen({ navigation, route }) {
                 Previous
               </Text>
             </TouchableOpacity>
-
             <Text style={[styles.chapterNavLabel, { color: activeTheme.muted }]}>
               {currentChapterIndex + 1} / {chapters.length}
             </Text>
-
             <TouchableOpacity
               onPress={() => currentChapterIndex < chapters.length - 1 && handleChapterSelect(chapters[currentChapterIndex + 1])}
               disabled={currentChapterIndex >= chapters.length - 1}
@@ -596,7 +624,6 @@ export default function ReaderScreen({ navigation, route }) {
     </View>
   );
 
-  // ── Main render ─────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={[styles.shell, { backgroundColor: activeTheme.bg }]} edges={['top']}>
 
@@ -621,6 +648,10 @@ export default function ReaderScreen({ navigation, route }) {
         </View>
 
         <View style={styles.topBarRight}>
+          {/* Subtle offline indicator */}
+          {!isOnline && (
+            <Ionicons name="cloud-offline-outline" size={16} color={activeTheme.muted} />
+          )}
           <TouchableOpacity
             onPress={() => setTocOpen(true)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -640,7 +671,6 @@ export default function ReaderScreen({ navigation, route }) {
 
       {/* ── Script toggle bar ── */}
       <View style={[styles.scriptBar, { borderBottomColor: activeTheme.border }]}>
-        {/* Row 1: Primary script mode */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -668,7 +698,6 @@ export default function ReaderScreen({ navigation, route }) {
           })}
         </ScrollView>
 
-        {/* Row 2: Secondary layer */}
         <View style={styles.secondaryRow}>
           <ScrollView
             horizontal
@@ -696,8 +725,6 @@ export default function ReaderScreen({ navigation, route }) {
               );
             })}
           </ScrollView>
-
-          {/* Eye toggle — shows/hides secondary text while keeping selection */}
           {secondaryLayer !== 'none' && (
             <TouchableOpacity
               onPress={() => setShowSecondaryText(v => !v)}
@@ -720,7 +747,6 @@ export default function ReaderScreen({ navigation, route }) {
         data={sentences}
         keyExtractor={item => item.id}
         onScrollToIndexFailed={({ averageItemLength, index }) => {
-          // Variable-height items: fall back to offset estimate if exact position unknown
           flatListRef.current?.scrollToOffset({
             offset: index * averageItemLength,
             animated: false,
@@ -842,7 +868,6 @@ const styles = StyleSheet.create({
   shell: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  // ── Top bar ─────────────────────────────────────────────────────────────────
   topBar: {
     height: 48,
     flexDirection: 'row',
@@ -851,184 +876,100 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 6, paddingVertical: 6,
   },
   backText: { fontSize: 16, color: C.primary, fontWeight: '500' },
   titleBlock: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
   bookTitleText: { fontSize: 13, fontWeight: '600' },
   chapterLabelText: { fontSize: 11, marginTop: 1 },
-  topBarRight: { flexDirection: 'row', alignItems: 'center' },
+  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   iconButton: { padding: 8 },
 
-  // ── Script toggle bar ────────────────────────────────────────────────────────
   scriptBar: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
-    paddingBottom: 6,
+    paddingTop: 8, paddingBottom: 6,
   },
-  scriptChipsRow: {
-    paddingHorizontal: 12,
-    gap: 6,
-  },
-  secondaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  secondaryChipsRow: {
-    paddingHorizontal: 12,
-    gap: 5,
-  },
-  eyeButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  // Primary chips (script mode)
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '500',
-    // NotoSerifJP renders Japanese glyphs correctly in chip labels
-    fontFamily: 'NotoSerifJP',
-  },
-  // Secondary chips (smaller)
-  chipSm: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 5,
-    borderWidth: 1,
-  },
-  chipSmText: {
-    fontSize: 11,
-    fontWeight: '500',
-    fontFamily: 'NotoSerifJP',
-  },
+  scriptChipsRow: { paddingHorizontal: 12, gap: 6 },
+  secondaryRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  secondaryChipsRow: { paddingHorizontal: 12, gap: 5 },
+  eyeButton: { paddingHorizontal: 10, paddingVertical: 4 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1 },
+  chipText: { fontSize: 13, fontWeight: '500', fontFamily: 'NotoSerifJP' },
+  chipSm: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 5, borderWidth: 1 },
+  chipSmText: { fontSize: 11, fontWeight: '500', fontFamily: 'NotoSerifJP' },
 
-  // ── Sentence list ────────────────────────────────────────────────────────────
   listContent: { paddingBottom: 64 },
-
-  // Chapter header
   chapterHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 32,
-    paddingBottom: 20,
-    alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 32, paddingBottom: 20, alignItems: 'center',
   },
   chapterTitle: {
-    fontFamily: 'Georgia',
-    fontSize: 24,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 4,
-    lineHeight: 32,
+    fontFamily: 'Georgia', fontSize: 24, fontWeight: '700',
+    textAlign: 'center', marginBottom: 4, lineHeight: 32,
   },
-  chapterTitleEn: {
-    fontSize: 15,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  chapterMeta: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  translationBadge: {
-    fontSize: 11,
-    color: C.primary,
-    marginTop: 4,
-    textAlign: 'center',
-  },
+  chapterTitleEn: { fontSize: 15, textAlign: 'center', marginBottom: 4 },
+  chapterMeta: { fontSize: 12, textAlign: 'center', marginTop: 6, lineHeight: 18 },
+  translationBadge: { fontSize: 11, color: C.primary, marginTop: 4, textAlign: 'center' },
 
-  // Sentence block
-  sentenceBlock: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
+  sentenceBlock: { paddingHorizontal: 20, paddingBottom: 24 },
   sentencePending: { opacity: 0.6 },
-  sentenceText: {
-    // fontSize / lineHeight / color / fontFamily set inline from reader settings
-  },
-  secondaryText: {
-    marginTop: 4,
-    // fontSize / lineHeight / color / fontFamily set inline
-  },
+  sentenceText: {},
+  secondaryText: { marginTop: 4 },
 
-  // Empty state
   emptyList: { paddingVertical: 60, alignItems: 'center' },
   emptyListText: { fontSize: 14 },
-
-  // Load more
   loadingMoreRow: { paddingVertical: 24, alignItems: 'center' },
 
-  // Chapter footer nav
   chapterFooter: { paddingBottom: 32 },
   chapterFooterDivider: {
-    marginHorizontal: 20,
-    marginTop: 24,
-    marginBottom: 20,
+    marginHorizontal: 20, marginTop: 24, marginBottom: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   chapterNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingHorizontal: 20,
   },
   chapterNavBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingVertical: 8, paddingHorizontal: 4,
   },
   chapterNavBtnDisabled: { opacity: 0.35 },
   chapterNavText: { fontSize: 15, fontWeight: '500' },
   chapterNavLabel: { fontSize: 13 },
 
-  // ── Error ────────────────────────────────────────────────────────────────────
-  errorTitle: { fontFamily: 'Georgia', fontSize: 18, color: C.textPrimary, marginBottom: 16 },
+  errorTitle: {
+    fontFamily: 'Georgia', fontSize: 18, color: C.textPrimary,
+    marginBottom: 8, textAlign: 'center', paddingHorizontal: 32,
+  },
+  errorBody: {
+    fontSize: 14, color: C.textMuted, textAlign: 'center',
+    paddingHorizontal: 32, lineHeight: 20, marginBottom: 16,
+  },
   retryButton: {
     paddingHorizontal: 20, paddingVertical: 10,
     borderRadius: 20, borderWidth: 1, borderColor: C.primary,
   },
   retryText: { fontSize: 15, color: C.primary, fontWeight: '500' },
 
-  // ── Modals ───────────────────────────────────────────────────────────────────
   modalRoot: { flex: 1, backgroundColor: '#FFFFFF' },
   modalHeader: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
+    height: 56, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
   },
-  modalTitle: { fontFamily: 'Georgia', fontSize: 18, fontWeight: '700', color: C.textPrimary },
+  modalTitle: {
+    fontFamily: 'Georgia', fontSize: 18, fontWeight: '700', color: C.textPrimary,
+  },
   modalScroll: { flex: 1 },
   modalScrollContent: { paddingBottom: 32 },
-
   tocRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
     gap: 10,
   },
   tocRowActive: { backgroundColor: 'rgba(211,56,47,0.04)' },
   tocNum: { fontSize: 14, fontWeight: '600', color: C.textMuted, width: 28, flexShrink: 0 },
   tocTitle: { flex: 1, fontSize: 15, color: C.textSecondary, lineHeight: 20 },
   tocTitleActive: { color: C.textPrimary, fontWeight: '600' },
-
 });
