@@ -538,6 +538,8 @@ export default function VocabularyScreen() {
           style={[styles.tab, mainTab === 'words' && styles.tabActive]}
           onPress={() => setMainTab('words')}
           testID="vocab-tab-words"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mainTab === 'words' }}
         >
           <Ionicons
             name="book-open-outline"
@@ -553,6 +555,8 @@ export default function VocabularyScreen() {
           style={[styles.tab, mainTab === 'review' && styles.tabActive]}
           onPress={() => setMainTab('review')}
           testID="vocab-tab-review"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mainTab === 'review' }}
         >
           <Ionicons
             name="refresh-outline"
@@ -587,7 +591,12 @@ export default function VocabularyScreen() {
               testID="vocab-search"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Clear search"
+                accessibilityRole="button"
+              >
                 <Ionicons name="close-circle" size={16} color={C.textMuted} />
               </TouchableOpacity>
             )}
@@ -935,7 +944,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 8,
     borderRadius: 5,
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
