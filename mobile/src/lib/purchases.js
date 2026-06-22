@@ -23,7 +23,7 @@ try {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // PENDING ACCOUNT: Replace with the iOS key from app.revenuecat.com
-export const RC_API_KEY = 'appl_PLACEHOLDER_REPLACE_WITH_REVENUECAT_KEY';
+export const RC_API_KEY = 'test_eVwVAOQGpextGOlNXnTsPDUHted';
 
 // These MUST match exactly what is created in App Store Connect
 // and in the RevenueCat product catalog.
