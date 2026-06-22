@@ -440,7 +440,7 @@ function ReviewTab({ vocabulary, reviewWords }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export default function VocabularyScreen() {
+export default function VocabularyScreen({ route }) {
   const [vocabulary, setVocabulary] = useState([]);
   const [reviewWords, setReviewWords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -448,6 +448,13 @@ export default function VocabularyScreen() {
   const [mainTab, setMainTab] = useState('words');     // 'words' | 'review'
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
+
+  // Navigate to the review tab when a notification tap requests it
+  useEffect(() => {
+    if (route?.params?.openTab) {
+      setMainTab(route.params.openTab);
+    }
+  }, [route?.params?.openTab]);
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
