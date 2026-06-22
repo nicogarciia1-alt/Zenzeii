@@ -17,6 +17,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import {
+  hasPushPermission,
+  hasBeenAsked,
+  markDismissed,
+  registerForPushNotifications,
+} from '../lib/notifications';
+import {
   getBooks, getProgress, getAvailableBooks, importBook, getBookStatus,
   getBook, getChapters, getSentences, getSentencesCount, deleteBook,
 } from '../lib/api';
@@ -224,12 +230,28 @@ export default function HomeScreen({ navigation }) {
   const [downloadStates, setDownloadStates] = useState({});
   const [downloadedIds, setDownloadedIds] = useState(new Set());
 
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+
   const dropdownTop = insets.top + TOP_BAR_HEIGHT;
 
   // ── Load persisted download index ────────────────────────────────────────────
 
   useEffect(() => {
     getDownloadedBookIds().then(ids => setDownloadedIds(new Set(ids)));
+  }, []);
+
+  // ── Contextual push notification prompt ──────────────────────────────────────
+  // Ask after the user lands on their book list — they've seen value already.
+  // Only surfaces if permission hasn't been granted and we haven't asked before.
+
+  useEffect(() => {
+    (async () => {
+      const asked = await hasBeenAsked();
+      if (asked) return;
+      const granted = await hasPushPermission();
+      if (granted) return;
+      setShowNotifPrompt(true);
+    })();
   }, []);
 
   // ── Data fetching (each falls back to its own cache) ─────────────────────────
@@ -390,6 +412,18 @@ export default function HomeScreen({ navigation }) {
     navigation.navigate('Reader', { bookId: book.id, bookTitle: book.title_jp || book.title });
   }, [navigation, isOnline, downloadedIds, downloadStates]);
 
+  // ── Notification prompt handlers ─────────────────────────────────────────────
+
+  const handleAllowNotifications = useCallback(async () => {
+    setShowNotifPrompt(false);
+    await registerForPushNotifications();
+  }, []);
+
+  const handleDismissNotifPrompt = useCallback(async () => {
+    setShowNotifPrompt(false);
+    await markDismissed();
+  }, []);
+
   // ── Derived ───────────────────────────────────────────────────────────────────
 
   const completedBooks = books.filter(b => b.import_status === 'completed');
@@ -414,6 +448,38 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.offlineBanner}>
           <Ionicons name="cloud-offline-outline" size={14} color={C.offlineText} />
           <Text style={styles.offlineBannerText}>Offline — downloaded books only</Text>
+        </View>
+      )}
+
+      {showNotifPrompt && books.length > 0 && (
+        <View style={styles.notifPromptCard}>
+          <View style={styles.notifPromptLeft}>
+            <Ionicons name="notifications-outline" size={22} color={C.primary} />
+          </View>
+          <View style={styles.notifPromptBody}>
+            <Text style={styles.notifPromptTitle}>Reading reminders</Text>
+            <Text style={styles.notifPromptSub}>
+              Gentle nudges to keep your practice going.
+            </Text>
+          </View>
+          <View style={styles.notifPromptActions}>
+            <TouchableOpacity
+              onPress={handleAllowNotifications}
+              style={styles.notifAllowBtn}
+              accessibilityLabel="Allow reading reminders"
+              accessibilityRole="button"
+            >
+              <Text style={styles.notifAllowText}>Allow</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDismissNotifPrompt}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="Dismiss notification prompt"
+              accessibilityRole="button"
+            >
+              <Text style={styles.notifDismissText}>Not now</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -653,6 +719,29 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0E0A0',
   },
   offlineBannerText: { fontSize: 13, color: C.offlineText, fontWeight: '500' },
+
+  // ── Notification prompt ──
+  notifPromptCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginHorizontal: H_PAD, marginVertical: 8,
+    backgroundColor: C.surface,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
+    borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  notifPromptLeft: { width: 36, alignItems: 'center', justifyContent: 'center' },
+  notifPromptBody: { flex: 1 },
+  notifPromptTitle: { fontSize: 14, fontWeight: '600', color: C.text, marginBottom: 2 },
+  notifPromptSub: { fontSize: 12, color: C.textMuted, lineHeight: 16 },
+  notifPromptActions: {
+    alignItems: 'flex-end', gap: 6,
+  },
+  notifAllowBtn: {
+    backgroundColor: C.primary, borderRadius: 6,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  notifAllowText: { fontSize: 13, color: '#FFFFFF', fontWeight: '600' },
+  notifDismissText: { fontSize: 12, color: C.textMuted },
 
   // ── Settings dropdown ──
   settingsDropdown: {

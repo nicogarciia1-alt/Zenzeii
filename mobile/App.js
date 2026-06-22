@@ -2,14 +2,15 @@ import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
+import * as Notifications from 'expo-notifications';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { SubscriptionProvider } from './src/contexts/SubscriptionContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { flushQueue } from './src/lib/offlineQueue';
+import { navigateFromNotification } from './src/lib/notifications';
 
 export default function App() {
-  // Flush the offline write queue whenever connectivity is restored.
-  // Tracks previous state so we only flush on the offline→online transition.
+  // ── Offline queue flush on reconnect ─────────────────────────────────────────
   useEffect(() => {
     let wasOnline = true;
     const unsub = NetInfo.addEventListener(state => {
@@ -20,6 +21,21 @@ export default function App() {
       wasOnline = nowOnline;
     });
     return unsub;
+  }, []);
+
+  // ── Push notification response handling ───────────────────────────────────────
+  useEffect(() => {
+    // Handle taps on notifications while the app is backgrounded
+    const tapSub = Notifications.addNotificationResponseReceivedListener(
+      navigateFromNotification
+    );
+
+    // Handle a notification that was tapped when the app was fully closed
+    Notifications.getLastNotificationResponseAsync()
+      .then(response => { if (response) navigateFromNotification(response); })
+      .catch(() => {});
+
+    return () => tapSub.remove();
   }, []);
 
   return (
