@@ -13,7 +13,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import bcrypt
 import jwt
 import httpx
@@ -292,6 +292,9 @@ class UserResponse(BaseModel):
     ai_messages_date: Optional[str] = None
     audio_minutes_balance: float = 0.0
     audio_minutes_purchased: float = 0.0
+    audio_free_minutes_used: float = 0.0
+    audio_monthly_minutes_balance: float = 0.0
+    audio_monthly_reset_date: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -625,6 +628,9 @@ async def register(user_data: UserCreate):
         "ai_messages_date": None,
         "audio_minutes_balance": 0.0,
         "audio_minutes_purchased": 0.0,
+        "audio_free_minutes_used": 0.0,
+        "audio_monthly_minutes_balance": 0.0,
+        "audio_monthly_reset_date": None,
     }
     await db.users.insert_one(user_doc)
     await _send_verification_email(user_id, user_data.email)
@@ -1079,6 +1085,57 @@ async def translate_specific_sentences(sentence_ids: List[str]):
     return [transform_sentence_for_frontend(s) for s in sentences]
 
 
+@api_router.post("/chapters/{chapter_id}/translate-next")
+async def translate_next_chunk(
+    chapter_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Advance the translation watermark for the book containing this chapter.
+    Marks the next FIRST_CHUNK_WORDS worth of 'not_requested' sentences as 'pending'
+    so the worker picks them up. Called by the frontend when the user is ~200 words
+    from the end of already-translated content.
+    """
+    chapter = await db.chapters.find_one({"id": chapter_id}, {"_id": 0, "book_id": 1})
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+
+    book_id = chapter["book_id"]
+
+    # Build ordered chapter list to sort sentences correctly across chapters
+    all_chapters = await db.chapters.find(
+        {"book_id": book_id},
+        {"_id": 0, "id": 1, "chapter_number": 1}
+    ).sort("chapter_number", 1).to_list(1000)
+    chapter_order = {c["id"]: idx for idx, c in enumerate(all_chapters)}
+
+    not_requested = await db.sentences.find(
+        {"book_id": book_id, "translation_status": "not_requested"},
+        {"_id": 0, "id": 1, "chapter_id": 1, "order": 1, "english": 1}
+    ).to_list(None)
+
+    if not not_requested:
+        return {"message": "No more sentences to translate", "queued": 0}
+
+    not_requested.sort(key=lambda s: (chapter_order.get(s["chapter_id"], 9999), s["order"]))
+
+    word_count = 0
+    to_mark = []
+    for s in not_requested:
+        if word_count >= FIRST_CHUNK_WORDS:
+            break
+        to_mark.append(s["id"])
+        word_count += len((s.get("english") or "").split())
+
+    if to_mark:
+        await db.sentences.update_many(
+            {"id": {"$in": to_mark}},
+            {"$set": {"translation_status": "pending"}}
+        )
+
+    return {"message": "Translation chunk queued", "queued": len(to_mark)}
+
+
 @api_router.get("/translate/text")
 async def translate_text(q: str = Query(..., description="English text to translate")):
     """
@@ -1330,11 +1387,12 @@ async def process_book_import_gutenberg(
         logger.info(f"Found {len(chapters)} chapters")
         
         total_sentences = 0
+        book_word_count = 0
         for chapter in chapters:
             sentences = split_into_sentences(chapter['content'])
             if not sentences:
                 continue
-            
+
             chapter_doc = {
                 "id": chapter['id'],
                 "book_id": book_id,
@@ -1344,10 +1402,12 @@ async def process_book_import_gutenberg(
                 "sentences_count": len(sentences)
             }
             await db.chapters.update_one({"id": chapter['id']}, {"$set": chapter_doc}, upsert=True)
-            
+
             # For English books: store English as primary, Japanese fields are null
             sentence_docs = []
             for i, sentence_text in enumerate(sentences):
+                status = _initial_translation_status(book_word_count)
+                book_word_count += len(sentence_text.split())
                 sentence_docs.append({
                     "id": f"{chapter['id']}-s{i+1}",
                     "chapter_id": chapter['id'],
@@ -1358,10 +1418,10 @@ async def process_book_import_gutenberg(
                     "hiragana_text": None,
                     "katakana_text": None,
                     "romaji_text": None,
-                    "translation_status": "pending",
+                    "translation_status": status,
                     "source_language": "en"
                 })
-            
+
             if sentence_docs:
                 await db.sentences.delete_many({"chapter_id": chapter['id']})
                 await db.sentences.insert_many(sentence_docs)
@@ -1541,6 +1601,49 @@ async def process_book_import_aozora(
         )
 
 
+FIRST_CHUNK_WORDS = 5000  # Words translated eagerly on import; rest stay "not_requested"
+
+
+def _initial_translation_status(cumulative_words_so_far: int) -> str:
+    """'pending' for the first FIRST_CHUNK_WORDS of a book; 'not_requested' beyond that."""
+    return "pending" if cumulative_words_so_far < FIRST_CHUNK_WORDS else "not_requested"
+
+
+def extract_text_from_epub(epub_bytes: bytes) -> str:
+    """
+    Extracts clean plain text from EPUB file bytes.
+    Raises ValueError if the file is not a valid EPUB or contains no readable text.
+    """
+    import ebooklib
+    from ebooklib import epub
+    from bs4 import BeautifulSoup
+    import io
+
+    try:
+        book = epub.read_epub(io.BytesIO(epub_bytes))
+    except Exception:
+        raise ValueError("Could not parse EPUB file — file may be corrupted or invalid")
+
+    text_parts = []
+    for item in book.get_items():
+        if item.get_type() == ebooklib.ITEM_DOCUMENT:
+            soup = BeautifulSoup(item.get_content(), "html.parser")
+            for tag in soup(["script", "style", "head"]):
+                tag.decompose()
+            text = soup.get_text(separator="\n")
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            if lines:
+                text_parts.append("\n".join(lines))
+
+    if not text_parts:
+        raise ValueError(
+            "No readable text found in EPUB — the file may be DRM-protected or image-based. "
+            "DRM-protected files from Amazon, Apple Books, or similar stores cannot be imported."
+        )
+
+    return "\n\n".join(text_parts)
+
+
 @api_router.post("/books/upload")
 async def upload_book(
     file: UploadFile = File(...),
@@ -1550,14 +1653,26 @@ async def upload_book(
     current_user: dict = Depends(get_current_user)
 ):
     """Upload a book file for instant import"""
-    if not file.filename.endswith('.txt'):
-        raise HTTPException(status_code=400, detail="Only .txt files supported")
+    allowed_extensions = ('.txt', '.epub')
+    if not file.filename.lower().endswith(allowed_extensions):
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file format. Please upload a .txt or .epub file."
+        )
 
-    content = await file.read()
-    try:
-        text = content.decode('utf-8')
-    except UnicodeDecodeError:
-        text = content.decode('latin-1')
+    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum upload size is 50MB.")
+
+    filename_lower = file.filename.lower()
+    if filename_lower.endswith('.epub'):
+        try:
+            text = extract_text_from_epub(file_bytes)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+    else:
+        text = file_bytes.decode("utf-8", errors="replace")
 
     book_id = f"upload-{current_user['id'][:8]}-{str(uuid.uuid4())[:8]}"
     background_tasks.add_task(process_upload_fast, book_id, text, title, author, current_user["id"])
@@ -1591,13 +1706,14 @@ async def process_upload_fast(book_id: str, text: str, title: str, author: str, 
 
         clean_text = clean_gutenberg_text(text)
         chapters = split_into_chapters(clean_text, book_id)
-        
+
         total_sentences = 0
+        book_word_count = 0
         for chapter in chapters:
             sentences = split_into_sentences(chapter['content'])
             if not sentences:
                 continue
-            
+
             chapter_doc = {
                 "id": chapter['id'],
                 "book_id": book_id,
@@ -1607,21 +1723,25 @@ async def process_upload_fast(book_id: str, text: str, title: str, author: str, 
                 "sentences_count": len(sentences)
             }
             await db.chapters.insert_one(chapter_doc)
-            
-            sentence_docs = [{
-                "id": f"{chapter['id']}-s{i+1}",
-                "chapter_id": chapter['id'],
-                "book_id": book_id,
-                "order": i + 1,
-                "english": s,
-                "kanji_text": None,
-                "hiragana_text": None,
-                "katakana_text": None,
-                "romaji_text": None,
-                "translation_status": "pending",
-                "words": []
-            } for i, s in enumerate(sentences)]
-            
+
+            sentence_docs = []
+            for i, s in enumerate(sentences):
+                status = _initial_translation_status(book_word_count)
+                book_word_count += len(s.split())
+                sentence_docs.append({
+                    "id": f"{chapter['id']}-s{i+1}",
+                    "chapter_id": chapter['id'],
+                    "book_id": book_id,
+                    "order": i + 1,
+                    "english": s,
+                    "kanji_text": None,
+                    "hiragana_text": None,
+                    "katakana_text": None,
+                    "romaji_text": None,
+                    "translation_status": status,
+                    "words": []
+                })
+
             if sentence_docs:
                 await db.sentences.insert_many(sentence_docs)
                 total_sentences += len(sentence_docs)
@@ -2036,6 +2156,28 @@ def _check_ai_rate_limit(user_id: str):
     timestamps.append(now)
     _ai_rate_limit[user_id] = timestamps
 
+
+async def check_ai_limit(user: dict, db) -> None:
+    if user.get("subscription_tier") in ("premium", "founding_member"):
+        return
+    today = datetime.now(timezone.utc).date().isoformat()
+    if user.get("ai_messages_date") != today:
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"ai_messages_today": 0, "ai_messages_date": today}}
+        )
+        user["ai_messages_today"] = 0
+    if user.get("ai_messages_today", 0) >= 5:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "daily_ai_limit_reached",
+                "limit": 5,
+                "resets": "midnight UTC",
+                "upgrade_url": "/upgrade"
+            }
+        )
+
 # ========================
 # AI EXPLAIN
 # ========================
@@ -2051,6 +2193,7 @@ async def ai_explain_word(
 ):
     """Explain a Japanese word in context using GPT-4o-mini."""
     _check_ai_rate_limit(current_user["id"])
+    await check_ai_limit(current_user, db)
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     if not openai_key:
         raise HTTPException(status_code=503, detail="AI explanation not available")
@@ -2077,7 +2220,9 @@ async def ai_explain_word(
             temperature=0.7,
         )
 
-        return {"explanation": response.choices[0].message.content.strip()}
+        explanation = response.choices[0].message.content.strip()
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"ai_messages_today": 1}})
+        return {"explanation": explanation}
     except Exception as e:
         logger.error(f"AI explain error: {e}")
         raise HTTPException(status_code=500, detail="AI explanation failed")
@@ -2099,6 +2244,7 @@ async def ai_chat(
 ):
     """Chat with Zenzeii, a scholarly Japanese literature companion."""
     _check_ai_rate_limit(current_user["id"])
+    await check_ai_limit(current_user, db)
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     if not openai_key:
         raise HTTPException(status_code=503, detail="AI not available")
@@ -2141,10 +2287,36 @@ async def ai_chat(
             temperature=0.7,
         )
 
-        return {"reply": response.choices[0].message.content.strip()}
+        reply = response.choices[0].message.content.strip()
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"ai_messages_today": 1}})
+        return {"reply": reply}
     except Exception as e:
         logger.error(f"AI chat error: {e}")
         raise HTTPException(status_code=500, detail="AI chat failed")
+
+
+@api_router.get("/ai/usage")
+async def get_ai_usage(current_user: dict = Depends(get_current_user)):
+    tier = current_user.get("subscription_tier", "free")
+    if tier in ("premium", "founding_member"):
+        return {
+            "ai_messages_today": current_user.get("ai_messages_today", 0),
+            "ai_messages_limit": None,
+            "ai_messages_remaining": None,
+            "resets": "midnight UTC",
+            "subscription_tier": tier,
+        }
+    today = datetime.now(timezone.utc).date().isoformat()
+    used = current_user.get("ai_messages_today", 0)
+    if current_user.get("ai_messages_date") != today:
+        used = 0
+    return {
+        "ai_messages_today": used,
+        "ai_messages_limit": 5,
+        "ai_messages_remaining": max(0, 5 - used),
+        "resets": "midnight UTC",
+        "subscription_tier": tier,
+    }
 
 
 @api_router.post("/tokenize")
@@ -2267,12 +2439,74 @@ async def create_checkout_session(
 
 
 # ========================
+# AUDIO HELPERS
+# ========================
+
+async def check_and_reset_monthly_audio(user: dict, db) -> dict:
+    """Reset Premium monthly audio allowance if 30+ days have elapsed since last reset."""
+    if user.get("subscription_tier") != "premium":
+        return user
+
+    today = datetime.now(timezone.utc).date()
+    reset_date_raw = user.get("audio_monthly_reset_date")
+
+    if reset_date_raw is None:
+        # First premium audio interaction — initialize
+        today_iso = today.isoformat()
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {
+                "audio_monthly_minutes_balance": 30.0,
+                "audio_monthly_reset_date": today_iso,
+            }}
+        )
+        return {**user, "audio_monthly_minutes_balance": 30.0, "audio_monthly_reset_date": today_iso}
+
+    reset_date = date.fromisoformat(reset_date_raw) if isinstance(reset_date_raw, str) else reset_date_raw
+    days_since_reset = (today - reset_date).days
+
+    if days_since_reset >= 30:
+        # Reset cycle elapsed — hard reset to 30.0, no rollover
+        today_iso = today.isoformat()
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {
+                "audio_monthly_minutes_balance": 30.0,
+                "audio_monthly_reset_date": today_iso,
+            }}
+        )
+        return {**user, "audio_monthly_minutes_balance": 30.0, "audio_monthly_reset_date": today_iso}
+
+    return user
+
+
+# ========================
 # AUDIO ENDPOINTS
 # ========================
 
 @api_router.get("/audio/balance")
 async def get_audio_balance(current_user: dict = Depends(get_current_user)):
-    return {"audio_minutes_balance": current_user.get("audio_minutes_balance", 0.0)}
+    user = current_user
+    if user.get("subscription_tier") == "premium":
+        user = await check_and_reset_monthly_audio(user, db)
+
+    tier = user.get("subscription_tier", "free")
+    free_used = user.get("audio_free_minutes_used", 0.0)
+    free_remaining = max(0.0, round(3.0 - free_used, 4)) if tier == "free" else 0.0
+    monthly_balance = user.get("audio_monthly_minutes_balance", 0.0) if tier == "premium" else 0.0
+    pack_balance = max(0.0, user.get("audio_minutes_balance", 0.0))
+    total_available = round(free_remaining + monthly_balance + pack_balance, 4)
+
+    return {
+        "audio_free_minutes_used": free_used,
+        "audio_free_minutes_remaining": free_remaining,
+        "audio_monthly_minutes_balance": monthly_balance,
+        "audio_monthly_reset_date": user.get("audio_monthly_reset_date"),
+        "audio_pack_minutes_balance": pack_balance,
+        "total_minutes_available": total_available,
+        "is_free_taster_exhausted": free_used >= 3.0,
+        "subscription_tier": tier,
+    }
 
 
 @api_router.post("/audio/purchase")
@@ -2305,7 +2539,7 @@ async def purchase_audio_pack(
 
 @api_router.get("/audio/chapter/{chapter_id}")
 async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_current_user)):
-    # 1. Check cache first — no balance deduction if audio already exists
+    # 1. Cache check — cached chapters cost nothing and skip all balance logic
     cached = await db.audio_cache.find_one({"_id": chapter_id})
     if cached:
         return {
@@ -2314,20 +2548,32 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
             "cached": True,
         }
 
-    # 2. Not cached — check credentials before touching balance
+    # 2. Infrastructure check before touching any balance
     if not ELEVENLABS_API_KEY:
         raise HTTPException(status_code=503, detail="Audio generation not available.")
     if not R2_ACCOUNT_ID or not R2_PUBLIC_URL:
         raise HTTPException(status_code=503, detail="Audio storage not available.")
-
     voice_id = ELEVENLABS_LITERARY_VOICE or ELEVENLABS_STORY_VOICE
     if not voice_id:
         raise HTTPException(status_code=503, detail="No voice configured for audio generation.")
 
-    # 3. Check user balance
-    balance = current_user.get("audio_minutes_balance", 0.0)
+    # 3. Refresh monthly allowance for Premium users before balance check
+    user = current_user
+    if user.get("subscription_tier") == "premium":
+        user = await check_and_reset_monthly_audio(user, db)
 
-    # 4. Fetch chapter sentences and assemble text
+    # 4. Calculate available balance across all buckets (spending order: free → monthly → pack)
+    tier = user.get("subscription_tier", "free")
+    free_used = user.get("audio_free_minutes_used", 0.0)
+    free_remaining = max(0.0, round(3.0 - free_used, 4)) if tier == "free" else 0.0
+    monthly_remaining = max(0.0, user.get("audio_monthly_minutes_balance", 0.0)) if tier == "premium" else 0.0
+    pack_remaining = max(0.0, user.get("audio_minutes_balance", 0.0))
+    total_available = round(free_remaining + monthly_remaining + pack_remaining, 4)
+
+    if total_available <= 0:
+        raise HTTPException(status_code=402, detail="No audio minutes available. Purchase a pack to continue.")
+
+    # 5. Fetch chapter text
     sentences = await db.sentences.find(
         {"chapter_id": chapter_id},
         {"_id": 0, "japanese_original": 1, "kanji_text": 1, "order": 1}
@@ -2345,7 +2591,15 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
     if not chapter_text:
         raise HTTPException(status_code=422, detail="Chapter has no Japanese text to narrate.")
 
-    # 5. Generate audio via ElevenLabs
+    # 6. Rough pre-check: skip ElevenLabs call when the chapter is obviously unaffordable
+    rough_estimate = len(chapter_text) / 900.0
+    if rough_estimate > total_available * 1.5:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient audio minutes. Estimated {rough_estimate:.1f} min needed; {total_available:.1f} min available."
+        )
+
+    # 7. Generate audio — no balance touched yet; user loses nothing if this fails
     try:
         from elevenlabs.client import ElevenLabs as ElevenLabsClient
         el_client = ElevenLabsClient(api_key=ELEVENLABS_API_KEY)
@@ -2360,24 +2614,47 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
         logger.error(f"ElevenLabs generation failed for chapter {chapter_id}: {type(e).__name__}: {e}")
         raise HTTPException(status_code=502, detail="Audio generation failed. Please try again.")
 
-    # 6. Measure duration
+    # 8. Measure exact duration — never estimate; failure is a hard error, not a fallback
     try:
         from mutagen.mp3 import MP3
         from io import BytesIO
         mp3_info = MP3(BytesIO(audio_bytes))
-        duration_minutes = mp3_info.info.length / 60.0
+        duration_minutes = round(mp3_info.info.length / 60.0, 4)
     except Exception as e:
-        logger.warning(f"mutagen duration measurement failed for chapter {chapter_id}: {e} — estimating")
-        duration_minutes = len(chapter_text) / 800.0  # rough fallback: ~800 chars/min
+        logger.error(f"mutagen duration measurement failed for chapter {chapter_id}: {e}")
+        raise HTTPException(status_code=500, detail="Audio duration measurement failed. Please try again.")
 
-    # 7. Check balance is sufficient now that we know the real duration
-    if balance < duration_minutes:
+    # 9. Re-fetch user for fresh balance (generation took 10-30s; balances may have changed)
+    user_fresh = await db.users.find_one({"id": current_user["id"]})
+    if not user_fresh:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if user_fresh.get("subscription_tier") == "premium":
+        user_fresh = await check_and_reset_monthly_audio(user_fresh, db)
+
+    tier = user_fresh.get("subscription_tier", "free")
+    free_used_f = user_fresh.get("audio_free_minutes_used", 0.0)
+    free_remaining_f = max(0.0, round(3.0 - free_used_f, 4)) if tier == "free" else 0.0
+    monthly_remaining_f = max(0.0, user_fresh.get("audio_monthly_minutes_balance", 0.0)) if tier == "premium" else 0.0
+    pack_remaining_f = max(0.0, user_fresh.get("audio_minutes_balance", 0.0))
+    total_available_f = round(free_remaining_f + monthly_remaining_f + pack_remaining_f, 4)
+
+    # 10. Final exact-duration check — do not upload or cache if user can't afford it
+    if total_available_f < duration_minutes:
         raise HTTPException(
             status_code=402,
-            detail=f"Insufficient audio minutes. This chapter requires {duration_minutes:.1f} min; your balance is {balance:.1f} min."
+            detail=f"Insufficient audio minutes. This chapter is {duration_minutes:.1f} min; {total_available_f:.1f} min available."
         )
 
-    # 8. Upload to R2 (before balance deduction — user loses nothing if upload fails)
+    # 11. Calculate per-bucket deduction (spending order: free → monthly → pack)
+    remaining = duration_minutes
+    from_free = round(min(free_remaining_f, remaining), 4)
+    remaining = round(remaining - from_free, 4)
+    from_monthly = round(min(monthly_remaining_f, remaining), 4)
+    remaining = round(remaining - from_monthly, 4)
+    from_pack = round(min(pack_remaining_f, remaining), 4)
+
+    # 12. Upload to R2 (before deduction — if deduction fails, user gets audio at Zenzeii's cost;
+    #     this is the correct tradeoff: user never loses paid minutes due to our infra errors)
     r2_key = f"chapters/{chapter_id}.mp3"
     r2_url = f"{R2_PUBLIC_URL.rstrip('/')}/{r2_key}"
     try:
@@ -2401,7 +2678,7 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
         logger.error(f"R2 upload failed for chapter {chapter_id}: {type(e).__name__}: {e}")
         raise HTTPException(status_code=502, detail="Audio storage failed. Please try again.")
 
-    # 9. Insert cache document
+    # 13. Insert cache document
     chapter_doc = await db.chapters.find_one({"id": chapter_id}, {"book_id": 1})
     await db.audio_cache.insert_one({
         "_id": chapter_id,
@@ -2409,24 +2686,67 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
         "book_id": chapter_doc["book_id"] if chapter_doc else None,
         "r2_key": r2_key,
         "r2_url": r2_url,
-        "duration_minutes": round(duration_minutes, 3),
+        "duration_minutes": duration_minutes,
         "voice_id": voice_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "character_count": len(chapter_text),
     })
 
-    # 10. Deduct balance (last step — user already has the audio at this point)
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"audio_minutes_balance": -duration_minutes}}
+    # 14. Atomic deduction — filter includes balance conditions for every bucket being spent,
+    #     so a concurrent request that races us cannot cause double-spending
+    deduct_filter: dict = {"id": current_user["id"]}
+    deduct_inc: dict = {}
+
+    if from_free > 0:
+        deduct_filter["audio_free_minutes_used"] = {"$lte": round(3.0 - from_free, 4)}
+        deduct_inc["audio_free_minutes_used"] = from_free
+
+    if from_monthly > 0:
+        deduct_filter["audio_monthly_minutes_balance"] = {"$gte": from_monthly}
+        deduct_inc["audio_monthly_minutes_balance"] = -from_monthly
+
+    if from_pack > 0:
+        deduct_filter["audio_minutes_balance"] = {"$gte": from_pack}
+        deduct_inc["audio_minutes_balance"] = -from_pack
+
+    deduction_result = await db.users.find_one_and_update(
+        deduct_filter,
+        {"$inc": deduct_inc},
+        return_document=ReturnDocument.AFTER
+    )
+    if deduction_result is None:
+        logger.error(
+            f"Atomic deduction failed: user={current_user['id']}, chapter={chapter_id}, "
+            f"from_free={from_free}, from_monthly={from_monthly}, from_pack={from_pack} — "
+            "balance changed during generation (concurrent request race)"
+        )
+        raise HTTPException(status_code=402, detail="Balance changed during audio generation. Please try again.")
+
+    logger.info(
+        f"Audio generated: chapter={chapter_id}, duration={duration_minutes:.4f}min, "
+        f"from_free={from_free:.4f}, from_monthly={from_monthly:.4f}, from_pack={from_pack:.4f}, "
+        f"user={current_user['id']}"
     )
 
-    logger.info(f"Audio generated for chapter {chapter_id}: {duration_minutes:.2f} min, {len(chapter_text)} chars")
+    balance_after = {
+        "audio_free_minutes_used": deduction_result.get("audio_free_minutes_used", 0.0),
+        "audio_monthly_minutes_balance": deduction_result.get("audio_monthly_minutes_balance", 0.0),
+        "audio_pack_minutes_balance": deduction_result.get("audio_minutes_balance", 0.0),
+    }
+
     return {
         "url": r2_url,
-        "duration_minutes": round(duration_minutes, 3),
+        "duration_minutes": duration_minutes,
         "cached": False,
+        "balance_after": balance_after,
     }
+
+
+@api_router.get("/audio/cached-chapters/{book_id}")
+async def get_cached_chapters(book_id: str, current_user: dict = Depends(get_current_user)):
+    """Return chapter IDs that already have generated audio cached in R2."""
+    docs = await db.audio_cache.find({"book_id": book_id}, {"_id": 1}).to_list(length=None)
+    return {"cached_chapter_ids": [d["_id"] for d in docs]}
 
 
 # ========================
