@@ -71,3 +71,22 @@ export const textToSpeech = (text, voice = 'nova') =>
 // Payments API
 export const createCheckoutSession = (tier) =>
   axios.post(`${API}/payments/create-checkout-session`, { tier });
+
+// Audio API
+export const getAudioBalance = () =>
+  axios.get(`${API}/audio/balance`);
+
+export const purchaseAudioPack = (packId) =>
+  axios.post(`${API}/audio/purchase`, { pack_id: packId });
+
+export const getChapterAudio = (chapterId) =>
+  axios.get(`${API}/audio/chapter/${chapterId}`);
+
+export const getCachedChapters = (bookId) =>
+  axios.get(`${API}/audio/cached-chapters/${bookId}`);
+
+export const getAiUsage = () =>
+  axios.get(`${API}/ai/usage`);
+
+export const translateNextChunk = (chapterId) =>
+  axios.post(`${API}/chapters/${chapterId}/translate-next`);
