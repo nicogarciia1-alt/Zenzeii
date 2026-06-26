@@ -2456,26 +2456,26 @@ async def check_and_reset_monthly_audio(user: dict, db) -> dict:
         await db.users.update_one(
             {"id": user["id"]},
             {"$set": {
-                "audio_monthly_minutes_balance": 30.0,
+                "audio_monthly_minutes_balance": 15.0,
                 "audio_monthly_reset_date": today_iso,
             }}
         )
-        return {**user, "audio_monthly_minutes_balance": 30.0, "audio_monthly_reset_date": today_iso}
+        return {**user, "audio_monthly_minutes_balance": 15.0, "audio_monthly_reset_date": today_iso}
 
     reset_date = date.fromisoformat(reset_date_raw) if isinstance(reset_date_raw, str) else reset_date_raw
     days_since_reset = (today - reset_date).days
 
     if days_since_reset >= 30:
-        # Reset cycle elapsed — hard reset to 30.0, no rollover
+        # Reset cycle elapsed — hard reset to 15.0, no rollover
         today_iso = today.isoformat()
         await db.users.update_one(
             {"id": user["id"]},
             {"$set": {
-                "audio_monthly_minutes_balance": 30.0,
+                "audio_monthly_minutes_balance": 15.0,
                 "audio_monthly_reset_date": today_iso,
             }}
         )
-        return {**user, "audio_monthly_minutes_balance": 30.0, "audio_monthly_reset_date": today_iso}
+        return {**user, "audio_monthly_minutes_balance": 15.0, "audio_monthly_reset_date": today_iso}
 
     return user
 
@@ -2492,7 +2492,7 @@ async def get_audio_balance(current_user: dict = Depends(get_current_user)):
 
     tier = user.get("subscription_tier", "free")
     free_used = user.get("audio_free_minutes_used", 0.0)
-    free_remaining = max(0.0, round(3.0 - free_used, 4)) if tier == "free" else 0.0
+    free_remaining = max(0.0, round(1.0 - free_used, 4)) if tier == "free" else 0.0
     monthly_balance = user.get("audio_monthly_minutes_balance", 0.0) if tier == "premium" else 0.0
     pack_balance = max(0.0, user.get("audio_minutes_balance", 0.0))
     total_available = round(free_remaining + monthly_balance + pack_balance, 4)
@@ -2504,7 +2504,7 @@ async def get_audio_balance(current_user: dict = Depends(get_current_user)):
         "audio_monthly_reset_date": user.get("audio_monthly_reset_date"),
         "audio_pack_minutes_balance": pack_balance,
         "total_minutes_available": total_available,
-        "is_free_taster_exhausted": free_used >= 3.0,
+        "is_free_taster_exhausted": free_used >= 1.0,
         "subscription_tier": tier,
     }
 
@@ -2565,7 +2565,7 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
     # 4. Calculate available balance across all buckets (spending order: free → monthly → pack)
     tier = user.get("subscription_tier", "free")
     free_used = user.get("audio_free_minutes_used", 0.0)
-    free_remaining = max(0.0, round(3.0 - free_used, 4)) if tier == "free" else 0.0
+    free_remaining = max(0.0, round(1.0 - free_used, 4)) if tier == "free" else 0.0
     monthly_remaining = max(0.0, user.get("audio_monthly_minutes_balance", 0.0)) if tier == "premium" else 0.0
     pack_remaining = max(0.0, user.get("audio_minutes_balance", 0.0))
     total_available = round(free_remaining + monthly_remaining + pack_remaining, 4)
@@ -2633,7 +2633,7 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
 
     tier = user_fresh.get("subscription_tier", "free")
     free_used_f = user_fresh.get("audio_free_minutes_used", 0.0)
-    free_remaining_f = max(0.0, round(3.0 - free_used_f, 4)) if tier == "free" else 0.0
+    free_remaining_f = max(0.0, round(1.0 - free_used_f, 4)) if tier == "free" else 0.0
     monthly_remaining_f = max(0.0, user_fresh.get("audio_monthly_minutes_balance", 0.0)) if tier == "premium" else 0.0
     pack_remaining_f = max(0.0, user_fresh.get("audio_minutes_balance", 0.0))
     total_available_f = round(free_remaining_f + monthly_remaining_f + pack_remaining_f, 4)
@@ -2698,7 +2698,7 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
     deduct_inc: dict = {}
 
     if from_free > 0:
-        deduct_filter["audio_free_minutes_used"] = {"$lte": round(3.0 - from_free, 4)}
+        deduct_filter["audio_free_minutes_used"] = {"$lte": round(1.0 - from_free, 4)}
         deduct_inc["audio_free_minutes_used"] = from_free
 
     if from_monthly > 0:
