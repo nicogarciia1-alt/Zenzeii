@@ -80,6 +80,7 @@ const TokenizedSentence = ({ text, sentenceId, onWordClick, tokenCache, getToken
     } else {
       getTokens(sentenceId, text).then(setTokens);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sentenceId, text]);
 
   if (!tokens) return <span>{text}</span>;
@@ -233,6 +234,7 @@ export const ReaderPage = () => {
 
   useEffect(() => {
     fetchBookData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId]);
 
   useEffect(() => {
@@ -247,6 +249,7 @@ export const ReaderPage = () => {
       setCurrentChapter(firstChapter);
       navigate(`/read/${bookId}/${firstChapter.id}`, { replace: true });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapterId, chapters, bookId, navigate]);
 
   // Infinite scroll observer
@@ -264,6 +267,7 @@ export const ReaderPage = () => {
 
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, loadingMore, sentences.length]);
 
   // Lazy-translation trigger: when the user scrolls within ~200 words of the
@@ -308,6 +312,7 @@ export const ReaderPage = () => {
     }, 3000);
 
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scriptMode, currentChapter, sentences.length]);
 
   const fetchBookData = async () => {

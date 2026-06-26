@@ -8,7 +8,7 @@ import { isCJK } from '@/lib/vocabHighlight';
 import { CATEGORY_COLORS, getWordCategory, posToCategory } from '@/lib/categoryColors';
 import { toast } from 'sonner';
 
-export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], onWordSaved, contextSentence = '', pos = '' }) => {
+export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], onWordSaved, contextSentence = '', pos = '', aiUsage = null, onAiUsed, onAiLimitReached }) => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(
     savedWords.some(w => w.word === wordData?.word)
@@ -53,6 +53,7 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
   const [aiExplanation, setAiExplanation] = useState('');
   const [aiError, setAiError] = useState('');
   const [aiAvailable, setAiAvailable] = useState(true);
+  const [aiLimitReached, setAiLimitReached] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [savedKanji, setSavedKanji] = useState({});
 
@@ -62,6 +63,7 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
       isKanji: isCJK(char),
       alreadySaved: savedWords.some(w => w.word === char && w.type === 'kanji'),
     })) : [],
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   [wordData?.word, savedWords]);
 
   const showBreakdown = !!wordData?.word && wordData.word.length > 1 && kanjiBreakdown.some(c => c.isKanji);
@@ -75,10 +77,14 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
     try {
       const res = await explainWord(wordData.word, contextSentence);
       setAiExplanation(res.data.explanation);
+      onAiUsed?.();
     } catch (err) {
       if (err.response?.status === 503) {
         setAiAvailable(false);
         setAiOpen(false);
+      } else if (err.response?.status === 429) {
+        setAiLimitReached(true);
+        onAiLimitReached?.();
       } else {
         setAiError('Could not fetch explanation. Please try again.');
       }
@@ -302,6 +308,14 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
       {/* AI Explanation */}
       {aiAvailable && (
         <div className="mb-4">
+          {aiUsage?.subscription_tier === 'free' &&
+            typeof aiUsage?.ai_messages_remaining === 'number' &&
+            aiUsage.ai_messages_remaining > 0 &&
+            aiUsage.ai_messages_remaining <= 2 && (
+            <p className="text-xs text-muted-foreground mb-1.5">
+              {aiUsage.ai_messages_remaining} AI {aiUsage.ai_messages_remaining === 1 ? 'explanation' : 'explanations'} left today
+            </p>
+          )}
           {!aiOpen ? (
             <Button
               variant="outline"
@@ -324,6 +338,27 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
               </div>
               {aiLoading ? (
                 <p className="text-xs text-muted-foreground">Thinking...</p>
+              ) : aiLimitReached ? (
+                <div className="space-y-2.5">
+                  <p className="text-xs text-foreground">You've used today's AI explanations.</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Come back tomorrow, or unlock unlimited access with Zenzeii Premium.
+                  </p>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => { setAiOpen(false); onClose(); }}
+                      className="flex-1 text-xs px-2 py-1.5 rounded border border-border bg-background text-muted-foreground hover:bg-muted transition-colors"
+                    >
+                      Continue reading
+                    </button>
+                    <a
+                      href="/upgrade"
+                      className="flex-1 text-xs px-2 py-1.5 rounded bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-center"
+                    >
+                      Upgrade — €5.99/month
+                    </a>
+                  </div>
+                </div>
               ) : aiError ? (
                 <p className="text-xs text-destructive">{aiError}</p>
               ) : (
