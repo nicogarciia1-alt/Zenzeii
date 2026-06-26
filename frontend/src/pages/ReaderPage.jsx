@@ -55,11 +55,18 @@ import {
   getBookmarks,
   deleteBookmark,
   updateProgress,
-  triggerTranslation
+  triggerTranslation,
+  getAudioBalance,
+  getChapterAudio,
+  getCachedChapters,
+  getAiUsage,
+  translateNextChunk,
 } from '@/lib/api';
 import { toast } from 'sonner';
 import axios from 'axios';
 const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
+
+const AUDIO_ENABLED = true;
 
 const DEFAULT_SENTENCES_PER_PAGE = 50;
 
@@ -134,6 +141,8 @@ export const ReaderPage = () => {
   const { theme, toggleTheme, readerSettings, updateReaderSettings } = useTheme();
   const sentinelRef = useRef(null);
   const touchStartX = useRef(null);
+  const translateChunkInFlight = useRef(false);
+  const translateTriggerRef = useRef(null);
 
   const [book, setBook] = useState(null);
   const [chapters, setChapters] = useState([]);
@@ -148,11 +157,17 @@ export const ReaderPage = () => {
   const [hasMore, setHasMore] = useState(true);
   const [audioMode, setAudioMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playButtonVisible, setPlayButtonVisible] = useState(true);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioSpeed, setAudioSpeed] = useState(1);
+  const [audioBalanceData, setAudioBalanceData] = useState(null);
+  const [cachedChapterIds, setCachedChapterIds] = useState(new Set());
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [showAudioPrompt, setShowAudioPrompt] = useState(null); // null | 'taster' | 'no_minutes'
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(null);
   const [highlightedSentenceId, setHighlightedSentenceId] = useState(null);
-  const speechRef = useRef(null);
-  const doubleTapRef = useRef(null);
+  const audioRef = useRef(null);
 
   // Dictionary popup state
   const [selectedWord, setSelectedWord] = useState(null);
@@ -171,6 +186,7 @@ export const ReaderPage = () => {
   const [showWordHighlights, setShowWordHighlights] = useState(false);
   const [showKanjiHighlights, setShowKanjiHighlights] = useState(false);
   const [zenzeiiOpen, setZenzeiiOpen] = useState(false);
+  const [aiUsage, setAiUsage] = useState(null);
   const [verticalMode, setVerticalMode] = useState(false);
   const [tokenCache, setTokenCache] = useState({});
 
@@ -184,9 +200,35 @@ export const ReaderPage = () => {
   // Rebuild vocab lookup index only when savedWords changes
   const vocabIndex = useMemo(() => buildVocabIndex(savedWords), [savedWords]);
 
+  // Index of the sentence at which to place the lazy-translation trigger sentinel.
+  // Positions it ~200 words before the first "not_requested" sentence so the request
+  // fires while the user still has translated content ahead of them.
+  const translateTriggerIndex = useMemo(() => {
+    const watermark = sentences.findIndex(s => s.translation_status === 'not_requested');
+    if (watermark <= 0) return null;
+    let words = 0;
+    for (let i = watermark - 1; i >= 0; i--) {
+      words += (sentences[i].english || '').split(/\s+/).filter(Boolean).length;
+      if (words >= 200) return i;
+    }
+    return 0;
+  }, [sentences]);
+
   // Update savedWords immediately when a word is saved from the popup
   const handleWordSaved = useCallback((wordData) => {
     setSavedWords(prev => [...prev, wordData]);
+  }, []);
+
+  const handleAiUsed = useCallback(() => {
+    setAiUsage(prev => prev && prev.ai_messages_remaining !== null ? {
+      ...prev,
+      ai_messages_today: prev.ai_messages_today + 1,
+      ai_messages_remaining: Math.max(0, prev.ai_messages_remaining - 1),
+    } : prev);
+  }, []);
+
+  const handleAiLimitReached = useCallback(() => {
+    setAiUsage(prev => prev ? { ...prev, ai_messages_remaining: 0 } : prev);
   }, []);
 
   useEffect(() => {
@@ -224,6 +266,23 @@ export const ReaderPage = () => {
     return () => observer.disconnect();
   }, [hasMore, loadingMore, sentences.length]);
 
+  // Lazy-translation trigger: when the user scrolls within ~200 words of the
+  // not_requested boundary, silently request the next chunk from the backend.
+  useEffect(() => {
+    if (translateTriggerIndex === null || !currentChapter || !translateTriggerRef.current) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries[0].isIntersecting || translateChunkInFlight.current) return;
+      translateChunkInFlight.current = true;
+      translateNextChunk(currentChapter.id)
+        .catch(() => {})
+        .finally(() => { translateChunkInFlight.current = false; });
+    }, { threshold: 0.1 });
+
+    observer.observe(translateTriggerRef.current);
+    return () => observer.disconnect();
+  }, [translateTriggerIndex, currentChapter]);
+
   // Poll for translation updates when in Japanese mode
   useEffect(() => {
     if (scriptMode === 'english' || !currentChapter) return;
@@ -254,16 +313,20 @@ export const ReaderPage = () => {
   const fetchBookData = async () => {
     setLoading(true);
     try {
-      const [bookRes, chaptersRes, vocabRes, bookmarksRes] = await Promise.all([
+      const [bookRes, chaptersRes, vocabRes, bookmarksRes, cachedAudioRes, aiUsageRes] = await Promise.all([
         getBook(bookId),
         getChapters(bookId),
         getVocabulary(),
-        getBookmarks()
+        getBookmarks(),
+        getCachedChapters(bookId).catch(() => ({ data: { cached_chapter_ids: [] } })),
+        getAiUsage().catch(() => null),
       ]);
       setBook(bookRes.data);
       setChapters(chaptersRes.data);
       setSavedWords(vocabRes.data);
       setBookmarks(bookmarksRes.data.filter(b => b.book_id === bookId));
+      setCachedChapterIds(new Set(cachedAudioRes.data.cached_chapter_ids));
+      if (aiUsageRes) setAiUsage(aiUsageRes.data);
       
       // Set default script mode based on book language
       // Japanese source books should default to showing Japanese (kanji)
@@ -385,62 +448,66 @@ export const ReaderPage = () => {
     }
   };
 
-  const handlePlayPause = () => {
-    if (isPlaying) {
-      window.speechSynthesis.cancel();
-      setIsPlaying(false);
-      setHighlightedWordIndex(null);
-      setHighlightedSentenceId(null);
-    } else {
-      startReading();
+  // Reset audio + lazy-translation state whenever the chapter changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
     }
-  };
+    setAudioUrl(null);
+    setAudioCurrentTime(0);
+    setIsPlaying(false);
+    setShowAudioPrompt(null);
+    translateChunkInFlight.current = false;
+  }, [chapterId]);
 
-  const startReading = () => {
-    const japaneseSentences = sentences.filter(s =>
-      s.japanese_kanji || s.japanese_original
-    );
-    if (!japaneseSentences.length) return;
-
-    let index = 0;
-    const readNext = () => {
-      if (index >= japaneseSentences.length) {
-        setIsPlaying(false);
-        return;
+  const loadChapterAudio = async () => {
+    if (!chapterId) return;
+    if (audioBalanceData !== null && audioBalanceData.total_minutes_available <= 0) {
+      setShowAudioPrompt(audioBalanceData.is_free_taster_exhausted && audioBalanceData.subscription_tier === 'free' ? 'taster' : 'no_minutes');
+      return;
+    }
+    setAudioLoading(true);
+    try {
+      const res = await getChapterAudio(chapterId);
+      setAudioUrl(res.data.url);
+      setAudioDuration(res.data.duration_minutes);
+      if (res.data.balance_after) {
+        const b = res.data.balance_after;
+        const freeRemaining = Math.max(0, 1.0 - b.audio_free_minutes_used);
+        setAudioBalanceData(prev => prev ? {
+          ...prev,
+          audio_free_minutes_used: b.audio_free_minutes_used,
+          audio_free_minutes_remaining: freeRemaining,
+          is_free_taster_exhausted: b.audio_free_minutes_used >= 1.0,
+          audio_monthly_minutes_balance: b.audio_monthly_minutes_balance,
+          audio_pack_minutes_balance: b.audio_pack_minutes_balance,
+          total_minutes_available: parseFloat(
+            (freeRemaining + b.audio_monthly_minutes_balance + b.audio_pack_minutes_balance).toFixed(4)
+          ),
+        } : prev);
       }
-      const sentence = japaneseSentences[index];
-      const text = sentence.japanese_kanji || sentence.japanese_original;
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ja-JP';
-      utterance.rate = 0.8;
-
-      utterance.onboundary = (e) => {
-        if (e.name === 'word') {
-          setHighlightedSentenceId(sentence.id);
-          setHighlightedWordIndex(e.charIndex);
-        }
-      };
-
-      utterance.onend = () => {
-        index++;
-        readNext();
-      };
-
-      setHighlightedSentenceId(sentence.id);
-      speechRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
-    };
-
-    setIsPlaying(true);
-    readNext();
+      if (res.data.cached) {
+        setCachedChapterIds(prev => new Set([...prev, chapterId]));
+      }
+    } catch (err) {
+      if (err.response?.status === 402) {
+        setShowAudioPrompt(audioBalanceData?.is_free_taster_exhausted && audioBalanceData?.subscription_tier === 'free' ? 'taster' : 'no_minutes');
+      } else {
+        toast.error('Could not load audio for this chapter. Please try again.');
+      }
+    } finally {
+      setAudioLoading(false);
+    }
   };
 
-  const handleReaderDoubleTap = () => {
-    const now = Date.now();
-    if (doubleTapRef.current && now - doubleTapRef.current < 300) {
-      setPlayButtonVisible(v => !v);
+  const handleAudioPlayPause = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (isPlaying) {
+      el.pause();
+    } else {
+      el.play();
     }
-    doubleTapRef.current = now;
   };
 
   const handleChapterChange = (chapId) => {
@@ -654,7 +721,7 @@ export const ReaderPage = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-background ${themeClass}`} onClick={handleClosePopup} onDoubleClick={handleReaderDoubleTap} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className={`min-h-screen bg-background ${themeClass}`} onClick={handleClosePopup} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       {/* Top Bar */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
@@ -678,7 +745,7 @@ export const ReaderPage = () => {
             <SelectContent>
               {chapters.map((chapter) => (
                 <SelectItem key={chapter.id} value={chapter.id}>
-                  Ch. {chapter.chapter_number}: {chapter.title}
+                  {AUDIO_ENABLED && cachedChapterIds.has(chapter.id) ? '🎧 ' : ''}Ch. {chapter.chapter_number}: {chapter.title}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -710,6 +777,9 @@ export const ReaderPage = () => {
                       >
                         <span className="truncate">
                           {chapter.chapter_number}. {chapter.title_jp || chapter.title}
+                          {AUDIO_ENABLED && cachedChapterIds.has(chapter.id) && (
+                            <span title="Audio ready — instant playback" style={{ marginLeft: '6px', fontSize: '0.8em' }}>🎧</span>
+                          )}
                         </span>
                       </Button>
                     ))}
@@ -793,11 +863,18 @@ export const ReaderPage = () => {
           >
             縦
           </button>
+          {AUDIO_ENABLED && (
           <button
             onClick={() => {
-              setAudioMode(v => !v);
-              if (isPlaying) {
-                window.speechSynthesis.cancel();
+              const next = !audioMode;
+              setAudioMode(next);
+              if (next && audioBalanceData === null) {
+                getAudioBalance()
+                  .then(r => setAudioBalanceData(r.data))
+                  .catch(() => {});
+              }
+              if (!next) {
+                audioRef.current?.pause();
                 setIsPlaying(false);
               }
             }}
@@ -814,6 +891,7 @@ export const ReaderPage = () => {
           >
             音
           </button>
+          )}
           <div className="flex items-center justify-between gap-4">
             <SecondaryScriptToggle
               value={secondaryLayer}
@@ -902,14 +980,16 @@ export const ReaderPage = () => {
             }}
             data-testid="reader-content"
           >
-            {sentences.map((sentence) => {
+            {sentences.map((sentence, index) => {
               const secondaryText = getSecondaryText(sentence);
               const showSecondary = secondaryLayer !== 'none' && showSecondaryText && secondaryText && (secondaryLayer === 'english' || sentence.translation_status === 'completed');
-              console.log('sentence', sentence.id, 'english:', sentence.english, 'showSecondary:', showSecondary, 'secondaryLayer:', secondaryLayer, 'showSecondaryText:', showSecondaryText);
 
               return (
-                <div
-                  key={sentence.id}
+                <React.Fragment key={sentence.id}>
+                  {index === translateTriggerIndex && (
+                    <div ref={translateTriggerRef} style={{ height: 0, overflow: 'hidden' }} aria-hidden="true" />
+                  )}
+                  <div
                   className={`reader-sentence group relative ${isTranslationPending(sentence) ? 'opacity-70' : ''}`}
                   data-testid={`sentence-${sentence.id}`}
                 >
@@ -977,9 +1057,10 @@ export const ReaderPage = () => {
                     )}
                   </Button>
                 </div>
+                </React.Fragment>
               );
             })}
-            
+
             {hasMore && (
               <div ref={sentinelRef} className="py-8 text-center">
                 {loadingMore ? (
@@ -1033,65 +1114,257 @@ export const ReaderPage = () => {
               onWordSaved={handleWordSaved}
               contextSentence={contextSentence}
               pos={wordPos}
+              aiUsage={aiUsage}
+              onAiUsed={handleAiUsed}
+              onAiLimitReached={handleAiLimitReached}
             />
           )}
         </>
       )}
 
       {/* Zenzeii chat trigger */}
-      <button
-        onClick={(e) => { e.stopPropagation(); setZenzeiiOpen(true); }}
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          left: '24px',
-          fontFamily: 'EB Garamond, serif',
-          fontSize: '14px',
-          background: 'var(--background)',
-          border: '1px solid var(--border)',
-          color: 'var(--foreground)',
-          padding: '8px 16px',
-          cursor: 'pointer',
-          letterSpacing: '0.05em',
-        }}
-      >
-        文 Zenzeii
-      </button>
+      <div style={{ position: 'fixed', bottom: '24px', left: '24px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+        {aiUsage?.subscription_tier === 'free' &&
+          typeof aiUsage?.ai_messages_remaining === 'number' &&
+          aiUsage.ai_messages_remaining > 0 &&
+          aiUsage.ai_messages_remaining <= 2 && (
+          <span style={{ fontSize: '11px', color: 'var(--muted-foreground)', fontFamily: 'EB Garamond, serif', paddingLeft: '2px' }}>
+            {aiUsage.ai_messages_remaining} AI {aiUsage.ai_messages_remaining === 1 ? 'message' : 'messages'} left today
+          </span>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); setZenzeiiOpen(true); }}
+          style={{
+            fontFamily: 'EB Garamond, serif',
+            fontSize: '14px',
+            background: 'var(--background)',
+            border: '1px solid var(--border)',
+            color: 'var(--foreground)',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            letterSpacing: '0.05em',
+          }}
+        >
+          文 Zenzeii
+        </button>
+      </div>
 
-      {audioMode && playButtonVisible && (
+      {AUDIO_ENABLED && audioMode && (
         <div
           style={{
             position: 'fixed',
-            bottom: '40px',
-            left: '50%',
-            transform: 'translateX(-50%)',
+            bottom: 0,
+            left: 0,
+            right: 0,
             zIndex: 90,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '8px',
+            backgroundColor: showAudioPrompt ? (theme === 'dark' ? '#2C2018' : '#EDE6D6') : 'hsl(var(--background))',
+            borderTop: showAudioPrompt ? '2px solid #C9BC9E' : '1px solid hsl(var(--border))',
+            padding: showAudioPrompt ? '16px 20px' : '10px 20px',
           }}
-          onDoubleClick={() => setPlayButtonVisible(false)}
         >
-          <button
-            onClick={handlePlayPause}
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              border: '1px solid hsl(var(--border))',
-              backgroundColor: 'hsl(var(--background))',
-              color: 'hsl(var(--foreground))',
-              fontSize: '1.4rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-            }}
-          >
-            {isPlaying ? '⏸' : '▶'}
-          </button>
+          <audio
+            ref={audioRef}
+            src={audioUrl || undefined}
+            onTimeUpdate={() => setAudioCurrentTime(audioRef.current?.currentTime || 0)}
+            onEnded={() => setIsPlaying(false)}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+          />
+
+          {showAudioPrompt ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                <span style={{ fontFamily: '"Cormorant Garamond", Georgia, serif', fontSize: '32px', opacity: 0.25, lineHeight: 1, color: theme === 'dark' ? '#F5F0E8' : '#1C1410', userSelect: 'none', flexShrink: 0, marginTop: '2px' }}>
+                  声
+                </span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: '"Cormorant Garamond", Georgia, serif', fontSize: '18px', fontStyle: 'italic', color: theme === 'dark' ? '#F5F0E8' : '#1C1410', lineHeight: 1.3 }}>
+                    {showAudioPrompt === 'taster' ? "You've heard what's possible." : 'Your reading awaits its voice.'}
+                  </div>
+                  <div style={{ fontFamily: '"Crimson Text", Georgia, serif', fontSize: '14px', color: '#6B5744', marginTop: '4px', lineHeight: 1.4 }}>
+                    {showAudioPrompt === 'taster'
+                      ? 'Your free minute has been used. Continue your reading with a narration pack.'
+                      : 'Add narration to continue listening.'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { audioRef.current?.pause(); setIsPlaying(false); setAudioMode(false); setShowAudioPrompt(null); }}
+                  style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #C9BC9E', backgroundColor: 'transparent', color: '#6B5744', fontSize: '0.8rem', cursor: 'pointer', flexShrink: 0 }}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Link
+                  to={`/audio-packs${bookId ? `?from=${bookId}` : ''}`}
+                  style={{ fontFamily: '"EB Garamond", Georgia, serif', fontSize: '14px', padding: '7px 18px', backgroundColor: theme === 'dark' ? '#F5F0E8' : '#1C1410', color: theme === 'dark' ? '#1C1410' : '#F5F0E8', borderRadius: '4px', textDecoration: 'none', whiteSpace: 'nowrap', display: 'inline-block' }}
+                >
+                  Explore narration packs
+                </Link>
+                <button
+                  onClick={() => setShowAudioPrompt(null)}
+                  style={{ fontFamily: '"EB Garamond", Georgia, serif', fontSize: '14px', padding: '7px 18px', backgroundColor: 'transparent', color: '#6B5744', border: '1px solid #C9BC9E', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {/* Load button — shown before any audio is fetched */}
+              {!audioUrl && !audioLoading && (
+                <button
+                  onClick={loadChapterAudio}
+                  style={{
+                    fontFamily: '"EB Garamond", Georgia, serif',
+                    fontSize: '0.85rem',
+                    padding: '6px 14px',
+                    borderRadius: '4px',
+                    border: '1px solid hsl(var(--border))',
+                    backgroundColor: 'hsl(var(--primary))',
+                    color: 'hsl(var(--primary-foreground))',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  🎧 Listen
+                </button>
+              )}
+
+              {/* Generating spinner */}
+              {audioLoading && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem', flexShrink: 0 }}>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating…
+                </div>
+              )}
+
+              {/* Play / Pause */}
+              {audioUrl && (
+                <button
+                  onClick={handleAudioPlayPause}
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    border: '1px solid hsl(var(--border))',
+                    backgroundColor: 'transparent',
+                    color: 'hsl(var(--foreground))',
+                    fontSize: '1rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {isPlaying ? '⏸' : '▶'}
+                </button>
+              )}
+
+              {/* Progress bar */}
+              {audioUrl && (
+                <div
+                  style={{ flex: 1, height: '4px', backgroundColor: 'hsl(var(--muted))', borderRadius: '2px', cursor: 'pointer' }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const ratio = (e.clientX - rect.left) / rect.width;
+                    if (audioRef.current?.duration) {
+                      audioRef.current.currentTime = ratio * audioRef.current.duration;
+                    }
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${audioRef.current?.duration ? (audioCurrentTime / audioRef.current.duration) * 100 : 0}%`,
+                      height: '100%',
+                      backgroundColor: 'hsl(var(--primary))',
+                      borderRadius: '2px',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Speed toggle */}
+              {audioUrl && (
+                <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                  {[0.75, 1, 1.5].map(s => (
+                    <button
+                      key={s}
+                      onClick={() => {
+                        setAudioSpeed(s);
+                        if (audioRef.current) audioRef.current.playbackRate = s;
+                      }}
+                      style={{
+                        padding: '2px 7px',
+                        borderRadius: '4px',
+                        border: '1px solid hsl(var(--border))',
+                        backgroundColor: audioSpeed === s ? 'hsl(var(--primary))' : 'transparent',
+                        color: audioSpeed === s ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))',
+                        fontSize: '0.72rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {s}×
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Balance — 声 X.X min [· resets Mon DD] */}
+              {audioBalanceData !== null && audioBalanceData.total_minutes_available > 0 && (() => {
+                const { subscription_tier, audio_free_minutes_remaining, audio_monthly_minutes_balance,
+                        audio_pack_minutes_balance, total_minutes_available, audio_monthly_reset_date } = audioBalanceData;
+                const s = { fontFamily: '"EB Garamond", Georgia, serif', fontSize: '0.8rem', color: '#6B5744', whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '4px' };
+
+                let mins;
+                let resetLabel = null;
+                if (subscription_tier === 'free') {
+                  mins = (audio_free_minutes_remaining ?? total_minutes_available).toFixed(1);
+                } else if (subscription_tier === 'premium' && audio_monthly_minutes_balance > 0) {
+                  mins = audio_monthly_minutes_balance.toFixed(1);
+                  if (audio_monthly_reset_date) {
+                    const d = new Date(audio_monthly_reset_date + 'T00:00:00');
+                    d.setMonth(d.getMonth() + 1);
+                    resetLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  }
+                } else {
+                  mins = (audio_pack_minutes_balance ?? total_minutes_available).toFixed(1);
+                }
+
+                return (
+                  <span style={s}>
+                    <span style={{ opacity: 0.5, fontSize: '14px', fontFamily: '"EB Garamond", Georgia, serif' }}>声</span>
+                    <span>{mins} min{resetLabel ? <span style={{ opacity: 0.6 }}> · resets {resetLabel}</span> : null}</span>
+                  </span>
+                );
+              })()}
+
+              {/* Close */}
+              <button
+                onClick={() => {
+                  audioRef.current?.pause();
+                  setIsPlaying(false);
+                  setAudioMode(false);
+                }}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: 'transparent',
+                  color: 'hsl(var(--muted-foreground))',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  marginLeft: 'auto',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1100,6 +1373,9 @@ export const ReaderPage = () => {
         currentSentence={contextSentence || ''}
         isOpen={zenzeiiOpen}
         onClose={() => setZenzeiiOpen(false)}
+        aiUsage={aiUsage}
+        onAiUsed={handleAiUsed}
+        onAiLimitReached={handleAiLimitReached}
       />
 
     </div>
