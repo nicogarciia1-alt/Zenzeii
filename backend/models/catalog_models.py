@@ -1,12 +1,16 @@
 """
-Pydantic models for the Zenzeii Library Catalog (Layer 1).
+Pydantic models for the Zenzeii Library Catalog (Layer 1 and Layer 2).
 
-Covers two MongoDB collections and their API contracts:
+Covers the catalog's MongoDB collections and their API contracts:
 
-- `genres`        — controlled vocabulary, referenced by ID, never duplicated.
-- `book_catalog`  — the single source of truth for the library. Separate
-                     from the `books` collection, which only holds books
-                     that have already been imported for reading.
+- `genres`             — Layer 1 controlled vocabulary.
+- `book_catalog`       — the single source of truth for the library. Separate
+                          from the `books` collection, which only holds books
+                          that have already been imported for reading.
+- `themes`, `moods`, `settings`, `historical_periods`, `cultural_concepts`,
+  `awards`, `adaptation_types` — Layer 2 discovery taxonomy. Each is an
+  independent, reusable entity collection; book documents reference these
+  by ID and never duplicate the vocabulary as free text.
 
 This module defines shapes only — no query logic, no database calls.
 See services/catalog_service.py for filter parsing and query building.
@@ -85,6 +89,24 @@ class SortOption(str, Enum):
     TITLE = "title"
 
 
+class SettingType(str, Enum):
+    """Classifies a `settings` entry — Kyoto is a city, Edo-era Japan is an era_context."""
+    CITY = "city"
+    REGION = "region"
+    PLACE_TYPE = "place_type"
+    ERA_CONTEXT = "era_context"
+
+
+class CulturalCategory(str, Enum):
+    """Classifies a `cultural_concepts` entry, e.g. Zen is a spiritual_practice."""
+    AESTHETIC_PHILOSOPHY = "aesthetic_philosophy"
+    SOCIAL_VALUE = "social_value"
+    SPIRITUAL_PRACTICE = "spiritual_practice"
+    SEASONAL_TRADITION = "seasonal_tradition"
+    CULTURAL_PRACTICE = "cultural_practice"
+    LITERARY_CONCEPT = "literary_concept"
+
+
 # --------------------------------------------------------------------------
 # Named constants — no magic numbers in length-category computation.
 # --------------------------------------------------------------------------
@@ -94,6 +116,13 @@ LENGTH_MEDIUM_MAX_PAGES = 300
 
 DEFAULT_PAGE_LIMIT = 24
 MAX_PAGE_LIMIT = 48
+
+# historical_periods.year_end for the current, still-ongoing era (Reiwa).
+PERIOD_OPEN_ENDED_YEAR = 9999
+# historical_periods.year_start for the "spans multiple periods" catch-all entry.
+PERIOD_MULTI_YEAR_START = 0
+
+TAXONOMY_CACHE_MAX_AGE_SECONDS = 60 * 60 * 24  # 24h — taxonomy changes rarely
 
 
 # --------------------------------------------------------------------------
@@ -131,7 +160,276 @@ class GenreListResponse(BaseModel):
 
 
 # --------------------------------------------------------------------------
-# Award reference — embedded in book_catalog.award_ids (Layer 2 placeholder)
+# Theme — Layer 2 discovery taxonomy (`themes` collection)
+# The human concerns at the heart of a book: family, loss, identity, ...
+# --------------------------------------------------------------------------
+
+class Theme(BaseModel):
+    """A single theme document as stored in the `themes` collection."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    description: str
+    layer: int = 2
+    filterable: bool = True
+    searchable: bool = True
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ThemeResponse(BaseModel):
+    """Theme shape returned to the discovery filter UI."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    description: str
+    sort_order: int
+
+
+# --------------------------------------------------------------------------
+# Mood — Layer 2 discovery taxonomy (`moods` collection)
+# The emotional atmosphere of reading a book, distinct from its plot.
+# --------------------------------------------------------------------------
+
+class Mood(BaseModel):
+    """A single mood document as stored in the `moods` collection."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    description: str
+    layer: int = 2
+    filterable: bool = True
+    searchable: bool = True
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class MoodResponse(BaseModel):
+    """Mood shape returned to the discovery filter UI."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    description: str
+    sort_order: int
+
+
+# --------------------------------------------------------------------------
+# Setting — Layer 2 discovery taxonomy (`settings` collection)
+# Where a story takes place: a city, a region, a kind of place, or an era.
+# --------------------------------------------------------------------------
+
+class Setting(BaseModel):
+    """A single setting document as stored in the `settings` collection."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    type: SettingType
+    description: str
+    layer: int = 2
+    filterable: bool = True
+    searchable: bool = True
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class SettingResponse(BaseModel):
+    """Setting shape returned to the discovery filter UI."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    type: SettingType
+    description: str
+    sort_order: int
+
+
+# --------------------------------------------------------------------------
+# HistoricalPeriod — Layer 2 discovery taxonomy (`historical_periods`)
+# The Japanese historical era a book is set in or emerged from.
+# --------------------------------------------------------------------------
+
+class HistoricalPeriod(BaseModel):
+    """A single period document as stored in the `historical_periods` collection."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    years: str
+    year_start: int
+    year_end: int
+    description: str
+    layer: int = 2
+    filterable: bool = True
+    searchable: bool = True
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class HistoricalPeriodResponse(BaseModel):
+    """Period shape returned to the discovery filter UI."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    years: str
+    year_start: int
+    year_end: int
+    description: str
+    sort_order: int
+
+
+# --------------------------------------------------------------------------
+# CulturalConcept — Layer 2 discovery taxonomy (`cultural_concepts`)
+# Zenzeii's most distinctive feature: Japanese aesthetic and philosophical
+# concepts (Mono no Aware, Wabi-Sabi, ...). Each carries a short description
+# for filter tooltips and a long description for the concept detail page.
+# --------------------------------------------------------------------------
+
+class CulturalConcept(BaseModel):
+    """A single concept document as stored in the `cultural_concepts` collection."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    romaji: str
+    description_short: str = Field(max_length=120)
+    description_long: str
+    cultural_category: CulturalCategory
+    layer: int = 2
+    filterable: bool = True
+    searchable: bool = True
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class CulturalConceptResponse(BaseModel):
+    """
+    Concept shape for the taxonomy list and filter chips.
+
+    Carries description_short only — description_long is reserved for
+    GET /api/catalog/concepts/{concept_id}, which explains the concept in
+    full rather than in a tooltip-sized fragment.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    romaji: str
+    description_short: str
+    cultural_category: CulturalCategory
+    sort_order: int
+
+
+class CulturalConceptDetail(BaseModel):
+    """Full concept shape for GET /api/catalog/concepts/{concept_id}."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    romaji: str
+    description_short: str
+    description_long: str
+    cultural_category: CulturalCategory
+
+
+# --------------------------------------------------------------------------
+# Award — Layer 2 discovery taxonomy (`awards` collection)
+# Literary prizes. Dual role: a discovery filter (Layer 2) and a prestige
+# badge on the book card (Layer 1 display) — badge_display controls the
+# latter. Distinct from AwardReference below, which is the lightweight
+# {award_id, year} pair embedded on a book document.
+# --------------------------------------------------------------------------
+
+class Award(BaseModel):
+    """A single award document as stored in the `awards` collection."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    description: str
+    founded_year: int
+    country: str
+    prestige_level: int
+    layer: int = 2
+    filterable: bool = True
+    badge_display: bool = False
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AwardResponse(BaseModel):
+    """Award shape returned to the discovery filter UI and for badge rendering."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    description: str
+    founded_year: int
+    country: str
+    prestige_level: int
+    badge_display: bool
+    sort_order: int
+
+
+# --------------------------------------------------------------------------
+# AdaptationType — Layer 2 discovery taxonomy (`adaptation_types`)
+# Simple lookup collection for media adaptation kinds (anime, film, ...).
+# --------------------------------------------------------------------------
+
+class AdaptationType(BaseModel):
+    """A single adaptation-type document as stored in the `adaptation_types` collection."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AdaptationTypeResponse(BaseModel):
+    """Adaptation-type shape returned to the discovery filter UI."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    name_jp: str
+    sort_order: int
+
+
+class TaxonomyResponse(BaseModel):
+    """Response body for GET /api/catalog/taxonomy — every Layer 2 entity in one call."""
+    model_config = ConfigDict(extra="ignore")
+
+    themes: List[ThemeResponse]
+    moods: List[MoodResponse]
+    settings: List[SettingResponse]
+    historical_periods: List[HistoricalPeriodResponse]
+    cultural_concepts: List[CulturalConceptResponse]
+    awards: List[AwardResponse]
+    adaptation_types: List[AdaptationTypeResponse]
+
+
+# --------------------------------------------------------------------------
+# Award reference — embedded in book_catalog.award_ids
 # --------------------------------------------------------------------------
 
 class AwardReference(BaseModel):
@@ -151,8 +449,8 @@ class BookCatalog(BaseModel):
 
     Every field is defensively typed with an explicit default so a
     partially-populated document never crashes a query or response
-    serializer. Layer 2 fields are present but always empty at this stage —
-    they are populated by the next brief, not by this one.
+    serializer. Layer 2 fields (theme_ids, mood_ids, etc.) reference
+    entities in their own taxonomy collections by ID — never free text.
     """
     model_config = ConfigDict(extra="ignore")
 
@@ -220,8 +518,10 @@ class BookCatalogItem(BaseModel):
     Book shape returned inside GET /api/catalog list results.
 
     Excludes internal-only fields (ontology_version, entity_status) and the
-    not-yet-populated Layer 2 arrays. Adds `is_on_shelf`, which is computed
-    per-request from the caller's auth context, not stored on the document.
+    Layer 2 taxonomy arrays — list/card view stays Layer 1 only by design;
+    Layer 2 tags are available via BookCatalogDetail on the book page. Adds
+    `is_on_shelf`, which is computed per-request from the caller's auth
+    context, not stored on the document.
     """
     model_config = ConfigDict(extra="ignore")
 
@@ -252,8 +552,10 @@ class BookCatalogDetail(BookCatalogItem):
     Full shape for GET /api/catalog/{book_id}.
 
     Adds fields not needed in list view but required on the book detail
-    page, plus the (currently empty) Layer 2 placeholder arrays. Still
-    excludes ontology_version and entity_status, per the brief.
+    page, plus the Layer 2 taxonomy arrays (theme_ids, mood_ids, etc.) —
+    raw ID references, resolved into full entities by the caller via
+    GET /api/catalog/taxonomy, not denormalized here. Still excludes
+    ontology_version and entity_status, per the brief.
     """
     description_short: Optional[str] = None
     description_long: Optional[str] = None
@@ -283,7 +585,15 @@ class BookCatalogDetail(BookCatalogItem):
 # --------------------------------------------------------------------------
 
 class CatalogQueryParams(BaseModel):
-    """Validated filter/sort/pagination parameters for GET /api/catalog."""
+    """
+    Validated filter/sort/pagination parameters for GET /api/catalog.
+
+    Layer 1 filters (genre..availability) are typed enums, validated by
+    FastAPI itself. Layer 2 filters (theme..adaptation) are plain strings —
+    their taxonomy collections are open-ended and DB-validated at query
+    time via validate_ids_against_collection(), so an unknown ID returns
+    400, not FastAPI's automatic 422 for a type mismatch.
+    """
     model_config = ConfigDict(extra="ignore")
 
     q: Optional[str] = None
@@ -295,6 +605,16 @@ class CatalogQueryParams(BaseModel):
     availability: List[Availability] = Field(default_factory=list)
     year_from: Optional[int] = None
     year_to: Optional[int] = None
+
+    # --- Layer 2 discovery filters ---
+    theme: List[str] = Field(default_factory=list)
+    mood: List[str] = Field(default_factory=list)
+    setting: List[str] = Field(default_factory=list)
+    period: List[str] = Field(default_factory=list)
+    concept: List[str] = Field(default_factory=list)
+    award: List[str] = Field(default_factory=list)
+    adaptation: List[str] = Field(default_factory=list)
+
     sort: SortOption = SortOption.POPULAR
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=DEFAULT_PAGE_LIMIT, ge=1, le=MAX_PAGE_LIMIT)

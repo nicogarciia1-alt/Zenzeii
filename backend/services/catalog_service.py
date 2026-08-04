@@ -1,5 +1,5 @@
 """
-Business logic for the Zenzeii Library Catalog (Layer 1).
+Business logic for the Zenzeii Library Catalog (Layer 1 and Layer 2).
 
 Owns filter parsing, MongoDB query construction, index management, and the
 read operations backing the /api/catalog endpoints. Contains no FastAPI or
@@ -12,16 +12,27 @@ from typing import Any, Dict, List, Optional, Tuple
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from models.catalog_models import (
+    AdaptationTypeResponse,
+    AwardResponse,
     BookCatalogDetail,
     BookCatalogItem,
     CatalogListResponse,
     CatalogQueryParams,
+    CulturalConceptDetail,
+    CulturalConceptResponse,
     EntityStatus,
     GenreResponse,
+    HistoricalPeriodResponse,
     LENGTH_MEDIUM_MAX_PAGES,
     LENGTH_SHORT_MAX_PAGES,
     LengthCategory,
+    MoodResponse,
+    PERIOD_MULTI_YEAR_START,
+    PERIOD_OPEN_ENDED_YEAR,
+    SettingResponse,
     SortOption,
+    TaxonomyResponse,
+    ThemeResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,6 +56,23 @@ def compute_length_category(page_count: Optional[int]) -> Optional[LengthCategor
     if page_count <= LENGTH_MEDIUM_MAX_PAGES:
         return LengthCategory.MEDIUM
     return LengthCategory.LONG
+
+
+def format_period_years(year_start: int, year_end: int) -> str:
+    """
+    Formats historical_periods.years for display from its numeric range.
+
+    year_end == PERIOD_OPEN_ENDED_YEAR (9999) marks a still-ongoing era
+    (Reiwa) and renders as "{year_start}-present" rather than a literal
+    "-9999". year_start == PERIOD_MULTI_YEAR_START (0) combined with an
+    open-ended year_end is the "spans multiple periods" catch-all entry and
+    renders as a fixed descriptive string instead of a numeric range.
+    """
+    if year_start == PERIOD_MULTI_YEAR_START and year_end == PERIOD_OPEN_ENDED_YEAR:
+        return "Spans multiple periods"
+    if year_end == PERIOD_OPEN_ENDED_YEAR:
+        return f"{year_start}-present"
+    return f"{year_start}-{year_end}"
 
 
 # --------------------------------------------------------------------------
@@ -100,6 +128,75 @@ async def ensure_catalog_indexes(db: AsyncIOMotorDatabase) -> None:
     logger.info("book_catalog and genres indexes ensured")
 
 
+async def ensure_layer2_indexes(db: AsyncIOMotorDatabase) -> None:
+    """
+    Creates every index required by the 7 Layer 2 taxonomy collections and
+    their reference fields on book_catalog.
+
+    Mirrors ensure_catalog_indexes(): not wired into server.py's startup,
+    called explicitly from scripts/seed_layer2_taxonomy.py instead. Safe to
+    call repeatedly — create_index is a no-op when an identical index
+    already exists.
+    """
+    # themes
+    await db.themes.create_index([("id", 1)], unique=True)
+    await db.themes.create_index([("layer", 1)])
+    await db.themes.create_index([("name", 1)])
+
+    # moods
+    await db.moods.create_index([("id", 1)], unique=True)
+    await db.moods.create_index([("layer", 1)])
+    await db.moods.create_index([("name", 1)])
+
+    # settings
+    await db.settings.create_index([("id", 1)], unique=True)
+    await db.settings.create_index([("type", 1)])
+    await db.settings.create_index([("layer", 1)])
+
+    # historical_periods
+    await db.historical_periods.create_index([("id", 1)], unique=True)
+    await db.historical_periods.create_index([("year_start", 1), ("year_end", 1)])
+    await db.historical_periods.create_index([("sort_order", 1)])
+
+    # cultural_concepts — no `language` field here, so no language_override
+    # gotcha like book_catalog's text index needed (see ensure_catalog_indexes).
+    await db.cultural_concepts.create_index([("id", 1)], unique=True)
+    await db.cultural_concepts.create_index([("cultural_category", 1)])
+    await db.cultural_concepts.create_index([("layer", 1)])
+    await db.cultural_concepts.create_index(
+        [("name", "text"), ("romaji", "text"), ("description_short", "text")],
+        name="concepts_text_search",
+    )
+
+    # awards
+    await db.awards.create_index([("id", 1)], unique=True)
+    await db.awards.create_index([("prestige_level", 1)])
+    await db.awards.create_index([("badge_display", 1)])
+
+    # adaptation_types
+    await db.adaptation_types.create_index([("id", 1)], unique=True)
+
+    # book_catalog — Layer 2 reference fields
+    await db.book_catalog.create_index([("theme_ids", 1)])
+    await db.book_catalog.create_index([("mood_ids", 1)])
+    await db.book_catalog.create_index([("setting_ids", 1)])
+    await db.book_catalog.create_index([("period_ids", 1)])
+    await db.book_catalog.create_index([("cultural_concept_ids", 1)])
+    await db.book_catalog.create_index([("adaptation_types", 1)])
+    await db.book_catalog.create_index([("award_ids.award_id", 1)])
+    await db.book_catalog.create_index([("award_ids.award_id", 1), ("award_ids.year", -1)])
+
+    # book_catalog — compound discovery combinations
+    await db.book_catalog.create_index([("mood_ids", 1), ("difficulty", 1)])
+    await db.book_catalog.create_index([("cultural_concept_ids", 1), ("difficulty", 1)])
+    # setting_ids+period_ids and theme_ids+mood_ids are both array-pairs — MongoDB
+    # rejects compound indexes with more than one array field (CannotIndexParallelArrays).
+    # Queries combining two array filters still work via index intersection on the
+    # existing single-field indexes above; there's no compound-index shape that fixes this.
+
+    logger.info("Layer 2 taxonomy and book_catalog reference indexes ensured")
+
+
 # --------------------------------------------------------------------------
 # Sort parsing / mapping
 # --------------------------------------------------------------------------
@@ -139,18 +236,55 @@ def build_sort_spec(sort: SortOption) -> List[Tuple[str, int]]:
 # Filter parsing / query building
 # --------------------------------------------------------------------------
 
-async def validate_genre_ids(db: AsyncIOMotorDatabase, genre_ids: List[str]) -> None:
+async def validate_ids_against_collection(
+    db: AsyncIOMotorDatabase,
+    collection_name: str,
+    ids: List[str],
+    label: str,
+) -> None:
     """
-    Confirms every requested genre_id exists in the genres collection.
+    Confirms every id in `ids` exists in db[collection_name].
 
-    Raises ValueError (mapped to HTTP 400 by the router) if any are unknown.
+    Generic across every controlled-vocabulary collection (genres, themes,
+    moods, settings, historical_periods, cultural_concepts, awards,
+    adaptation_types) — they all use `id` as their unique key. Raises
+    ValueError (mapped to HTTP 400 by the router, not FastAPI's automatic
+    422) naming the unknown ids, prefixed with `label` for a readable
+    message.
     """
-    if not genre_ids:
+    if not ids:
         return
-    known = await db.genres.distinct("id", {"id": {"$in": genre_ids}})
-    unknown = set(genre_ids) - set(known)
+    known = await db[collection_name].distinct("id", {"id": {"$in": ids}})
+    unknown = set(ids) - set(known)
     if unknown:
-        raise ValueError(f"Unknown genre id(s): {', '.join(sorted(unknown))}")
+        raise ValueError(f"Unknown {label} id(s): {', '.join(sorted(unknown))}")
+
+
+# (params attribute, collection name, error-message label) for every
+# ID-reference filter validated by validate_filter_ids() below.
+_ID_FILTER_COLLECTIONS = [
+    ("genre", "genres", "genre"),
+    ("theme", "themes", "theme"),
+    ("mood", "moods", "mood"),
+    ("setting", "settings", "setting"),
+    ("period", "historical_periods", "period"),
+    ("concept", "cultural_concepts", "concept"),
+    ("award", "awards", "award"),
+    ("adaptation", "adaptation_types", "adaptation"),
+]
+
+
+async def validate_filter_ids(db: AsyncIOMotorDatabase, params: CatalogQueryParams) -> None:
+    """
+    Validates every Layer 1 and Layer 2 ID-reference filter on `params`
+    against its taxonomy collection in one pass.
+
+    Raises ValueError (mapped to HTTP 400 by the router) on the first
+    unknown id found, checked in the order listed in _ID_FILTER_COLLECTIONS.
+    """
+    for attr_name, collection_name, label in _ID_FILTER_COLLECTIONS:
+        ids = getattr(params, attr_name)
+        await validate_ids_against_collection(db, collection_name, ids, label)
 
 
 def build_catalog_filter(params: CatalogQueryParams) -> Dict[str, Any]:
@@ -192,6 +326,29 @@ def build_catalog_filter(params: CatalogQueryParams) -> Dict[str, Any]:
             year_range["$lte"] = params.year_to
         query["publication_year"] = year_range
 
+    # --- Layer 2 discovery filters ---
+    if params.theme:
+        query["theme_ids"] = {"$in": params.theme}
+
+    if params.mood:
+        query["mood_ids"] = {"$in": params.mood}
+
+    if params.setting:
+        query["setting_ids"] = {"$in": params.setting}
+
+    if params.period:
+        query["period_ids"] = {"$in": params.period}
+
+    if params.concept:
+        query["cultural_concept_ids"] = {"$in": params.concept}
+
+    if params.award:
+        # award_ids is [{award_id, year}] — match on the embedded award_id.
+        query["award_ids.award_id"] = {"$in": params.award}
+
+    if params.adaptation:
+        query["adaptation_types"] = {"$in": params.adaptation}
+
     return query
 
 
@@ -211,6 +368,21 @@ def build_filters_applied(params: CatalogQueryParams) -> Dict[str, List[str]]:
         applied["language"] = [value.value for value in params.language]
     if params.availability:
         applied["availability"] = [value.value for value in params.availability]
+
+    if params.theme:
+        applied["theme"] = params.theme
+    if params.mood:
+        applied["mood"] = params.mood
+    if params.setting:
+        applied["setting"] = params.setting
+    if params.period:
+        applied["period"] = params.period
+    if params.concept:
+        applied["concept"] = params.concept
+    if params.award:
+        applied["award"] = params.award
+    if params.adaptation:
+        applied["adaptation"] = params.adaptation
 
     return applied
 
@@ -252,9 +424,9 @@ async def list_catalog(
     Executes a filtered, sorted, paginated catalog query.
 
     Raises ValueError (mapped to HTTP 400 by the router) if any requested
-    genre_id is unknown.
+    Layer 1 or Layer 2 filter id is unknown to its taxonomy collection.
     """
-    await validate_genre_ids(db, params.genre)
+    await validate_filter_ids(db, params)
 
     mongo_filter = build_catalog_filter(params)
     sort_spec = build_sort_spec(params.sort)
@@ -315,3 +487,48 @@ async def list_genres(db: AsyncIOMotorDatabase) -> List[GenreResponse]:
     """Returns all genres for the filter UI, ordered by sort_order."""
     cursor = db.genres.find().sort("sort_order", 1)
     return [GenreResponse(**doc) async for doc in cursor]
+
+
+async def get_taxonomy(db: AsyncIOMotorDatabase) -> TaxonomyResponse:
+    """
+    Fetches every Layer 2 taxonomy collection in one call, each ordered by
+    sort_order, for GET /api/catalog/taxonomy.
+    """
+    themes = [ThemeResponse(**doc) async for doc in db.themes.find().sort("sort_order", 1)]
+    moods = [MoodResponse(**doc) async for doc in db.moods.find().sort("sort_order", 1)]
+    settings = [SettingResponse(**doc) async for doc in db.settings.find().sort("sort_order", 1)]
+    periods = [
+        HistoricalPeriodResponse(**doc)
+        async for doc in db.historical_periods.find().sort("sort_order", 1)
+    ]
+    concepts = [
+        CulturalConceptResponse(**doc)
+        async for doc in db.cultural_concepts.find().sort("sort_order", 1)
+    ]
+    awards = [AwardResponse(**doc) async for doc in db.awards.find().sort("sort_order", 1)]
+    adaptations = [
+        AdaptationTypeResponse(**doc)
+        async for doc in db.adaptation_types.find().sort("sort_order", 1)
+    ]
+
+    return TaxonomyResponse(
+        themes=themes,
+        moods=moods,
+        settings=settings,
+        historical_periods=periods,
+        cultural_concepts=concepts,
+        awards=awards,
+        adaptation_types=adaptations,
+    )
+
+
+async def get_concept_by_id(db: AsyncIOMotorDatabase, concept_id: str) -> Optional[CulturalConceptDetail]:
+    """
+    Fetches a single cultural concept with its full long-form description.
+
+    Returns None (mapped to HTTP 404 by the router) if concept_id is unknown.
+    """
+    doc = await db.cultural_concepts.find_one({"id": concept_id})
+    if doc is None:
+        return None
+    return CulturalConceptDetail(**doc)

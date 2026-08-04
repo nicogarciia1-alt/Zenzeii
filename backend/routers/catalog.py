@@ -1,9 +1,11 @@
 """
-API endpoints for the Zenzeii Library Catalog (Layer 1).
+API endpoints for the Zenzeii Library Catalog (Layer 1 and Layer 2).
 
-GET /api/catalog             — filtered, sorted, paginated book listing
-GET /api/catalog/genres      — controlled vocabulary for the genre filter
-GET /api/catalog/{book_id}   — single published catalog entry
+GET /api/catalog                    — filtered, sorted, paginated book listing
+GET /api/catalog/genres             — controlled vocabulary for the genre filter
+GET /api/catalog/taxonomy           — every Layer 2 taxonomy entity in one call
+GET /api/catalog/concepts/{id}      — cultural concept detail (full description)
+GET /api/catalog/{book_id}          — single published catalog entry
 
 All business logic lives in services/catalog_service.py; this module is
 responsible only for HTTP concerns: parameter declaration, dependency
@@ -13,7 +15,7 @@ import logging
 from typing import List, Optional
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -23,12 +25,15 @@ from models.catalog_models import (
     CatalogLanguage,
     CatalogListResponse,
     CatalogQueryParams,
+    CulturalConceptDetail,
     DEFAULT_PAGE_LIMIT,
     Difficulty,
     GenreListResponse,
     JLPTLevel,
     LengthCategory,
     MAX_PAGE_LIMIT,
+    TAXONOMY_CACHE_MAX_AGE_SECONDS,
+    TaxonomyResponse,
 )
 from services import catalog_service
 
@@ -92,6 +97,36 @@ async def get_catalog_genres(db: AsyncIOMotorDatabase = Depends(get_db)):
     return GenreListResponse(genres=genres)
 
 
+@catalog_router.get("/taxonomy", response_model=TaxonomyResponse)
+async def get_catalog_taxonomy(response: Response, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """
+    Returns every Layer 2 taxonomy entity in one call — themes, moods,
+    settings, historical periods, cultural concepts, awards, and adaptation
+    types. Used to populate the discovery filter UI.
+
+    Sets Cache-Control directly since taxonomy changes rarely and this is a
+    new endpoint; unlike GET /api/catalog/genres (Layer 1, already shipped),
+    caching isn't left as a frontend/CDN-only concern here.
+    """
+    response.headers["Cache-Control"] = f"public, max-age={TAXONOMY_CACHE_MAX_AGE_SECONDS}"
+    return await catalog_service.get_taxonomy(db)
+
+
+@catalog_router.get("/concepts/{concept_id}", response_model=CulturalConceptDetail)
+async def get_catalog_concept(concept_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """
+    Returns a single cultural concept with its full long-form description,
+    for tooltip/explanation UI.
+
+    Raises:
+        404 — concept_id not found in the cultural_concepts collection.
+    """
+    concept = await catalog_service.get_concept_by_id(db, concept_id)
+    if concept is None:
+        raise HTTPException(status_code=404, detail="Cultural concept not found")
+    return concept
+
+
 @catalog_router.get("", response_model=CatalogListResponse)
 async def get_catalog(
     q: Optional[str] = Query(None, description="Full-text search across title and author"),
@@ -103,6 +138,13 @@ async def get_catalog(
     availability: List[Availability] = Query([], description="Availability enum, repeatable"),
     year_from: Optional[int] = Query(None, description="Publication year range start"),
     year_to: Optional[int] = Query(None, description="Publication year range end"),
+    theme: List[str] = Query([], description="Theme id slug, repeatable (Layer 2)"),
+    mood: List[str] = Query([], description="Mood id slug, repeatable (Layer 2)"),
+    setting: List[str] = Query([], description="Setting id slug, repeatable (Layer 2)"),
+    period: List[str] = Query([], description="Historical period id slug, repeatable (Layer 2)"),
+    concept: List[str] = Query([], description="Cultural concept id slug, repeatable (Layer 2)"),
+    award: List[str] = Query([], description="Award id slug, repeatable (Layer 2)"),
+    adaptation: List[str] = Query([], description="Adaptation type id slug, repeatable (Layer 2)"),
     sort: Optional[str] = Query(
         None, description="Sort order — one of: popular, rating, recent, year, title"
     ),
@@ -113,10 +155,14 @@ async def get_catalog(
 ):
     """
     Primary catalog listing. Filters narrow the result set; sort reorders
-    within the filtered set. Both apply simultaneously.
+    within the filtered set. Both apply simultaneously. Layer 2 filters
+    (theme..adaptation) combine with Layer 1 filters and with each other the
+    same way: OR within a field's repeated values, AND across fields.
 
     Raises:
-        400 — unknown genre id, or an invalid `sort` value.
+        400 — unknown id for any Layer 1 or Layer 2 reference filter
+              (genre, theme, mood, setting, period, concept, award,
+              adaptation), or an invalid `sort` value.
         422 — malformed query parameters (raised automatically by FastAPI
               for values that don't match a declared type or enum).
     """
@@ -132,6 +178,13 @@ async def get_catalog(
             availability=availability,
             year_from=year_from,
             year_to=year_to,
+            theme=theme,
+            mood=mood,
+            setting=setting,
+            period=period,
+            concept=concept,
+            award=award,
+            adaptation=adaptation,
             sort=parsed_sort,
             page=page,
             limit=limit,
