@@ -47,6 +47,9 @@ from services.translation import (
     get_word_forms
 )
 
+# Import routers
+from routers.catalog import catalog_router
+
 # Import rate limiting constants
 IMPORT_LIMIT_PER_HOUR = 3
 IMPORT_LIMIT_WINDOW_HOURS = 1
@@ -2758,6 +2761,7 @@ async def root():
     return {"message": "Japanese Reading App API", "version": "3.0.0"}
 
 app.include_router(api_router)
+app.include_router(catalog_router, prefix="/api")
 
 # ========================
 # STRIPE WEBHOOK
