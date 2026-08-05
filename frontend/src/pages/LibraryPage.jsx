@@ -14,13 +14,14 @@
  *     <CatalogGrid />           Phase 6
  *   </LibraryPage>
  */
+import LibraryHero from '@/features/library/components/hero/LibraryHero';
 
 export default function LibraryPage() {
   return (
     <div className="min-h-screen bg-library-bg-primary">
 
       {/* Phase 1 — Hero */}
-      <div data-section="hero" className="w-full h-[300px] md:h-[360px] lg:h-[480px] bg-library-bg-hero-dark" />
+      <LibraryHero />
 
       {/* Phase 2 — Recommendation */}
       <div data-section="recommendation" className="max-w-[1440px] mx-auto px-6 md:px-12 lg:px-20 py-8 lg:py-12" />
