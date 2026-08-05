@@ -14,6 +14,8 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import PricingPage from "@/pages/PricingPage";
+import AudioPacksPage from "@/pages/AudioPacksPage";
+import LibraryPage from "@/pages/LibraryPage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -49,11 +51,13 @@ function AppRoutes() {
       <Route path="/read/:bookId/:chapterId" element={<ProtectedRoute><ReaderPage /></ProtectedRoute>} />
       <Route path="/vocabulary" element={<ProtectedRoute><VocabularyPage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-      <Route path="/library" element={<ProtectedRoute><div>Library coming soon</div></ProtectedRoute>} />
+      <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route path="/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
+      <Route path="/upgrade" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
+      <Route path="/audio-packs" element={<ProtectedRoute><AudioPacksPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

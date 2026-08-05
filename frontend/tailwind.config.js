@@ -55,6 +55,26 @@ module.exports = {
           4: "hsl(var(--chart-4))",
           5: "hsl(var(--chart-5))",
         },
+        // Zenzeii Library feature — scoped token set (frontend/src/features/library).
+        // Does not replace or alias the app-wide tokens above; the Library page
+        // opts into this palette explicitly via the `library-*` utility classes.
+        library: {
+          'bg-primary': '#FAFAF8',
+          'bg-card': '#FFFFFF',
+          'bg-hero-dark': '#1C1A17',
+          'bg-shelf': '#F5F3EF',
+          'text-primary': '#1A1814',
+          'text-secondary': '#6B6560',
+          'text-muted': '#9B958F',
+          'text-hero': '#FFFFFF',
+          red: '#C0392B',
+          'red-hover': '#A93226',
+          border: '#E8E4DF',
+          'filter-active': '#F8F4F0',
+          star: '#D4A017',
+          'shelf-overlay-from': 'rgba(0,0,0,0)',
+          'shelf-overlay-to': 'rgba(0,0,0,0.7)',
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
