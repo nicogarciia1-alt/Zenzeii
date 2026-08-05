@@ -12,7 +12,6 @@ import ProfilePage from "@/pages/ProfilePage";
 import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
-import ZenzeiiLibraryPage from "@/pages/ZenzeiiLibraryPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import PricingPage from "@/pages/PricingPage";
 
@@ -50,7 +49,7 @@ function AppRoutes() {
       <Route path="/read/:bookId/:chapterId" element={<ProtectedRoute><ReaderPage /></ProtectedRoute>} />
       <Route path="/vocabulary" element={<ProtectedRoute><VocabularyPage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-      <Route path="/zenzeii-library" element={<ProtectedRoute><ZenzeiiLibraryPage /></ProtectedRoute>} />
+      <Route path="/library" element={<ProtectedRoute><div>Library coming soon</div></ProtectedRoute>} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />

@@ -61,7 +61,7 @@ export const Navbar = () => {
   const navItems = [
     { path: '/', icon: Library, label: 'My Books' },
     { path: '/vocabulary', icon: BookOpen, label: 'Vocabulary' },
-    { path: '/zenzeii-library', icon: BookMarked, label: 'Library' },
+    { path: '/library', icon: BookMarked, label: 'Library' },
   ];
 
   return (
