@@ -11,6 +11,10 @@ module.exports = {
         sans: ['Noto Sans JP', 'Inter', 'system-ui', 'sans-serif'],
         serif: ['Noto Serif JP', 'Merriweather', 'Georgia', 'serif'],
         mono: ['JetBrains Mono', 'monospace'],
+        playfair: ['Playfair Display', 'Georgia', 'serif'],
+        garamond: ['EB Garamond', 'Georgia', 'serif'],
+        cormorant: ['Cormorant Garamond', 'Georgia', 'serif'],
+        crimson: ['Crimson Text', 'Georgia', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",
