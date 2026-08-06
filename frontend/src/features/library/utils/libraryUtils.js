@@ -39,3 +39,36 @@ export function formatRatingCount(count) {
   }
   return String(count);
 }
+
+/**
+ * Deterministic FNV-1a string hash. Extracted here in Phase 4 from
+ * BookCoverArt.jsx (its original, sole caller) once FeelingCard needed
+ * the exact same hash — same algorithm, unchanged, just relocated so two
+ * components can share one implementation instead of each carrying its
+ * own copy.
+ *
+ * Not the simplest possible hash (a djb2-style `hash*31+char` was tried
+ * first, in BookCoverArt, and rejected): verified empirically against
+ * the 10 real seeded book IDs and it collapsed badly — 6 of 10 IDs share
+ * the exact "aozora-" prefix, and that hash's poor mixing at small
+ * moduli put 6 of them on the same color. FNV-1a spreads meaningfully
+ * better on the same real data (verified: 4 distinct colors instead of
+ * 3, largest cluster 4 books instead of 6).
+ *
+ * When deriving two independent values from one input (e.g. a color AND
+ * a decorative glyph), hash different transforms of the input (e.g.
+ * forward vs. reversed string) rather than the same hash with two small
+ * moduli — moduli 8 and 4 would make one fully determined by the other,
+ * since 4 divides 8.
+ *
+ * @param {string} str
+ * @returns {number} Unsigned 32-bit hash.
+ */
+export function fnv1aHash(str) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}

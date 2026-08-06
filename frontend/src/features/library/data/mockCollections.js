@@ -12,19 +12,19 @@
  */
 
 export const FEELING_SHELVES = [
-  { id: 'rainy_day', name: 'Rainy Day', name_jp: '雨の日', emoji: '🌧', book_count: 28 },
-  { id: 'quiet_evening', name: 'Quiet Evening', name_jp: '静かな夜', emoji: '🌙', book_count: 32 },
-  { id: 'cozy_warm', name: 'Cozy & Warm', name_jp: '温かい', emoji: '☕', book_count: 41 },
-  { id: 'reflective', name: 'Reflective', name_jp: '内省的', emoji: '🍃', book_count: 37 },
-  { id: 'mysterious', name: 'Mysterious', name_jp: '神秘的', emoji: '👁', book_count: 29 },
-  { id: 'funny', name: 'Funny', name_jp: '面白い', emoji: '😄', book_count: 23 },
+  { id: 'rainy_day', name: 'Rainy Day', name_jp: '雨の日', emoji: '🌧', book_count: 28, image_url: null },
+  { id: 'quiet_evening', name: 'Quiet Evening', name_jp: '静かな夜', emoji: '🌙', book_count: 32, image_url: null },
+  { id: 'cozy_warm', name: 'Cozy & Warm', name_jp: '温かい', emoji: '☕', book_count: 41, image_url: null },
+  { id: 'reflective', name: 'Reflective', name_jp: '内省的', emoji: '🍃', book_count: 37, image_url: null },
+  { id: 'mysterious', name: 'Mysterious', name_jp: '神秘的', emoji: '👁', book_count: 29, image_url: null },
+  { id: 'funny', name: 'Funny', name_jp: '面白い', emoji: '😄', book_count: 23, image_url: null },
 ];
 
 export const DISCOVER_JAPAN_SHELVES = [
-  { id: 'tokyo_stories', name: 'Tokyo Stories', book_count: 35 },
-  { id: 'kyoto_tradition', name: 'Kyoto & Tradition', book_count: 42 },
-  { id: 'countryside_life', name: 'Countryside Life', book_count: 31 },
-  { id: 'edo_period', name: 'Edo Period', book_count: 28 },
-  { id: 'tea_ceremony', name: 'Tea Ceremony', book_count: 18 },
-  { id: 'samurai_history', name: 'Samurai & History', book_count: 26 },
+  { id: 'tokyo_stories', name: 'Tokyo Stories', name_jp: '東京の物語', book_count: 35, image_url: null },
+  { id: 'kyoto_tradition', name: 'Kyoto & Tradition', name_jp: '京都と伝統', book_count: 42, image_url: null },
+  { id: 'countryside_life', name: 'Countryside Life', name_jp: '田舎暮らし', book_count: 31, image_url: null },
+  { id: 'edo_period', name: 'Edo Period', name_jp: '江戸時代', book_count: 28, image_url: null },
+  { id: 'tea_ceremony', name: 'Tea Ceremony', name_jp: '茶道', book_count: 18, image_url: null },
+  { id: 'samurai_history', name: 'Samurai & History', name_jp: '侍と歴史', book_count: 26, image_url: null },
 ];

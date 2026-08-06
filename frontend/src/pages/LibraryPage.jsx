@@ -17,6 +17,7 @@
 import LibraryHero from '@/features/library/components/hero/LibraryHero';
 import { RecommendationSection } from '@/features/library/components/recommendation/RecommendationSection';
 import { FilterBar } from '@/features/library/components/filters/FilterBar';
+import { ShelvesSection } from '@/features/library/components/shelves/ShelvesSection';
 
 export default function LibraryPage() {
   return (
@@ -32,7 +33,7 @@ export default function LibraryPage() {
       <FilterBar />
 
       {/* Phase 4 — Shelves */}
-      <div data-section="shelves" className="max-w-[1440px] mx-auto px-6 md:px-12 lg:px-20 py-8 lg:py-12 space-y-8 lg:space-y-16" />
+      <ShelvesSection />
 
     </div>
   );

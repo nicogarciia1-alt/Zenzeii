@@ -205,6 +205,18 @@ ruby rt {
   background: hsl(var(--muted-foreground));
 }
 
+/* Scoped scrollbar hiding — used by Library shelf scroll rows. Does not
+   touch the global ::-webkit-scrollbar rules above; a class-scoped
+   selector already wins the cascade over that bare pseudo-element rule. */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Animation classes */
 @keyframes fade-in {
   from { opacity: 0; }

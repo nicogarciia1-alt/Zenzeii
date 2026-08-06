@@ -15,8 +15,13 @@
  * @param {string} [props.icon] - Optional icon/emoji before title (e.g. "✦")
  * @param {string} [props.viewAllLabel] - Label for the "View all" link (e.g. "View all")
  * @param {function} [props.onViewAll] - Called when "View all" is clicked
+ * @param {string} [props.viewAllAriaLabel] - More specific aria-label for the
+ *   "View all" link (e.g. "View all books in Timeless classics"), for when the
+ *   short visible label needs a longer accessible name. Falls back to
+ *   viewAllLabel when omitted — existing callers (RecommendationSection)
+ *   are unaffected.
  */
-export function SectionHeader({ title, subtitle, icon, viewAllLabel, onViewAll }) {
+export function SectionHeader({ title, subtitle, icon, viewAllLabel, onViewAll, viewAllAriaLabel }) {
   return (
     <div className="mb-6">
       <div className="flex items-baseline justify-between gap-4">
@@ -32,6 +37,7 @@ export function SectionHeader({ title, subtitle, icon, viewAllLabel, onViewAll }
           <button
             type="button"
             onClick={onViewAll}
+            aria-label={viewAllAriaLabel || viewAllLabel}
             className="text-sm text-library-text-secondary hover:underline whitespace-nowrap"
           >
             {viewAllLabel}

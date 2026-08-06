@@ -10,31 +10,12 @@
  * hash rather than title-derived, a fixed 8-color literary palette,
  * explicit sm/md/lg size variants), scoped to the Library feature per
  * the established features/library convention. That file is untouched.
- */
-
-/**
- * Deterministic FNV-1a string hash — derives cover color and decorative
- * kanji per book.
  *
- * Not the simplest possible hash (a djb2-style `hash*31+char` was tried
- * first and rejected): verified empirically against the 10 real seeded
- * book IDs and it collapsed badly — 6 of 10 IDs share the exact
- * "aozora-" prefix, and that hash's poor mixing at small moduli put 6 of
- * them on the same color. FNV-1a spreads meaningfully better on the same
- * real data (verified: 4 distinct colors instead of 3, largest cluster
- * 4 books instead of 6). Color and kanji are hashed from different
- * transforms of the input (forward vs. reversed string) so they vary
- * independently — hashing both from the same value with moduli 8 and 4
- * would make kanji fully determined by color, since 4 divides 8.
+ * The hash function itself (fnv1aHash) moved to libraryUtils.js in
+ * Phase 4, once FeelingCard needed the same hash for its own color
+ * derivation — see that file for the full rationale.
  */
-function fnv1aHash(str) {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
+import { fnv1aHash } from '../../utils/libraryUtils';
 
 /** The complete 8-color generated-cover palette. Named constants — never inlined in JSX. */
 const LITERARY_COLORS = [
