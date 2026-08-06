@@ -55,3 +55,32 @@ export const PRIMARY_FILTERS = ['genre', 'difficulty', 'jlpt', 'length', 'theme'
 
 /** Filter bar secondary filters — shown inside "More Filters" panel */
 export const SECONDARY_FILTERS = ['setting', 'period', 'concept', 'award', 'adaptation'];
+
+/**
+ * Configuration for the 6 primary FilterBar chips (Phase 3). `icon` is a
+ * lucide-react export name, resolved to a component by FilterBar — kept
+ * as a string here so this file stays plain data, no JSX/React import.
+ * `optionsSource` of 'static' means the chip's options come from the
+ * *_OPTIONS constants below; 'genres'/'themes'/'moods' means they're
+ * mapped from mockTaxonomy.js in Phase 3, and from useTaxonomy() in
+ * Phase 6 — same FilterOption[] shape either way.
+ */
+export const FILTER_BAR_CHIPS = [
+  { id: 'genre', label: 'Genre', icon: 'BookOpen', optionsSource: 'genres' },
+  { id: 'difficulty', label: 'Difficulty', icon: 'BarChart2', optionsSource: 'static' },
+  { id: 'jlpt', label: 'JLPT Level', icon: 'Languages', optionsSource: 'static' },
+  { id: 'length', label: 'Length', icon: 'Clock', optionsSource: 'static' },
+  { id: 'theme', label: 'Theme', icon: 'Leaf', optionsSource: 'themes' },
+  { id: 'mood', label: 'Mood', icon: 'Smile', optionsSource: 'moods' },
+];
+
+/**
+ * Static filter option lists for the Difficulty/JLPT/Length FilterChips.
+ * Derived from the *_LABELS maps above rather than duplicating the same
+ * label text a second time — one source of truth, so the badge text used
+ * in BookInfoBlock (Phase 2) and these dropdown options can never drift
+ * apart.
+ */
+export const DIFFICULTY_OPTIONS = Object.entries(DIFFICULTY_LABELS).map(([value, label]) => ({ value, label }));
+export const JLPT_OPTIONS = Object.entries(JLPT_LABELS).map(([value, label]) => ({ value, label }));
+export const LENGTH_OPTIONS = Object.entries(LENGTH_LABELS).map(([value, label]) => ({ value, label }));

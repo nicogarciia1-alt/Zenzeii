@@ -89,4 +89,17 @@
  * @property {Object[]} adaptation_types
  */
 
+/**
+ * @typedef {Object} FilterOption
+ * Used by FilterDropdown (Phase 3) — a single selectable value inside a
+ * filter chip's dropdown. Genre/Theme/Mood options are mapped from their
+ * respective taxonomy entities (Genre/Object[themes]/Mood above);
+ * Difficulty/JLPT/Length options come from libraryConstants.js's static
+ * *_OPTIONS arrays.
+ * @property {string} value - The filter value (matches API parameter value)
+ * @property {string} label - Human-readable display label
+ * @property {string} [labelJp] - Optional Japanese label
+ * @property {number} [count] - Optional book count (Phase 6+, absent in Phase 3)
+ */
+
 export {};
