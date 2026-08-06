@@ -28,6 +28,12 @@ export const MOCK_CATALOG_BOOKS = [
     author_name: 'Natsume Soseki',
     author_name_jp: '夏目漱石',
     cover_image: null,
+    // description_short is not part of BookCatalogItem (list-view shape) —
+    // only BookCatalogDetail carries it, per the real API split. Added
+    // here, on this one entry only, because Phase 2's RecommendationCard
+    // needs a description and this is the featured book. Real seeded
+    // value from backend/scripts/seed_catalog.py, not a placeholder.
+    description_short: 'A meditation on isolation and guilt in early 20th-century Japan.',
     genre_ids: ['genre_novel', 'genre_classic'],
     difficulty: 'intermediate',
     jlpt_level: 'N2',
