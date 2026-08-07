@@ -1,19 +1,20 @@
 /**
  * @fileoverview "More Filters" button for the Library filter bar.
  *
- * Opens the advanced Layer 2 filter panel (MoreFiltersPanel — Phase 8).
- * In Phase 3: renders as a styled button, logs to console on click.
- * Phase 8: receives onOpen callback to show MoreFiltersPanel.
+ * Opens the advanced Layer 2 filter panel (MoreFiltersPanel). FilterBar
+ * always supplies a real onOpen, so DEFAULT_ON_OPEN below only runs if
+ * this button is ever rendered standalone, outside FilterBar — a
+ * defensive fallback, not a pending stub.
  */
 import { SlidersHorizontal } from 'lucide-react';
 
 const DEFAULT_ON_OPEN = () =>
-  console.log('[MoreFiltersButton] More Filters clicked — Phase 8 will open MoreFiltersPanel');
+  console.log('[MoreFiltersButton] More Filters clicked, but no onOpen handler was provided.');
 
 /**
  * @param {Object} props
- * @param {function} [props.onOpen] - Called when button is clicked (Phase 8)
- * @param {number} [props.activeCount] - Number of active advanced filters (Phase 8)
+ * @param {function} [props.onOpen] - Called when button is clicked
+ * @param {number} [props.activeCount] - Number of active advanced filters
  */
 export function MoreFiltersButton({ onOpen = DEFAULT_ON_OPEN, activeCount = 0 }) {
   return (

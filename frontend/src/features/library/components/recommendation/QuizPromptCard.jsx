@@ -9,9 +9,8 @@
  * No props — entirely static content.
  */
 
-const handleFindMyBook = () => {
-  console.log('[QuizPromptCard] Find My Book clicked — quiz feature not yet implemented (not scheduled in the current phase plan)');
-};
+// TODO: quiz feature not yet implemented — not scheduled in the current phase plan.
+const handleFindMyBook = () => {};
 
 export function QuizPromptCard() {
   return (

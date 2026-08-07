@@ -2,11 +2,14 @@
  * @fileoverview "Your next book" recommendation section.
  *
  * Renders the featured book recommendation and quiz prompt card directly
- * below the hero. Uses mock data in Phase 2 — the real seeded Kokoro
- * entry from mockCatalog.js. Phase 6 replaces mock data with real
- * catalog API data.
+ * below the hero. Still hardcoded to the seeded Kokoro entry from
+ * mockCatalog.js as of Phase 11 — deliberately not wired to live data.
+ * Personalized recommendations need actual user signal (reading history,
+ * saved books) to mean anything, which doesn't exist yet; a real
+ * catalog fetch here would just swap one arbitrary hardcoded book for
+ * another. Revisit once personalization has a real backend to call.
  *
- * No props — data sourced from mock in Phase 2.
+ * No props — data sourced from mock.
  */
 import { SectionHeader } from '../shelves/SectionHeader';
 import { RecommendationCard } from './RecommendationCard';

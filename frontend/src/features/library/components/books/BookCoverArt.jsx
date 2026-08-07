@@ -34,11 +34,10 @@ const DECORATIVE_KANJI = ['空', '読', '心', '文'];
 
 /**
  * Size variants. 'md' typography (text-lg title / text-xs author /
- * text-8xl kanji) is the brief's literal spec — Phase 2's
- * RecommendationCard is the only place this component renders today, and
- * it uses 'md'. 'sm'/'lg' are scaled proportionally from that baseline
- * for Phase 5 (BookCardShelf) and Phase 9 (BookDetailModal); not yet
- * visually exercised.
+ * text-8xl kanji) is the brief's literal spec, originally sized for
+ * Phase 2's RecommendationCard. 'sm' is exercised by BookCard's shelf/
+ * compact variants (Phase 5), 'md' by BookCard's grid variant; 'lg' is
+ * scaled proportionally for Phase 9's BookDetailModal, not yet built.
  */
 const SIZE_CONFIG = {
   sm: { wrapper: 'w-[80px] h-[120px]', padding: 'p-2', title: 'text-[10px]', author: 'text-[8px]', kanji: 'text-4xl' },

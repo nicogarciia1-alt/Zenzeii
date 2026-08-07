@@ -31,9 +31,7 @@
  * }}
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { SEARCH_DEBOUNCE_MS } from '../constants/libraryConstants';
-
-const CATALOG_SECTION_ID = 'library-catalog-section';
+import { SEARCH_DEBOUNCE_MS, CATALOG_SECTION_ID } from '../constants/libraryConstants';
 
 export function useSearch(onSearch) {
   const [query, setQueryState] = useState('');

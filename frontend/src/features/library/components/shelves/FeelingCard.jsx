@@ -42,8 +42,9 @@ const FEELING_GRADIENTS = [
  * @param {function} [props.onClick] - Called when card is clicked
  */
 export function FeelingCard({ id, name, nameJp, bookCount, imageUrl, emoji, onClick }) {
+  // TODO: filtering the catalog by collection needs the dynamic collection
+  // backend feature (ShelvesSection is still on mock data) — not yet built.
   const handleClick = () => {
-    console.log(`[FeelingCard] Collection clicked: ${id} — Phase 6 will filter catalog by this collection`);
     if (onClick) onClick(id);
   };
 

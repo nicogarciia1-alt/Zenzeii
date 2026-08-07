@@ -8,13 +8,21 @@
  * LibraryHero → here. Without it, SearchBar renders inert (typing does
  * nothing) rather than crashing — same graceful-fallback pattern as
  * onExplore/onSurpriseMe below.
+ *
+ * LibraryPage never actually passes onExplore/onSurpriseMe — these
+ * defaults are what real users hit. "Explore Books" scrolls to the same
+ * #library-catalog-section useSearch already targets after a debounced
+ * search; "Surprise Me" needs a real destination to land on (a random
+ * book's detail view), which doesn't exist until Phase 9 (deferred), so
+ * it stays inert rather than navigating somewhere half-built.
  */
 import { SearchBar } from './SearchBar';
+import { CATALOG_SECTION_ID } from '../../constants/libraryConstants';
 
 const DEFAULT_EXPLORE = () =>
-  console.log('[LibraryHero] Explore Books clicked — Phase 7 will connect search');
-const DEFAULT_SURPRISE_ME = () =>
-  console.log('[LibraryHero] Surprise Me clicked — Phase 6 will connect random book');
+  document.getElementById(CATALOG_SECTION_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+// TODO: needs a real destination (random book detail view) — Phase 9, deferred.
+const DEFAULT_SURPRISE_ME = () => {};
 const DEFAULT_SEARCH_PROPS = { value: '', onChange: () => {}, onClear: () => {}, isSearching: false };
 
 /**

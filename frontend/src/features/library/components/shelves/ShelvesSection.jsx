@@ -2,8 +2,13 @@
  * @fileoverview Library shelves section — all discovery shelf groups.
  *
  * Renders: Feeling Shelves, Discover Japan shelves, and Timeless
- * Classics shelf. Uses mock data in Phase 4. Phase 6 connects to real
- * catalog API.
+ * Classics shelf. Still on mock data as of Phase 11 — deliberately not
+ * wired to live data (see Phase 6/8/10 notes throughout this codebase).
+ * The "Explore by feeling"/"Discover Japan" shelves are hand-curated
+ * collections (mood/setting groupings), not a plain catalog query — they
+ * need a dynamic collection backend endpoint that doesn't exist yet, so
+ * wiring them to live data isn't a drop-in fetchCatalog() swap the way
+ * FilterBar/CatalogGrid were.
  *
  * No separate FeelingShelvesGroup/DiscoverJapanGroup/ClassicsShelfGroup
  * components — the three shelf blocks are inlined directly here,
@@ -11,8 +16,7 @@
  * implementation order (neither ever creates those three files,
  * despite the brief's Component Breakdown diagram implying they exist).
  *
- * No props — self-contained with mock data in Phase 4.
- * Phase 6: receives collections and books from parent (LibraryPage via useCatalog).
+ * No props — self-contained with mock data.
  */
 import { SectionHeader } from './SectionHeader';
 import { ShelfScrollContainer } from './ShelfScrollContainer';
@@ -31,7 +35,8 @@ export function ShelvesSection() {
           subtitle="Books that match your mood"
           viewAllLabel="View all"
           viewAllAriaLabel="View all books in Explore by feeling"
-          onViewAll={() => console.log('[ShelvesSection] View all feeling shelves clicked — Phase 6')}
+          // TODO: needs a dynamic collection backend endpoint — see fileoverview above.
+          onViewAll={() => {}}
         />
         <ShelfScrollContainer>
           {FEELING_SHELVES.map((shelf) => (
@@ -55,7 +60,8 @@ export function ShelvesSection() {
           subtitle="Explore books by setting, culture, and time"
           viewAllLabel="View all"
           viewAllAriaLabel="View all books in Discover Japan through stories"
-          onViewAll={() => console.log('[ShelvesSection] View all Discover Japan shelves clicked — Phase 6')}
+          // TODO: needs a dynamic collection backend endpoint — see fileoverview above.
+          onViewAll={() => {}}
         />
         <ShelfScrollContainer>
           {DISCOVER_JAPAN_SHELVES.map((shelf) => (
@@ -77,7 +83,8 @@ export function ShelvesSection() {
         title="Timeless classics"
         subtitle="The books everyone should read"
         books={MOCK_CATALOG_BOOKS}
-        onViewAll={() => console.log('[ShelvesSection] View all classics clicked — Phase 6')}
+        // TODO: needs a dynamic collection backend endpoint — see fileoverview above.
+        onViewAll={() => {}}
       />
     </div>
   );

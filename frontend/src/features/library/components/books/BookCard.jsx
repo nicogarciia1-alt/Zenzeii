@@ -135,8 +135,8 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
   );
   const buttonProps = getImportButtonProps(importStatus);
 
+  // TODO: Phase 9 (deferred — book detail design pending) opens BookDetailModal here by default.
   const handleCardClick = () => {
-    console.log(`[BookCard] ${variant} variant clicked:`, book.id, '— Phase 9 will open BookDetailModal');
     if (onCardClick) onCardClick(book);
   };
 

@@ -50,6 +50,13 @@ export const MAX_PAGE_SIZE = 48;
 /** Debounce delay for search input (ms) */
 export const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * DOM id of the catalog section in LibraryPage — the scroll target for
+ * both a debounced search (useSearch) and the hero's "Explore Books" CTA
+ * (HeroContent). One constant so the three call sites can't drift apart.
+ */
+export const CATALOG_SECTION_ID = 'library-catalog-section';
+
 /** Filter bar primary filters — shown without "More Filters" */
 export const PRIMARY_FILTERS = ['genre', 'difficulty', 'jlpt', 'length', 'theme', 'mood'];
 

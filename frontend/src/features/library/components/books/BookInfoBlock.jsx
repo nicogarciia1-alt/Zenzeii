@@ -11,10 +11,11 @@ import { StarRating } from './StarRating';
 import { DIFFICULTY_LABELS } from '../../constants/libraryConstants';
 import { estimateReadingHours } from '../../utils/libraryUtils';
 
-const DEFAULT_VIEW_DETAILS = (book) =>
-  console.log(`[BookInfoBlock] View Details clicked for "${book.title_en}" — Phase 9 will open the detail modal`);
-const DEFAULT_BOOKMARK = (book) =>
-  console.log(`[BookInfoBlock] Bookmark clicked for "${book.title_en}" — Phase 10 will connect real shelf state`);
+// TODO: Phase 9 (deferred — book detail design pending) opens the detail modal here.
+const DEFAULT_VIEW_DETAILS = () => {};
+// TODO: wiring real shelf/import state here needs RecommendationSection off
+// its hardcoded mock book first — see RecommendationSection.jsx.
+const DEFAULT_BOOKMARK = () => {};
 
 /**
  * @param {Object} props

@@ -30,6 +30,7 @@ import { SectionHeader } from '@/features/library/components/shelves/SectionHead
 import { useCatalog } from '@/features/library/hooks/useCatalog';
 import { useTaxonomy } from '@/features/library/hooks/useTaxonomy';
 import { useSearch } from '@/features/library/hooks/useSearch';
+import { CATALOG_SECTION_ID } from '@/features/library/constants/libraryConstants';
 import Layout from '@/components/layout/Layout';
 
 export default function LibraryPage() {
@@ -65,7 +66,7 @@ export default function LibraryPage() {
       <ShelvesSection />
 
       {/* Phase 6 — Catalog: all books, filterable. Phase 7: also the search results view. */}
-      <div id="library-catalog-section" className="max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8">
+      <div id={CATALOG_SECTION_ID} className="max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8">
         <SectionHeader
           title="All books"
           subtitle={
