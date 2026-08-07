@@ -56,7 +56,7 @@ export function FeelingCard({ id, name, nameJp, bookCount, imageUrl, emoji, onCl
       onClick={handleClick}
       aria-label={`${name} — ${bookCount} books`}
       title={nameJp}
-      className="relative w-[140px] h-[140px] md:w-[160px] md:h-[160px] rounded-lg overflow-hidden text-left hover:scale-[1.02] transition-transform duration-200"
+      className="relative w-[140px] h-[140px] md:w-[160px] md:h-[160px] rounded-lg overflow-hidden text-left hover:scale-[1.02] transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
       style={!imageUrl ? { background: `linear-gradient(to bottom right, ${gradient.from}, ${gradient.to})` } : undefined}
     >
       {imageUrl && (

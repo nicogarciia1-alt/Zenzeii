@@ -66,7 +66,11 @@ export default function LibraryPage() {
       <ShelvesSection />
 
       {/* Phase 6 — Catalog: all books, filterable. Phase 7: also the search results view. */}
-      <div id={CATALOG_SECTION_ID} className="max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8">
+      <section
+        id={CATALOG_SECTION_ID}
+        aria-label="All books"
+        className="max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8"
+      >
         <SectionHeader
           title="All books"
           subtitle={
@@ -88,7 +92,7 @@ export default function LibraryPage() {
           onClearFilters={catalog.clearAllFilters}
           hasActiveFilters={catalog.hasActiveFilters}
         />
-      </div>
+      </section>
 
     </div>
     </Layout>

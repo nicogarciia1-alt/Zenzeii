@@ -45,14 +45,14 @@ function getImportButtonProps(importStatus) {
         label: 'Importing...',
         className: 'opacity-60 cursor-not-allowed border-library-border text-library-text-muted',
         disabled: true,
-        icon: <Loader2 className="h-3 w-3 animate-spin" />,
+        icon: <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />,
       };
     case 'completed':
       return {
         label: 'In your library',
         className: 'bg-library-bg-shelf border-library-border text-library-text-secondary cursor-default',
         disabled: true,
-        icon: <Check className="h-3 w-3" />,
+        icon: <Check className="h-3 w-3" aria-hidden="true" />,
       };
     case 'failed':
       return {
@@ -181,12 +181,9 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
             type="button"
             onClick={handleImportClick}
             disabled={buttonProps.disabled}
-            aria-label={
-              importStatus === 'completed'
-                ? `${book.title_en} is in your library`
-                : `Add ${book.title_en} to your library`
-            }
-            className={`mt-1 w-full text-xs rounded px-2 py-1.5 border transition-colors flex items-center justify-center gap-1 ${buttonProps.className}`}
+            aria-live="polite"
+            aria-label={`${book.title_en}: ${buttonProps.label}`}
+            className={`mt-1 w-full text-xs rounded px-2 py-1.5 border transition-colors flex items-center justify-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${buttonProps.className}`}
           >
             {buttonProps.icon}
             {buttonProps.label}
@@ -197,7 +194,7 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
               type="button"
               onClick={handleReadNow}
               aria-label={`Read ${book.title_en} now`}
-              className="w-full text-xs text-library-red hover:underline text-center"
+              className="w-full text-xs text-library-red hover:underline text-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
             >
               Read now →
             </button>
@@ -212,7 +209,7 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           aria-label={`Buy ${book.title_en} — opens external site`}
-          className="mt-1 w-full text-xs rounded px-2 py-1.5 border border-library-border text-library-text-secondary hover:bg-library-bg-shelf text-center block transition-colors"
+          className="mt-1 w-full text-xs rounded px-2 py-1.5 border border-library-border text-library-text-secondary hover:bg-library-bg-shelf text-center block transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
         >
           Buy →
         </a>

@@ -32,7 +32,7 @@ export function QuizPromptCard() {
       <button
         type="button"
         onClick={handleFindMyBook}
-        className="self-start border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2"
+        className="self-start border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
       >
         Find My Book
         <span aria-hidden="true">→</span>

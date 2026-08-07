@@ -50,7 +50,7 @@ export function FilterSection({
             aria-expanded={!collapsed}
             aria-controls={listId}
             aria-label={`${collapsed ? 'Show' : 'Hide'} ${title} options`}
-            className="text-library-text-muted hover:text-library-text-primary transition-colors"
+            className="text-library-text-muted hover:text-library-text-primary transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
           >
             <ChevronDown className={`w-4 h-4 transition-transform duration-150 ${collapsed ? '' : 'rotate-180'}`} />
           </button>

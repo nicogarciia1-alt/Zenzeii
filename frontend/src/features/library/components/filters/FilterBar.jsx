@@ -127,7 +127,7 @@ export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy })
   };
 
   return (
-    <div className="sticky top-0 z-30 w-full h-14 bg-white border-b border-library-border">
+    <nav aria-label="Library filters" className="sticky top-0 z-30 w-full h-14 bg-white border-b border-library-border">
       <div
         role="toolbar"
         aria-label="Book discovery filters"
@@ -181,6 +181,6 @@ export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy })
           />
         </MoreFiltersBottomSheet>
       </div>
-    </div>
+    </nav>
   );
 }

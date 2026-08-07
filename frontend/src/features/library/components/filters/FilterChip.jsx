@@ -66,7 +66,7 @@ export function FilterChip({ filterId, label, icon, options, value, onChange, di
         aria-expanded={isOpen}
         aria-controls={`filter-dropdown-${filterId}`}
         aria-label={chipAriaLabel}
-        className={`h-full w-full flex flex-col items-center justify-center gap-0.5 px-3 min-w-[80px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`h-full w-full flex flex-col items-center justify-center gap-0.5 px-3 min-w-[80px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-inset ${
           isActive ? 'border-b-2 border-b-library-red' : 'border-b-2 border-b-transparent'
         } ${isActive || isOpen ? 'bg-library-filter-active' : 'hover:bg-library-bg-shelf'}`}
       >

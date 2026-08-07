@@ -79,7 +79,7 @@ export function ShelfScrollContainer({ children, showArrows = false, className =
             aria-label="Scroll left"
             aria-controls={scrollId}
             aria-disabled={!canScrollLeft}
-            className={`absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-md transition-opacity ${
+            className={`absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-md transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red ${
               canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
           >
@@ -92,7 +92,7 @@ export function ShelfScrollContainer({ children, showArrows = false, className =
             aria-label="Scroll right"
             aria-controls={scrollId}
             aria-disabled={!canScrollRight}
-            className={`absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-md transition-opacity ${
+            className={`absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-md transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red ${
               canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
           >

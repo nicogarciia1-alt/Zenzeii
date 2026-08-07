@@ -29,7 +29,7 @@ export function SearchBar({ value, onChange, onClear, isSearching = false, place
   };
 
   return (
-    <div className="flex items-center gap-2 w-full h-11 px-4 rounded-full bg-white border border-library-border shadow-sm">
+    <div className="flex items-center gap-2 w-full h-11 px-4 rounded-full bg-white border border-library-border shadow-sm focus-within:ring-2 focus-within:ring-library-red focus-within:ring-offset-2 focus-within:ring-offset-library-bg-hero-dark transition-shadow">
       <Search className="w-4 h-4 shrink-0 text-library-text-muted" aria-hidden="true" />
 
       <input
@@ -57,7 +57,7 @@ export function SearchBar({ value, onChange, onClear, isSearching = false, place
           type="button"
           onClick={onClear}
           aria-label="Clear search"
-          className="shrink-0 text-library-text-muted hover:text-library-text-primary transition-colors"
+          className="shrink-0 text-library-text-muted hover:text-library-text-primary transition-colors rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red"
         >
           <X className="w-4 h-4" />
         </button>

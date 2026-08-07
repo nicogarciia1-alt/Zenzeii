@@ -64,7 +64,7 @@ export function BookInfoBlock({ book, onViewDetails = DEFAULT_VIEW_DETAILS, onBo
           type="button"
           onClick={() => onViewDetails(book)}
           aria-label={`View details for ${book.title_en}`}
-          className="flex-1 border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-4 py-2 rounded text-sm font-medium transition-colors"
+          className="flex-1 border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-4 py-2 rounded text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
         >
           View Details
         </button>
@@ -72,7 +72,7 @@ export function BookInfoBlock({ book, onViewDetails = DEFAULT_VIEW_DETAILS, onBo
           type="button"
           onClick={() => onBookmark(book)}
           aria-label={isBookmarked ? 'Remove from library' : `Add ${book.title_en} to your library`}
-          className="shrink-0 border border-library-border text-library-text-secondary hover:text-library-red hover:border-library-red p-2 rounded transition-colors"
+          className="shrink-0 border border-library-border text-library-text-secondary hover:text-library-red hover:border-library-red p-2 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
         >
           <Bookmark className="w-4 h-4" fill={isBookmarked ? 'currentColor' : 'none'} aria-hidden="true" />
         </button>

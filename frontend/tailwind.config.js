@@ -62,6 +62,21 @@ module.exports = {
         // Zenzeii Library feature — scoped token set (frontend/src/features/library).
         // Does not replace or alias the app-wide tokens above; the Library page
         // opts into this palette explicitly via the `library-*` utility classes.
+        //
+        // WCAG AA contrast ratios (Phase 11 audit — text pairings actually used
+        // in the Library UI; formula: relative luminance per WCAG 2.x, computed
+        // against every background token each color realistically appears on):
+        //   text-primary   (#1A1814) on bg-primary (#FAFAF8): 16.96:1 — passes (needs 4.5:1)
+        //   text-secondary (#6B6560) on bg-primary (#FAFAF8):  5.50:1 — passes
+        //   text-muted     (#716D68) on bg-primary (#FAFAF8):  4.91:1 — passes
+        //   text-muted     (#716D68) on bg-card    (#FFFFFF):  5.14:1 — passes
+        //   text-muted     (#716D68) on bg-shelf   (#F5F3EF):  4.63:1 — passes
+        //   white          (#FFFFFF) on red        (#C0392B):  5.44:1 — passes
+        // text-muted was originally #9B958F — measured at 2.96:1 on white, well
+        // under AA. Darkened to #716D68, which passes on every background token
+        // it's actually rendered against while staying visibly lighter (higher
+        // luminance) than text-secondary, preserving the primary/secondary/muted
+        // visual hierarchy the three tokens are meant to express.
         library: {
           'bg-primary': '#FAFAF8',
           'bg-card': '#FFFFFF',
@@ -69,7 +84,7 @@ module.exports = {
           'bg-shelf': '#F5F3EF',
           'text-primary': '#1A1814',
           'text-secondary': '#6B6560',
-          'text-muted': '#9B958F',
+          'text-muted': '#716D68',
           'text-hero': '#FFFFFF',
           red: '#C0392B',
           'red-hover': '#A93226',

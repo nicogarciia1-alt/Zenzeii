@@ -23,7 +23,7 @@ export function MoreFiltersButton({ onOpen = DEFAULT_ON_OPEN, activeCount = 0 })
       onClick={onOpen}
       aria-label="More filters"
       aria-haspopup="dialog"
-      className="relative h-full flex flex-col items-center justify-center gap-0.5 px-3 min-w-[80px] border-l border-library-border text-library-text-secondary hover:bg-library-bg-shelf transition-colors"
+      className="relative h-full flex flex-col items-center justify-center gap-0.5 px-3 min-w-[80px] border-l border-library-border text-library-text-secondary hover:bg-library-bg-shelf transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-inset"
     >
       <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
       <span className="hidden lg:block text-xs">More Filters</span>

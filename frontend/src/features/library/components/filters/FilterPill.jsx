@@ -27,7 +27,7 @@ export function FilterPill({ value, label, labelJp, selected, onToggle }) {
       aria-checked={selected}
       aria-label={label}
       onClick={() => onToggle(value)}
-      className={`flex flex-col items-center rounded-full px-3 py-1.5 text-xs cursor-pointer border transition-colors duration-150 ${
+      className={`flex flex-col items-center rounded-full px-3 py-1.5 text-xs cursor-pointer border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${
         selected
           ? 'bg-library-red border-library-red text-white hover:bg-library-red-hover'
           : 'bg-transparent border-library-border text-library-text-primary hover:bg-library-bg-shelf'

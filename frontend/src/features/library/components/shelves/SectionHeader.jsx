@@ -42,7 +42,7 @@ export function SectionHeader({ title, subtitle, icon, viewAllLabel, onViewAll, 
             type="button"
             onClick={onViewAll}
             aria-label={viewAllAriaLabel || viewAllLabel}
-            className="text-sm text-library-text-secondary hover:underline whitespace-nowrap"
+            className="text-sm text-library-text-secondary hover:underline whitespace-nowrap rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
           >
             {viewAllLabel}
           </button>

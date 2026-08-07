@@ -39,7 +39,11 @@ export function MoreFiltersPanelFooter({ activeCount, resultCount, liveUpdate, o
           <>
             {activeCount} active filter{activeCount === 1 ? '' : 's'}
             {' · '}
-            <button type="button" onClick={onClearAll} className="text-library-red hover:underline">
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="text-library-red hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+            >
               Clear all
             </button>
           </>
@@ -50,7 +54,7 @@ export function MoreFiltersPanelFooter({ activeCount, resultCount, liveUpdate, o
         type="button"
         onClick={onApply}
         disabled={!liveUpdate && noResults}
-        className={`shrink-0 rounded px-5 py-2 text-sm font-medium text-white bg-library-red transition-colors ${
+        className={`shrink-0 rounded px-5 py-2 text-sm font-medium text-white bg-library-red transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${
           !liveUpdate && noResults ? 'opacity-60 cursor-not-allowed' : 'hover:bg-library-red-hover'
         }`}
       >

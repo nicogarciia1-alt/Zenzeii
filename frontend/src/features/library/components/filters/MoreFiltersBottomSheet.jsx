@@ -76,7 +76,7 @@ export function MoreFiltersBottomSheet({ isOpen, onClose, children }) {
             type="button"
             onClick={onClose}
             aria-label="Close filters"
-            className="absolute right-4 top-4 text-library-text-muted hover:text-library-text-primary transition-colors"
+            className="absolute right-4 top-4 text-library-text-muted hover:text-library-text-primary transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
           >
             <X className="w-5 h-5" />
           </button>
