@@ -10,17 +10,34 @@
  */
 import { BookCard } from './BookCard';
 
-const SKELETON_COUNT = 8;
+const SKELETON_COUNT = 12;
 const GRID_CLASSES = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6';
 
-/** Mirrors BookCard's 'grid' variant dimensions (BookCard.jsx VARIANT_CONFIG.grid) so layout doesn't shift when real cards replace skeletons. */
+/**
+ * Mirrors BookCard's 'grid' variant row-for-row (BookCard.jsx
+ * VARIANT_CONFIG.grid + its detailsContent): cover, 2-line title, JP
+ * title, author, a badges row, a rating row, and the Add to Library
+ * button — same gap-2 rhythm between each. A skeleton that only showed
+ * the cover and a couple of text lines (the previous version) was
+ * noticeably shorter than a real card, causing a visible jump when the
+ * grid swapped from skeletons to real content.
+ */
 function BookCardSkeleton() {
   return (
     <div className="flex flex-col gap-2 w-[160px] animate-pulse" aria-hidden="true">
       <div className="w-[120px] h-[180px] rounded bg-library-bg-shelf" />
-      <div className="h-3.5 w-full rounded bg-library-bg-shelf" />
-      <div className="h-3 w-2/3 rounded bg-library-bg-shelf" />
-      <div className="h-3 w-1/2 rounded bg-library-bg-shelf" />
+      <div className="flex flex-col gap-1">
+        <div className="h-3.5 w-full rounded bg-library-bg-shelf" />
+        <div className="h-3.5 w-4/5 rounded bg-library-bg-shelf" />
+        <div className="h-3 w-2/3 rounded bg-library-bg-shelf" />
+        <div className="h-3 w-1/2 rounded bg-library-bg-shelf" />
+      </div>
+      <div className="flex gap-1.5">
+        <div className="h-5 w-9 rounded-full bg-library-bg-shelf" />
+        <div className="h-5 w-14 rounded-full bg-library-bg-shelf" />
+      </div>
+      <div className="h-3.5 w-16 rounded bg-library-bg-shelf" />
+      <div className="h-6 w-full rounded bg-library-bg-shelf" />
     </div>
   );
 }

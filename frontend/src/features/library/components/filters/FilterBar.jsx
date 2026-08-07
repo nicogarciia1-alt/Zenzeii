@@ -52,6 +52,20 @@ const LOCAL_DEFAULT_FILTERS = {
 /** The five Layer 2 filters that live only behind "More Filters" — see useCatalog.js's ARRAY_FILTER_IDS. */
 const LAYER2_FILTER_IDS = SECONDARY_FILTERS;
 
+/** Chip optionsSource values backed by useTaxonomy — the only chips that have anything to wait on. */
+const TAXONOMY_DEPENDENT_SOURCES = new Set(['genres', 'themes', 'moods']);
+
+/** Placeholder shown in place of a taxonomy-backed FilterChip while useTaxonomy is still loading. Same footprint as a real chip so nothing reflows when it's replaced. */
+function FilterChipSkeleton() {
+  return (
+    <div className="h-full flex flex-col items-center justify-center gap-0.5 px-3 min-w-[80px] animate-pulse" aria-hidden="true">
+      <div className="w-4 h-4 rounded-full bg-library-bg-shelf" />
+      <div className="hidden lg:block h-2.5 w-10 rounded bg-library-bg-shelf" />
+      <div className="h-2.5 w-8 rounded bg-library-bg-shelf" />
+    </div>
+  );
+}
+
 /**
  * Resolves a chip's options from a pre-mapped { genres, themes, moods }
  * bundle (see useMemo calls in FilterBar below) for the three taxonomy-
@@ -153,9 +167,21 @@ export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy })
       >
         {FILTER_BAR_CHIPS.map((chip) => {
           const Icon = ICON_MAP[chip.icon];
+          const isTaxonomyDependent = TAXONOMY_DEPENDENT_SOURCES.has(chip.optionsSource);
+
+          if (taxonomy?.loading && isTaxonomyDependent) {
+            return <FilterChipSkeleton key={chip.id} />;
+          }
+
           return (
             <FilterChip
-              key={chip.id}
+              // The static chips (difficulty/jlpt/length) use a stable key —
+              // they never showed a skeleton, so they should never remount.
+              // Only the taxonomy-backed chips get a loading-state-suffixed
+              // key, forcing exactly one fresh mount (skeleton -> real) so
+              // the chip fades in via its own entrance animation, rather
+              // than a DOM node silently morphing from gray bars to content.
+              key={isTaxonomyDependent ? `${chip.id}-ready` : chip.id}
               filterId={chip.id}
               label={chip.label}
               icon={<Icon className="w-4 h-4" />}
