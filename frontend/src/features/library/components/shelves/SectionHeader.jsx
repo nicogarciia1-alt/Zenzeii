@@ -20,8 +20,12 @@
  *   short visible label needs a longer accessible name. Falls back to
  *   viewAllLabel when omitted — existing callers (RecommendationSection)
  *   are unaffected.
+ * @param {string} [props.subtitleAriaLive] - aria-live politeness for the
+ *   subtitle (e.g. "polite"), for subtitles that report a count that
+ *   changes after user action — e.g. LibraryPage's "N books found" during
+ *   search (Phase 7). Omitted by default; existing callers are unaffected.
  */
-export function SectionHeader({ title, subtitle, icon, viewAllLabel, onViewAll, viewAllAriaLabel }) {
+export function SectionHeader({ title, subtitle, icon, viewAllLabel, onViewAll, viewAllAriaLabel, subtitleAriaLive }) {
   return (
     <div className="mb-6">
       <div className="flex items-baseline justify-between gap-4">
@@ -45,7 +49,9 @@ export function SectionHeader({ title, subtitle, icon, viewAllLabel, onViewAll, 
         )}
       </div>
       {subtitle && (
-        <p className="mt-1 text-[13px] text-library-text-secondary">{subtitle}</p>
+        <p aria-live={subtitleAriaLive} className="mt-1 text-[13px] text-library-text-secondary">
+          {subtitle}
+        </p>
       )}
     </div>
   );

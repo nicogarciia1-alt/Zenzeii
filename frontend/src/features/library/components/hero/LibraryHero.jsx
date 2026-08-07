@@ -13,12 +13,17 @@
  * auto mobile.
  *
  * Static in Phase 1. Phase 2+ passes onExplore/onSurpriseMe callbacks
- * down to HeroContent.
+ * down to HeroContent. Phase 7 adds searchProps, forwarded to HeroContent
+ * unchanged — LibraryHero owns no search state itself.
  */
 import HeroContent from './HeroContent';
 import HeroImage from './HeroImage';
 
-export default function LibraryHero() {
+/**
+ * @param {Object} [props]
+ * @param {Object} [props.searchProps] - Forwarded to HeroContent → SearchBar (Phase 7)
+ */
+export default function LibraryHero({ searchProps }) {
   return (
     <section className="relative w-full h-auto md:h-[360px] lg:h-[480px] overflow-hidden bg-library-bg-hero-dark lg:grid lg:grid-cols-[45fr_55fr]">
       {/* Artwork: hidden on mobile, full-bleed absolute background on tablet, real right column on desktop */}
@@ -34,7 +39,7 @@ export default function LibraryHero() {
 
       {/* Content: full width on mobile/tablet, left column on desktop */}
       <div className="relative z-10 lg:col-start-1 lg:row-start-1 lg:bg-library-bg-hero-dark h-full">
-        <HeroContent />
+        <HeroContent searchProps={searchProps} />
       </div>
     </section>
   );

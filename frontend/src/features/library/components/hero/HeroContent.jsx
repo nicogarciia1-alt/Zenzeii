@@ -1,24 +1,35 @@
 /**
- * @fileoverview HeroContent — title, subtitle, description, and CTA
- * buttons in LibraryHero's left zone. Purely presentational.
+ * @fileoverview HeroContent — title, subtitle, description, search bar,
+ * and CTA buttons in LibraryHero's left zone. Purely presentational
+ * apart from mounting SearchBar, which owns its own controlled-input
+ * rendering — HeroContent just forwards searchProps to it.
  *
- * Phase 1: onExplore/onSurpriseMe default to console.log stubs when no
- * handler is passed. Phase 7 wires real search-scroll behavior; Phase 6
- * wires the random-book action, both via props passed down from
- * LibraryHero — this file itself does not change when that lands.
+ * Phase 7: searchProps wires SearchBar to useSearch via LibraryPage →
+ * LibraryHero → here. Without it, SearchBar renders inert (typing does
+ * nothing) rather than crashing — same graceful-fallback pattern as
+ * onExplore/onSurpriseMe below.
  */
+import { SearchBar } from './SearchBar';
 
 const DEFAULT_EXPLORE = () =>
   console.log('[LibraryHero] Explore Books clicked — Phase 7 will connect search');
 const DEFAULT_SURPRISE_ME = () =>
   console.log('[LibraryHero] Surprise Me clicked — Phase 6 will connect random book');
+const DEFAULT_SEARCH_PROPS = { value: '', onChange: () => {}, onClear: () => {}, isSearching: false };
 
 /**
  * @param {Object} props
  * @param {function} [props.onExplore] - Called when "Explore Books" is clicked
  * @param {function} [props.onSurpriseMe] - Called when "Surprise Me" is clicked
+ * @param {Object} [props.searchProps] - Props forwarded to SearchBar (Phase 7):
+ *   { value, onChange, onClear, isSearching }. Falls back to an inert stub
+ *   when omitted.
  */
-export default function HeroContent({ onExplore = DEFAULT_EXPLORE, onSurpriseMe = DEFAULT_SURPRISE_ME }) {
+export default function HeroContent({
+  onExplore = DEFAULT_EXPLORE,
+  onSurpriseMe = DEFAULT_SURPRISE_ME,
+  searchProps = DEFAULT_SEARCH_PROPS,
+}) {
   return (
     <div className="relative h-full flex flex-col justify-center gap-6 px-6 md:px-12 lg:px-16 py-12">
       {/* Japanese subtitle */}
@@ -40,6 +51,11 @@ export default function HeroContent({ onExplore = DEFAULT_EXPLORE, onSurpriseMe 
         <br />
         Find your next story, at the right level for you.
       </p>
+
+      {/* Search */}
+      <div className="max-w-sm">
+        <SearchBar {...searchProps} />
+      </div>
 
       {/* CTA buttons */}
       <div className="flex flex-col sm:flex-row gap-3 pt-2">
