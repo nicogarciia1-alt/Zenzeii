@@ -57,7 +57,7 @@ export function MoreFiltersPopover({ isOpen, onClose, triggerRef, children }) {
   if (!mounted) return null;
 
   return (
-    <div className="fixed top-14 inset-x-0 z-40 px-5 md:px-12 lg:px-20 pointer-events-none">
+    <div className="fixed top-14 inset-x-0 z-50 px-5 md:px-12 lg:px-20 pointer-events-none">
       <div
         ref={panelRef}
         role="dialog"
