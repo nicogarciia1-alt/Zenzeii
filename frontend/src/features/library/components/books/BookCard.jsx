@@ -183,10 +183,15 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
             disabled={buttonProps.disabled}
             aria-live="polite"
             aria-label={`${book.title_en}: ${buttonProps.label}`}
-            className={`mt-1 w-full text-xs rounded px-2 py-1.5 border transition-colors flex items-center justify-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${buttonProps.className}`}
+            className={`mt-1 w-full text-xs rounded px-2 py-1.5 border transition-colors duration-200 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${buttonProps.className}`}
           >
-            {buttonProps.icon}
-            {buttonProps.label}
+            {/* Keyed by status so each transition (idle -> importing -> completed/failed)
+                mounts fresh content and fades in, rather than the icon silently swapping
+                mid-frame — a spinner-to-checkmark crossfade instead of a jump cut. */}
+            <span key={importStatus} className="flex items-center gap-1 animate-in fade-in-0 duration-200">
+              {buttonProps.icon}
+              {buttonProps.label}
+            </span>
           </button>
 
           {importStatus === 'completed' && (
