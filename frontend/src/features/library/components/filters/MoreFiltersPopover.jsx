@@ -63,9 +63,9 @@ export function MoreFiltersPopover({ isOpen, onClose, triggerRef, children }) {
         role="dialog"
         aria-modal="false"
         aria-label="Advanced filters"
-        className={`pointer-events-auto max-w-[1440px] mx-auto max-h-[calc(100vh-56px-48px)] overflow-y-auto bg-white border border-library-border rounded-b-lg shadow-lg transition-all duration-200 ${
-          visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-        }`}
+        className={`max-w-[1440px] mx-auto max-h-[calc(100vh-56px-48px)] overflow-y-auto bg-white border border-library-border rounded-b-lg shadow-lg transition-all duration-200 ${
+          isOpen ? 'pointer-events-auto' : 'pointer-events-none'
+        } ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}
       >
         {children}
       </div>

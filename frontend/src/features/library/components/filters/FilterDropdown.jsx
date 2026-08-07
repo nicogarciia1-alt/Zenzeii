@@ -32,6 +32,10 @@ import { Check } from 'lucide-react';
 const ALL_OPTION = { value: null, label: 'All' };
 /** Gap between the chip's bottom edge and the dropdown — matches the old mt-2. */
 const DROPDOWN_GAP_PX = 8;
+/** Upper bound on dropdown height when there's plenty of room below the chip. */
+const MAX_DROPDOWN_HEIGHT_PX = 280;
+/** Breathing room between the dropdown's bottom edge and the viewport edge. */
+const VIEWPORT_MARGIN_PX = 8;
 
 /**
  * @param {Object} props
@@ -67,7 +71,19 @@ export function FilterDropdown({ options, selectedValue, onSelect, isOpen, onClo
 
     const updatePosition = () => {
       const rect = anchorRef.current.getBoundingClientRect();
-      setPosition({ top: rect.bottom + DROPDOWN_GAP_PX, left: rect.left });
+      const top = rect.bottom + DROPDOWN_GAP_PX;
+      // A static max-h-* class can't know how much room is actually left
+      // below `top` — if the chip sits low in the viewport (e.g. the
+      // filter bar hasn't stuck to the top yet), a fixed 280px budget
+      // would run the dropdown past the viewport edge, and the part
+      // beyond that edge is genuinely unreachable: page scroll doesn't
+      // move a position:fixed element, and overflow-y-auto only scrolls
+      // content overflowing the box's own height, not the part of the
+      // box rendered off-screen. Clamping to whatever room actually
+      // exists keeps the whole list reachable via the internal scrollbar
+      // instead of silently clipping it.
+      const maxHeight = Math.max(0, Math.min(MAX_DROPDOWN_HEIGHT_PX, window.innerHeight - top - VIEWPORT_MARGIN_PX));
+      setPosition({ top, left: rect.left, maxHeight });
     };
 
     updatePosition();
@@ -110,8 +126,8 @@ export function FilterDropdown({ options, selectedValue, onSelect, isOpen, onClo
       tabIndex={-1}
       aria-activedescendant={optionId(highlightedIndex)}
       onKeyDown={handleKeyDown}
-      style={{ top: position.top, left: position.left }}
-      className="fixed z-40 min-w-[160px] max-w-[240px] max-h-[280px] overflow-y-auto bg-white rounded-lg border border-library-border shadow-md py-1 animate-in fade-in-0 slide-in-from-top-1 duration-150 focus:outline-none"
+      style={{ top: position.top, left: position.left, maxHeight: position.maxHeight }}
+      className="fixed z-40 min-w-[160px] max-w-[240px] overflow-y-auto bg-white rounded-lg border border-library-border shadow-md py-1 animate-in fade-in-0 slide-in-from-top-1 duration-150 focus:outline-none"
     >
       {combined.map((option, i) => {
         const isSelected = option.value === selectedValue;
