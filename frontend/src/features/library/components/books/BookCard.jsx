@@ -43,14 +43,14 @@ function getImportButtonProps(importStatus) {
     case 'importing':
       return {
         label: 'Importing...',
-        className: 'opacity-60 cursor-not-allowed border-library-border text-library-text-muted',
+        className: 'opacity-60 cursor-not-allowed border-library-border/40 text-library-text-muted',
         disabled: true,
         icon: <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />,
       };
     case 'completed':
       return {
         label: 'In your library',
-        className: 'bg-library-bg-shelf border-library-border text-library-text-secondary cursor-default',
+        className: 'bg-library-bg-shelf border-library-border/40 text-library-text-secondary cursor-default',
         disabled: true,
         icon: <Check className="h-3 w-3" aria-hidden="true" />,
       };
@@ -65,7 +65,7 @@ function getImportButtonProps(importStatus) {
       return {
         label: '+ Add to Library',
         className:
-          'border-library-border text-library-text-secondary hover:bg-library-bg-shelf hover:text-library-text-primary',
+          'border-library-border/40 text-library-text-secondary hover:bg-library-bg-shelf hover:text-library-text-primary',
         disabled: false,
         icon: null,
       };
@@ -92,7 +92,7 @@ const VARIANT_CONFIG = {
     supportsAddButton: false,
   },
   grid: {
-    container: 'flex flex-col gap-2 w-[160px]',
+    container: 'flex flex-col gap-2 w-[160px] shadow-library-card-sm',
     coverSize: 'md',
     titleClass: 'text-sm font-semibold font-garamond line-clamp-2 text-library-text-primary',
     jpTitleClass: 'text-xs text-library-text-secondary line-clamp-1',
@@ -214,7 +214,7 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           aria-label={`Buy ${book.title_en} — opens external site`}
-          className="mt-1 w-full text-xs rounded px-2 py-1.5 border border-library-border text-library-text-secondary hover:bg-library-bg-shelf text-center block transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+          className="mt-1 w-full text-xs rounded px-2 py-1.5 border border-library-border/40 text-library-text-secondary hover:bg-library-bg-shelf text-center block transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
         >
           Buy →
         </a>

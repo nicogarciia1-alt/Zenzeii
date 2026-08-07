@@ -17,7 +17,7 @@ export function QuizPromptCard() {
     <div
       role="region"
       aria-label="Book recommendation quiz"
-      className="relative overflow-hidden bg-library-bg-card rounded-lg border border-library-border shadow-sm p-spacing-4 lg:p-spacing-6 h-full flex flex-col"
+      className="relative overflow-hidden bg-library-bg-card rounded-lg border border-library-border/40 shadow-library-card-sm p-spacing-4 lg:p-spacing-6 h-full flex flex-col"
     >
       <p className="mb-spacing-2 text-xs uppercase tracking-wide text-library-text-muted">Not sure what to read?</p>
 
