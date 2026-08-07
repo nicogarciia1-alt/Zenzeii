@@ -5,15 +5,12 @@
  * cards. The single shelf component that powers every book collection
  * in the Library.
  *
- * Phase 4: renders BookCardPlaceholder for each book.
- * Phase 5 handoff: the ONLY change this component needs is swapping
- * `<BookCardPlaceholder book={book} />` below for the real `<BookCard
- * book={book} />`. Everything else — SectionHeader, ShelfScrollContainer,
- * arrows, aria-labels — stays exactly as built here.
+ * Phase 5: renders the real BookCard (shelf variant) for each book —
+ * replaces BookCardPlaceholder, retired this phase.
  */
 import { SectionHeader } from './SectionHeader';
 import { ShelfScrollContainer } from './ShelfScrollContainer';
-import { BookCardPlaceholder } from '../books/BookCardPlaceholder';
+import { BookCard } from '../books/BookCard';
 
 /**
  * @param {Object} props
@@ -37,7 +34,7 @@ export function BookShelf({ title, subtitle, icon, books, onViewAll, showArrows 
       />
       <ShelfScrollContainer showArrows={showArrows}>
         {books.map((book) => (
-          <BookCardPlaceholder key={book.id} book={book} />
+          <BookCard key={book.id} book={book} variant="shelf" />
         ))}
       </ShelfScrollContainer>
     </section>
