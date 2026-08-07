@@ -129,38 +129,36 @@ module.exports = {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-        // UI Refinement Brief's radius scale, nested under `library` rather
-        // than as bare xs/sm/md/lg/2xl keys — those names collide with the
+        // UI Refinement Brief's radius scale. Flat, dash-joined keys
+        // (library-xs, not a nested `library: { xs }` object) — verified
+        // directly against the Tailwind CLI that borderRadius/boxShadow do
+        // NOT flatten nested objects into dashed utility names the way
+        // `colors` does (colors gets that behavior from a dedicated
+        // flattenColorPalette step other core plugins don't share; a nested
+        // object here silently produces no rounded-library-* class at all).
+        // Kept as library-prefixed regardless, to avoid colliding with the
         // shadcn/ui radius tokens directly above (sm/md/lg, tied to the
         // --radius CSS var), which 24 files in components/ui/ depend on
-        // app-wide. Same nesting convention as the `library` color palette
-        // below, for the same reason: additive to this feature, not a
-        // silent app-wide restyle. Produces rounded-library-xs, -sm, -md,
-        // -lg, -xl, -2xl.
-        library: {
-          xs: '4px',
-          sm: '8px',
-          md: '12px',
-          lg: '16px',
-          xl: '24px',
-          '2xl': '32px',
-        },
+        // app-wide.
+        'library-xs': '4px',
+        'library-sm': '8px',
+        'library-md': '12px',
+        'library-lg': '16px',
+        'library-xl': '24px',
+        'library-2xl': '32px',
       },
       boxShadow: {
         'card': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
         'float': '0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04)',
-        // UI Refinement Brief's shadow scale — same `library` nesting
-        // reasoning as borderRadius above: 'card' already exists above
-        // (used by AuthPage.jsx) with a different value than this brief
-        // specifies. Produces shadow-library-card-sm, -card, -card-lg,
-        // -card-hover. "Apple Books / Linear / Notion" — large blur, low
-        // opacity, no material-design elevation.
-        library: {
-          'card-sm': '0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-          card: '0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
-          'card-lg': '0 8px 32px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06)',
-          'card-hover': '0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08)',
-        },
+        // UI Refinement Brief's shadow scale — same flat-key reasoning as
+        // borderRadius above. 'card' already exists above (used by
+        // AuthPage.jsx) with a different value than this brief specifies.
+        // "Apple Books / Linear / Notion" — large blur, low opacity, no
+        // material-design elevation.
+        'library-card-sm': '0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+        'library-card': '0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
+        'library-card-lg': '0 8px 32px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06)',
+        'library-card-hover': '0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08)',
       },
       keyframes: {
         "accordion-down": {

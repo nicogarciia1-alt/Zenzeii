@@ -29,8 +29,8 @@ export function SearchBar({ value, onChange, onClear, isSearching = false, place
   };
 
   return (
-    <div className="flex items-center gap-2 w-full h-11 px-4 rounded-full bg-white border border-library-border shadow-sm focus-within:ring-2 focus-within:ring-library-red focus-within:ring-offset-2 focus-within:ring-offset-library-bg-hero-dark transition-shadow">
-      <Search className="w-4 h-4 shrink-0 text-library-text-muted" aria-hidden="true" />
+    <div className="flex items-center gap-2 w-full h-14 px-spacing-3 rounded-library-xl bg-white border border-library-border shadow-sm focus-within:ring-2 focus-within:ring-library-red focus-within:ring-offset-2 focus-within:ring-offset-library-bg-hero-dark transition-shadow">
+      <Search className="w-5 h-5 shrink-0 text-library-text-muted" aria-hidden="true" />
 
       <input
         type="text"
@@ -40,12 +40,12 @@ export function SearchBar({ value, onChange, onClear, isSearching = false, place
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-library-text-primary placeholder:text-library-text-muted"
+        className="flex-1 min-w-0 bg-transparent border-none outline-none text-body text-library-text-primary placeholder:text-library-text-muted"
       />
 
       {isSearching && (
         <Loader2
-          className="w-4 h-4 shrink-0 animate-spin text-library-text-muted"
+          className="w-5 h-5 shrink-0 animate-spin text-library-text-muted"
           role="status"
           aria-live="polite"
           aria-label="Searching..."
@@ -59,7 +59,7 @@ export function SearchBar({ value, onChange, onClear, isSearching = false, place
           aria-label="Clear search"
           className="shrink-0 text-library-text-muted hover:text-library-text-primary transition-colors rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red"
         >
-          <X className="w-4 h-4" />
+          <X className="w-5 h-5" />
         </button>
       )}
     </div>

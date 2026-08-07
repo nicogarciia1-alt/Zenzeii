@@ -8,9 +8,10 @@
  * Layout: mobile hides the artwork entirely (dark content zone, full
  * width, auto height). Tablet renders the artwork as a full-bleed
  * absolute background behind the content with a dark tint over it.
- * Desktop switches to a real two-column CSS Grid (45/55 split) with the
- * artwork as its own column. Heights: 480px desktop / 360px tablet /
- * auto mobile.
+ * Desktop switches to a real two-column CSS Grid (55/45 split — content
+ * gets the wider column so the title reads as monumental, not cramped)
+ * with the artwork as its own column. Heights: 600px desktop / 480px
+ * tablet / auto mobile (UI Refinement Brief Rev 1 — was 480/360).
  *
  * Static in Phase 1. Phase 2+ passes onExplore/onSurpriseMe callbacks
  * down to HeroContent. Phase 7 adds searchProps, forwarded to HeroContent
@@ -25,7 +26,7 @@ import HeroImage from './HeroImage';
  */
 export default function LibraryHero({ searchProps }) {
   return (
-    <section className="relative w-full h-auto md:h-[360px] lg:h-[480px] overflow-hidden bg-library-bg-hero-dark lg:grid lg:grid-cols-[45fr_55fr]">
+    <section className="relative w-full h-auto md:h-[480px] lg:h-[600px] overflow-hidden bg-library-bg-hero-dark lg:grid lg:grid-cols-[55fr_45fr]">
       {/* Artwork: hidden on mobile, full-bleed absolute background on tablet, real right column on desktop */}
       <div className="hidden md:block absolute inset-0 lg:static lg:col-start-2 lg:row-start-1">
         <HeroImage alt="Zenzeii Library — Japanese literary landscape" />

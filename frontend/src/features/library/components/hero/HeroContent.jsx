@@ -39,38 +39,44 @@ export default function HeroContent({
   searchProps = DEFAULT_SEARCH_PROPS,
 }) {
   return (
-    <div className="relative h-full flex flex-col justify-center gap-6 px-6 md:px-12 lg:px-16 py-12">
+    <div className="relative h-full flex flex-col justify-center px-spacing-3 md:px-spacing-6 lg:px-spacing-8 py-spacing-6">
       {/* Japanese subtitle */}
-      <p className="text-library-text-muted text-sm tracking-wide flex items-center gap-2">
+      <p className="mb-spacing-3 text-library-text-muted text-sm tracking-wide flex items-center gap-2">
         <span aria-hidden="true">🌸</span>
         <span>日本の物語を、あなたの言葉で</span>
       </p>
 
-      {/* Main headline — the page's single h1 */}
-      <h1 className="font-playfair text-[28px] md:text-4xl lg:text-5xl font-bold text-white leading-tight">
+      {/* Main headline — the page's single h1. Sized via the type scale alone
+          (text-h2/h1/display), no separate font-bold/leading-tight/tracking-tight:
+          those utilities compile after fontSize in Tailwind's stylesheet and
+          would deterministically override the scale's own per-size weight/
+          line-height/letter-spacing (confirmed against the compiled CSS) —
+          collapsing the whole point of a tuned scale back to one generic
+          value at every breakpoint. */}
+      <h1 className="mb-spacing-4 font-playfair text-h2 md:text-h1 lg:text-display text-white">
         Discover Japanese
         <br />
         Literature
       </h1>
 
       {/* Description */}
-      <p className="text-white/70 text-sm leading-relaxed max-w-sm">
+      <p className="mb-spacing-4 text-white/70 text-sm leading-relaxed max-w-sm">
         From timeless classics to hidden gems.
         <br />
         Find your next story, at the right level for you.
       </p>
 
       {/* Search */}
-      <div className="max-w-sm">
+      <div className="mb-spacing-4 max-w-sm">
         <SearchBar {...searchProps} />
       </div>
 
       {/* CTA buttons */}
-      <div className="flex flex-col sm:flex-row gap-3 pt-2">
+      <div className="flex flex-col sm:flex-row gap-spacing-2">
         <button
           type="button"
           onClick={onExplore}
-          className="bg-library-red hover:bg-library-red-hover text-white px-6 py-3 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 focus-visible:ring-offset-library-bg-hero-dark"
+          className="h-14 px-spacing-6 rounded-library-md bg-library-red hover:bg-library-red-hover text-white text-body font-semibold tracking-wide transition-colors duration-fast flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 focus-visible:ring-offset-library-bg-hero-dark"
         >
           Explore Books
           <span aria-hidden="true">→</span>
@@ -79,17 +85,19 @@ export default function HeroContent({
         <button
           type="button"
           onClick={onSurpriseMe}
-          className="border border-white/60 hover:border-white text-white px-6 py-3 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 focus-visible:ring-offset-library-bg-hero-dark"
+          className="h-14 px-spacing-6 rounded-library-md border border-white/60 hover:border-white text-white text-body font-semibold tracking-wide transition-colors duration-fast flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 focus-visible:ring-offset-library-bg-hero-dark"
         >
           <span aria-hidden="true">✦</span>
           Surprise Me
         </button>
       </div>
 
-      {/* Gradient transition into the artwork zone — right-edge fade, desktop two-column layout only */}
+      {/* Gradient transition into the artwork zone — right-edge fade, desktop two-column
+          layout only. Widened (was w-24/96px) for a smoother feather into the softened
+          placeholder gradient — a visible seam here is exactly what this brief calls out. */}
       <div
         aria-hidden="true"
-        className="hidden lg:block absolute inset-y-0 right-0 w-24 bg-gradient-to-r from-library-bg-hero-dark to-transparent pointer-events-none"
+        className="hidden lg:block absolute inset-y-0 right-0 w-spacing-16 bg-gradient-to-r from-library-bg-hero-dark to-transparent pointer-events-none"
       />
     </div>
   );
