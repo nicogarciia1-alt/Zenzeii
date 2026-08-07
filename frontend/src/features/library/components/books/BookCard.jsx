@@ -10,20 +10,67 @@
  * Composes BookCoverArt, MetadataBadge, and StarRating from Phase 2.
  *
  * Phase 5: static, no click-through navigation.
- * Phase 9: onCardClick opens BookDetailModal.
- * Phase 10: onAddToLibrary triggers import flow.
+ * Phase 9: onCardClick opens BookDetailModal (deferred — book detail design pending).
+ * Phase 10: the grid variant's "Add to Library" button is wired to
+ * useImport. useImport is called unconditionally (Rules of Hooks — a
+ * component can't call a hook only for some variants), but it's inert
+ * until triggerImport() is actually invoked, which only ever happens
+ * from the grid-variant button below.
  *
  * Root is <article>, not <button>, even though the whole card is
- * keyboard-actionable: the 'grid' variant nests a real "Add to Library"
- * <button> inside the card, and a <button> can never legally contain
- * another interactive <button>. role="article" + manual tabIndex/
- * onKeyDown makes the card keyboard-actionable without that HTML
- * validity violation.
+ * keyboard-actionable: the 'grid' variant nests real interactive
+ * elements (Add to Library button, buy link) inside the card, and a
+ * <button> can never legally contain another interactive control.
+ * role="article" + manual tabIndex/onKeyDown makes the card
+ * keyboard-actionable without that HTML validity violation.
  */
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Loader2, Check } from 'lucide-react';
 import { BookCoverArt } from './BookCoverArt';
 import { MetadataBadge } from './MetadataBadge';
 import { StarRating } from './StarRating';
 import { DIFFICULTY_LABELS } from '../../constants/libraryConstants';
+import { useImport } from '../../hooks/useImport';
+
+/**
+ * Button presentation for each useImport status. Centralized here so the
+ * JSX below only ever reads `buttonProps.*` — no scattered per-status
+ * className branching to keep in sync.
+ */
+function getImportButtonProps(importStatus) {
+  switch (importStatus) {
+    case 'importing':
+      return {
+        label: 'Importing...',
+        className: 'opacity-60 cursor-not-allowed border-library-border text-library-text-muted',
+        disabled: true,
+        icon: <Loader2 className="h-3 w-3 animate-spin" />,
+      };
+    case 'completed':
+      return {
+        label: 'In your library',
+        className: 'bg-library-bg-shelf border-library-border text-library-text-secondary cursor-default',
+        disabled: true,
+        icon: <Check className="h-3 w-3" />,
+      };
+    case 'failed':
+      return {
+        label: 'Try again',
+        className: 'border-red-300 text-red-600 hover:bg-red-50',
+        disabled: false,
+        icon: null,
+      };
+    default: // 'idle'
+      return {
+        label: '+ Add to Library',
+        className:
+          'border-library-border text-library-text-secondary hover:bg-library-bg-shelf hover:text-library-text-primary',
+        disabled: false,
+        icon: null,
+      };
+  }
+}
 
 /**
  * Class/behavior configuration for each BookCard variant. Add new
@@ -71,22 +118,36 @@ const VARIANT_CONFIG = {
  * @param {import('../../types/catalogTypes').BookCatalogItem} props.book
  * @param {'shelf'|'grid'|'compact'} [props.variant] - Display variant (default: 'shelf')
  * @param {function} [props.onCardClick] - Called when card is clicked (Phase 9)
- * @param {function} [props.onAddToLibrary] - Called when add button is clicked (Phase 10)
  * @param {boolean} [props.showAddButton] - Whether to show the add-to-library button (default: false)
  */
-export function BookCard({ book, variant = 'shelf', onCardClick, onAddToLibrary, showAddButton = false }) {
+export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton = false }) {
   const config = VARIANT_CONFIG[variant] ?? VARIANT_CONFIG.shelf;
   const isHorizontal = config.layout === 'horizontal';
+  const navigate = useNavigate();
+
+  const { importStatus, triggerImport } = useImport(
+    book.id,
+    ({ alreadyOwned } = {}) => {
+      toast.success(alreadyOwned ? 'Already in your library' : `${book.title_en} added to your library`);
+    },
+    (message) => toast.error(message || 'Import failed'),
+    book.is_on_shelf ? 'completed' : 'idle'
+  );
+  const buttonProps = getImportButtonProps(importStatus);
 
   const handleCardClick = () => {
     console.log(`[BookCard] ${variant} variant clicked:`, book.id, '— Phase 9 will open BookDetailModal');
     if (onCardClick) onCardClick(book);
   };
 
-  const handleAddToLibrary = (e) => {
+  const handleImportClick = (e) => {
     e.stopPropagation();
-    console.log('[BookCard] Add to Library clicked:', book.id, '— Phase 10 will trigger import flow');
-    if (onAddToLibrary) onAddToLibrary(book);
+    triggerImport();
+  };
+
+  const handleReadNow = (e) => {
+    e.stopPropagation();
+    navigate(`/read/${book.id}`);
   };
 
   const detailsContent = (
@@ -114,15 +175,47 @@ export function BookCard({ book, variant = 'shelf', onCardClick, onAddToLibrary,
 
       <StarRating rating={book.rating_avg} count={book.rating_count} size="sm" />
 
-      {showAddButton && config.supportsAddButton && (
-        <button
-          type="button"
-          onClick={handleAddToLibrary}
-          aria-label={`Add ${book.title_en} to your library`}
-          className="mt-1 w-full text-xs border border-library-border rounded px-2 py-1.5 text-library-text-secondary hover:bg-library-bg-shelf hover:text-library-text-primary transition-colors"
+      {showAddButton && config.supportsAddButton && book.availability === 'free' && (
+        <>
+          <button
+            type="button"
+            onClick={handleImportClick}
+            disabled={buttonProps.disabled}
+            aria-label={
+              importStatus === 'completed'
+                ? `${book.title_en} is in your library`
+                : `Add ${book.title_en} to your library`
+            }
+            className={`mt-1 w-full text-xs rounded px-2 py-1.5 border transition-colors flex items-center justify-center gap-1 ${buttonProps.className}`}
+          >
+            {buttonProps.icon}
+            {buttonProps.label}
+          </button>
+
+          {importStatus === 'completed' && (
+            <button
+              type="button"
+              onClick={handleReadNow}
+              aria-label={`Read ${book.title_en} now`}
+              className="w-full text-xs text-library-red hover:underline text-center"
+            >
+              Read now →
+            </button>
+          )}
+        </>
+      )}
+
+      {showAddButton && config.supportsAddButton && book.availability === 'buy' && book.buy_link && (
+        <a
+          href={book.buy_link}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Buy ${book.title_en} — opens external site`}
+          className="mt-1 w-full text-xs rounded px-2 py-1.5 border border-library-border text-library-text-secondary hover:bg-library-bg-shelf text-center block transition-colors"
         >
-          + Add to Library
-        </button>
+          Buy →
+        </a>
       )}
     </>
   );

@@ -1,7 +1,8 @@
 /**
- * @fileoverview ImportFlow — triggers a book import from the catalog and
- * hands off to ImportProgress, backed by useImport.
- * Placeholder for Phase 10. No implementation yet.
+ * @fileoverview DEPRECATED — Phase 10 implemented the import flow via the
+ * useImport hook wired directly into BookCard's grid variant, not as a
+ * separate component. This file is unused and will be removed in Phase
+ * 11 cleanup.
  */
 export default function ImportFlow() {
   return null;
