@@ -68,16 +68,15 @@ export const Navbar = () => {
     <>
     <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
-        <div className="flex h-[72px] items-center justify-between">
-          {/* Logo — pl-6 (24px) breathing room beyond the container's own px-4, per
-              UI Refinement Brief Step 2: "currently too tight against the edge." */}
-          <Link to="/profile" className="flex items-center gap-2 group pl-6" data-testid="nav-logo">
+        <div className="flex h-16 items-center justify-between">
+          {/* Logo */}
+          <Link to="/profile" className="flex items-center gap-2 group" data-testid="nav-logo">
             <span className="text-2xl font-serif text-primary">読</span>
             <span className="text-lg font-medium text-foreground hidden sm:inline">Zenzeii</span>
           </Link>
 
           {/* Navigation Links */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-1">
             {navItems.map(({ path, icon: Icon, label }) => (
               <Link key={path} to={path}>
                 <Button
