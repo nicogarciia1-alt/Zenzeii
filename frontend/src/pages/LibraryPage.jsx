@@ -54,17 +54,29 @@ export default function LibraryPage() {
           a delay before the user sees anything at all. */}
       <LibraryHero searchProps={searchProps} />
 
-      {/* Phase 2 — Recommendation */}
-      <div className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
+      {/* Phase 2 — Recommendation.
+          Fade-only entrance everywhere below (no slide/transform) — see
+          Bug 2 fix note: a transform held past its animation's end via
+          animationFillMode: 'both' establishes a permanent new stacking
+          context on that element. Any such wrapper positioned after
+          FilterBar in the DOM then paints its entire subtree on top of
+          FilterBar's z-40 dropdown, regardless of that z-index — stacking
+          contexts aren't comparable across that boundary, only DOM/paint
+          order is, once a sibling creates its own context. This bit
+          FilterBar → ShelvesSection/CatalogGrid in production; fade-only
+          (opacity settles at 1, which does not create a stacking context)
+          avoids the whole bug class rather than fixing it section by
+          section. */}
+      <div className="animate-in fade-in-0 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
         <RecommendationSection />
       </div>
 
       {/* Phase 3 — Filter Bar, live-wired to useCatalog + useTaxonomy (Phase 6).
-          Fade-only entrance (no slide/transform): FilterBar's root is
-          position: sticky, and a transform on an ancestor — even one that
-          settles at translateY(0) once the animation ends — establishes a
-          new CSS containing block, which can permanently break sticky
-          positioning for the descendant. Opacity doesn't have that effect. */}
+          Also fade-only for its own separate reason: FilterBar's root is
+          position: sticky, and a transform on an ancestor can break sticky
+          positioning for the descendant the same way it breaks z-index
+          above — same root cause (a lingering transform), two different
+          symptoms. */}
       <div className="animate-in fade-in-0 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
         <FilterBar
           externalFilters={catalog.filters}
@@ -74,7 +86,7 @@ export default function LibraryPage() {
       </div>
 
       {/* Phase 4 — Shelves, still mock data */}
-      <div className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
+      <div className="animate-in fade-in-0 duration-500" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
         <ShelvesSection />
       </div>
 
@@ -82,7 +94,7 @@ export default function LibraryPage() {
       <section
         id={CATALOG_SECTION_ID}
         aria-label="All books"
-        className="max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 animate-in fade-in-0 slide-in-from-bottom-4 duration-500"
+        className="max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 animate-in fade-in-0 duration-500"
         style={{ animationDelay: '400ms', animationFillMode: 'both' }}
       >
         <SectionHeader

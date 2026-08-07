@@ -57,7 +57,7 @@ export function FilterChip({ filterId, label, icon, options, value, onChange, di
   const chipAriaLabel = `${label} filter, currently set to ${displayValue}`;
 
   return (
-    <div ref={chipRef} className="relative h-full">
+    <div ref={chipRef} className="relative h-full flex-1">
       <button
         type="button"
         disabled={disabled}
