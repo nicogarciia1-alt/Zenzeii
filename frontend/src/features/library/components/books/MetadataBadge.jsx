@@ -7,12 +7,16 @@
  * logic lives inside it, just label + variant + optional icon.
  */
 
+// Border opacity /40 throughout — UI Refinement Brief Step 9's value.
+// (Step 3 separately says /50 for this same component; Step 9's list is
+// the later, more comprehensive pass, so it wins — applying /40 once
+// here rather than /50 now and /40 again in the Step 9 commit.)
 const VARIANT_CLASSES = {
-  default: 'bg-transparent border-library-border text-library-text-secondary',
+  default: 'bg-transparent border-library-border/40 text-library-text-secondary',
   subtle: 'border-transparent bg-library-filter-active text-library-text-secondary',
   jlpt: 'bg-transparent border-library-text-primary/40 text-library-text-primary font-medium',
-  difficulty: 'bg-transparent border-library-border text-library-text-secondary',
-  time: 'bg-transparent border-library-border text-library-text-muted',
+  difficulty: 'bg-transparent border-library-border/40 text-library-text-secondary',
+  time: 'bg-transparent border-library-border/40 text-library-text-muted',
 };
 
 /**
@@ -29,7 +33,7 @@ export function MetadataBadge({ label, variant = 'default', icon, ariaLabel }) {
   return (
     <span
       aria-label={ariaLabel || label}
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${VARIANT_CLASSES[variant] ?? VARIANT_CLASSES.default}`}
+      className={`inline-flex items-center gap-1 px-spacing-2 py-0.5 rounded-full border text-xs ${VARIANT_CLASSES[variant] ?? VARIANT_CLASSES.default}`}
     >
       {icon && <span aria-hidden="true">{icon}</span>}
       {label}

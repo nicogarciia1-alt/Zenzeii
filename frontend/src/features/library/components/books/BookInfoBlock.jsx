@@ -32,19 +32,19 @@ export function BookInfoBlock({ book, onViewDetails = DEFAULT_VIEW_DETAILS, onBo
       <p className="text-xs uppercase tracking-widest text-library-red font-medium">Recommended</p>
 
       <div>
-        <h3 className="font-playfair text-2xl font-semibold text-library-text-primary leading-tight">
+        <h3 className="font-playfair text-h3 text-library-text-primary">
           {book.title_en}
         </h3>
         <p className="font-garamond text-sm text-library-text-secondary mt-0.5">{book.title_jp}</p>
       </div>
 
-      <p className="text-sm text-library-text-secondary">
+      <p className="text-sm text-library-text-secondary/80">
         {book.author_name}
         {book.author_name_jp ? ` ${book.author_name_jp}` : ''}
       </p>
 
       {book.description_short && (
-        <p className="text-sm text-library-text-secondary leading-relaxed line-clamp-3">
+        <p className="text-sm text-library-text-secondary leading-loose line-clamp-3">
           {book.description_short}
         </p>
       )}
@@ -64,7 +64,7 @@ export function BookInfoBlock({ book, onViewDetails = DEFAULT_VIEW_DETAILS, onBo
           type="button"
           onClick={() => onViewDetails(book)}
           aria-label={`View details for ${book.title_en}`}
-          className="flex-1 border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-4 py-2 rounded text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+          className="flex-1 h-12 border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-spacing-3 rounded text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
         >
           View Details
         </button>
@@ -72,9 +72,9 @@ export function BookInfoBlock({ book, onViewDetails = DEFAULT_VIEW_DETAILS, onBo
           type="button"
           onClick={() => onBookmark(book)}
           aria-label={isBookmarked ? 'Remove from library' : `Add ${book.title_en} to your library`}
-          className="shrink-0 border border-library-border text-library-text-secondary hover:text-library-red hover:border-library-red p-2 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+          className="shrink-0 border border-library-border text-library-text-secondary hover:text-library-red hover:border-library-red p-spacing-2 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
         >
-          <Bookmark className="w-4 h-4" fill={isBookmarked ? 'currentColor' : 'none'} aria-hidden="true" />
+          <Bookmark className="w-5 h-5" fill={isBookmarked ? 'currentColor' : 'none'} aria-hidden="true" />
         </button>
       </div>
     </div>

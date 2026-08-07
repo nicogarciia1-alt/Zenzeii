@@ -24,10 +24,24 @@
  *   subtitle (e.g. "polite"), for subtitles that report a count that
  *   changes after user action — e.g. LibraryPage's "N books found" during
  *   search (Phase 7). Omitted by default; existing callers are unaffected.
+ * @param {string} [props.className] - Overrides the default mb-6 bottom margin
+ *   (e.g. mb-spacing-6 for a section that needs more room below its header).
+ *   Replaces rather than appends, so only one margin-bottom utility is ever
+ *   active on the root — existing callers that omit it keep mb-6 exactly as
+ *   before.
  */
-export function SectionHeader({ title, subtitle, icon, viewAllLabel, onViewAll, viewAllAriaLabel, subtitleAriaLive }) {
+export function SectionHeader({
+  title,
+  subtitle,
+  icon,
+  viewAllLabel,
+  onViewAll,
+  viewAllAriaLabel,
+  subtitleAriaLive,
+  className,
+}) {
   return (
-    <div className="mb-6">
+    <div className={className || 'mb-6'}>
       <div className="flex items-baseline justify-between gap-4">
         <h2 className="flex items-center gap-2 font-playfair text-[22px] md:text-2xl font-semibold text-library-text-primary">
           {icon && (

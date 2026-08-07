@@ -38,10 +38,15 @@ const DECORATIVE_KANJI = ['空', '読', '心', '文'];
  * Phase 2's RecommendationCard. 'sm' is exercised by BookCard's shelf/
  * compact variants (Phase 5), 'md' by BookCard's grid variant; 'lg' is
  * scaled proportionally for Phase 9's BookDetailModal, not yet built.
+ * 'rec' (UI Refinement Brief Rev 1, Step 3) is ~10% larger than 'md' —
+ * 132x198 vs 120x180 — for RecommendationCard specifically; reuses md's
+ * internal typography proportions since a 10% size bump doesn't cross
+ * any natural Tailwind text-size step.
  */
 const SIZE_CONFIG = {
   sm: { wrapper: 'w-[80px] h-[120px]', padding: 'p-2', title: 'text-[10px]', author: 'text-[8px]', kanji: 'text-4xl' },
   md: { wrapper: 'w-[120px] h-[180px]', padding: 'p-3', title: 'text-lg', author: 'text-xs', kanji: 'text-8xl' },
+  rec: { wrapper: 'w-[132px] h-[198px]', padding: 'p-3', title: 'text-lg', author: 'text-xs', kanji: 'text-8xl' },
   lg: { wrapper: 'w-[160px] h-[240px]', padding: 'p-4', title: 'text-xl', author: 'text-sm', kanji: 'text-9xl' },
 };
 
@@ -52,7 +57,7 @@ const SIZE_CONFIG = {
  * @param {string} props.titleEn - English title (used as aria-label)
  * @param {string} props.authorJp - Japanese author name on generated cover
  * @param {string|null} [props.coverImage] - URL of real cover image, if available
- * @param {'sm'|'md'|'lg'} [props.size] - Cover size variant
+ * @param {'sm'|'md'|'rec'|'lg'} [props.size] - Cover size variant
  */
 export function BookCoverArt({ bookId, titleJp, titleEn, authorJp, coverImage, size = 'md' }) {
   const config = SIZE_CONFIG[size] ?? SIZE_CONFIG.md;

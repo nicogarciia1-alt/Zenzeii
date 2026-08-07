@@ -17,22 +17,22 @@ export function QuizPromptCard() {
     <div
       role="region"
       aria-label="Book recommendation quiz"
-      className="relative overflow-hidden bg-library-bg-card rounded-lg border border-library-border shadow-sm p-6 h-full flex flex-col gap-3"
+      className="relative overflow-hidden bg-library-bg-card rounded-lg border border-library-border shadow-sm p-spacing-4 lg:p-spacing-6 h-full flex flex-col"
     >
-      <p className="text-xs uppercase tracking-wide text-library-text-muted">Not sure what to read?</p>
+      <p className="mb-spacing-2 text-xs uppercase tracking-wide text-library-text-muted">Not sure what to read?</p>
 
-      <h3 className="font-playfair text-xl font-semibold text-library-text-primary">
+      <h3 className="mb-spacing-3 font-playfair text-xl font-semibold text-library-text-primary">
         Take our 30-second quiz
       </h3>
 
-      <p className="text-sm text-library-text-secondary leading-relaxed">
+      <p className="mb-spacing-4 text-sm text-library-text-secondary leading-relaxed">
         We'll find the perfect book for your level and interests.
       </p>
 
       <button
         type="button"
         onClick={handleFindMyBook}
-        className="self-start border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+        className="self-start h-12 border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-4 rounded text-sm font-medium transition-colors flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
       >
         Find My Book
         <span aria-hidden="true">→</span>

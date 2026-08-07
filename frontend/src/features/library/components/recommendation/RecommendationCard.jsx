@@ -20,7 +20,7 @@ export function RecommendationCard({ book, onViewDetails, onBookmark, isBookmark
     <div
       role="region"
       aria-label="Featured book recommendation"
-      className="bg-library-bg-card rounded-lg border border-library-border shadow-sm p-6 grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6"
+      className="bg-library-bg-card rounded-lg border border-library-border shadow-sm p-spacing-4 lg:p-spacing-6 grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6"
     >
       <BookCoverArt
         bookId={book.id}
@@ -28,7 +28,7 @@ export function RecommendationCard({ book, onViewDetails, onBookmark, isBookmark
         titleEn={book.title_en}
         authorJp={book.author_name_jp || book.author_name}
         coverImage={book.cover_image}
-        size="md"
+        size="rec"
       />
       <BookInfoBlock
         book={book}
