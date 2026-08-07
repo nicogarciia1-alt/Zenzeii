@@ -5,21 +5,30 @@
  * pagination, loading, and error states. Fetches from GET /api/catalog
  * whenever filters, sort, or page changes.
  *
- * Filter state is scalar (one selected value per filter, or null),
- * matching FilterChip's existing single-select UI exactly — not the
- * array/toggle model a multi-select UI would need. The real backend
- * does support repeated params for OR-logic multi-select (verified
- * directly against production), but exposing that is a future UI
- * decision (e.g. checkboxes in Phase 8's MoreFiltersPanel), not
- * something this phase should force into the already-shipped chips.
+ * Filter state is scalar (one selected value per filter, or null) for
+ * every Layer 1 filter — q, genre, difficulty, jlpt, length, language,
+ * availability, year_from, year_to, theme, mood — matching FilterChip's
+ * existing single-select UI exactly.
+ *
+ * The five Layer 2 filters exposed only through MoreFiltersPanel
+ * (Phase 8) — setting, period, concept, award, adaptation — are array
+ * state instead: multiple values OR'd together, matching FilterPill's
+ * checkbox UI and the repeated-param OR-logic the backend already
+ * supports. theme/mood stay scalar and out of that panel entirely —
+ * they already have a single-select home in the primary FilterBar chips,
+ * and giving them a second, differently-shaped entry point would put two
+ * UIs writing incompatible value types into the same filter key.
  *
  * Used by: LibraryPage (passed down to FilterBar and CatalogGrid)
  */
 import { useEffect, useState } from 'react';
 import { fetchCatalog } from '../services/catalogApi';
-import { SEARCH_DEBOUNCE_MS, SORT_OPTIONS } from '../constants/libraryConstants';
+import { SEARCH_DEBOUNCE_MS, SORT_OPTIONS, SECONDARY_FILTERS } from '../constants/libraryConstants';
 
 const DEFAULT_SORT = SORT_OPTIONS[0].value; // 'popular'
+
+/** Layer 2 filters — array/toggle state, selected via MoreFiltersPanel checkboxes. */
+const ARRAY_FILTER_IDS = SECONDARY_FILTERS;
 
 const DEFAULT_FILTERS = {
   q: null,
@@ -33,11 +42,11 @@ const DEFAULT_FILTERS = {
   year_to: null,
   theme: null,
   mood: null,
-  setting: null,
-  period: null,
-  concept: null,
-  award: null,
-  adaptation: null,
+  setting: [],
+  period: [],
+  concept: [],
+  award: [],
+  adaptation: [],
 };
 
 /**
@@ -139,7 +148,19 @@ export function useCatalog(initialParams = {}) {
   ]);
 
   const setFilter = (filterId, value) => {
-    setFiltersState((prev) => ({ ...prev, [filterId]: value }));
+    setFiltersState((prev) => {
+      if (ARRAY_FILTER_IDS.includes(filterId)) {
+        // Layer 2 filters are OR'd sets — `value` is the single option
+        // being toggled, not a replacement array (FilterPill/FilterSection
+        // only ever pass one value at a time).
+        const current = prev[filterId];
+        const next = current.includes(value)
+          ? current.filter((v) => v !== value)
+          : [...current, value];
+        return { ...prev, [filterId]: next };
+      }
+      return { ...prev, [filterId]: value };
+    });
     setPage(1);
   };
 
@@ -158,7 +179,9 @@ export function useCatalog(initialParams = {}) {
     setPage(1);
   };
 
-  const hasActiveFilters = Object.values(filters).some((v) => v !== null);
+  const hasActiveFilters = Object.entries(filters).some(([filterId, v]) =>
+    ARRAY_FILTER_IDS.includes(filterId) ? v.length > 0 : v !== null
+  );
 
   return {
     books: result.books,

@@ -8,16 +8,28 @@
  * externalFilters/onExternalFilterChange/taxonomy are passed. Falls back
  * to local state and mock taxonomy when they're not — keeps FilterBar
  * usable standalone (Phase 3 behavior unchanged for any other caller).
+ *
+ * Phase 8: owns the "More Filters" open/close state and renders the
+ * desktop popover + mobile bottom sheet, both wrapping the same
+ * MoreFiltersPanel content. Layer 2 filter values live in the same
+ * externalFilters/onExternalFilterChange pair as the primary chips — no
+ * new state management, just five more keys (setting/period/concept/
+ * award/adaptation) that happen to be arrays instead of scalars. See
+ * useCatalog.js for why theme/mood aren't among them.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { BookOpen, BarChart2, Languages, Clock, Leaf, Smile } from 'lucide-react';
 import { FilterChip } from './FilterChip';
 import { MoreFiltersButton } from './MoreFiltersButton';
+import { MoreFiltersPanel } from './MoreFiltersPanel';
+import { MoreFiltersPopover } from './MoreFiltersPopover';
+import { MoreFiltersBottomSheet } from './MoreFiltersBottomSheet';
 import {
   FILTER_BAR_CHIPS,
   DIFFICULTY_OPTIONS,
   JLPT_OPTIONS,
   LENGTH_OPTIONS,
+  SECONDARY_FILTERS,
 } from '../../constants/libraryConstants';
 import { MOCK_GENRES, MOCK_THEMES, MOCK_MOODS } from '../../data/mockTaxonomy';
 
@@ -36,6 +48,9 @@ const LOCAL_DEFAULT_FILTERS = {
   theme: null,
   mood: null,
 };
+
+/** The five Layer 2 filters that live only behind "More Filters" — see useCatalog.js's ARRAY_FILTER_IDS. */
+const LAYER2_FILTER_IDS = SECONDARY_FILTERS;
 
 /**
  * Resolves a chip's options. genres/themes/moods chips prefer live
@@ -75,6 +90,8 @@ function resolveOptions(chip, taxonomy) {
  */
 export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy }) {
   const [localFilters, setLocalFilters] = useState(LOCAL_DEFAULT_FILTERS);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const moreFiltersTriggerRef = useRef(null);
 
   const isControlled = externalFilters != null && onExternalFilterChange != null;
   const filters = isControlled ? externalFilters : localFilters;
@@ -86,6 +103,27 @@ export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy })
       console.log('[FilterBar] Filter changed:', { filterId, value }); // Phase 3 fallback — no catalog connected
       setLocalFilters((prev) => ({ ...prev, [filterId]: value }));
     }
+  };
+
+  const activeLayer2Count = LAYER2_FILTER_IDS.reduce(
+    (count, id) => count + (externalFilters?.[id]?.length ?? 0),
+    0
+  );
+
+  // Clears each Layer 2 field by toggling off every value currently
+  // selected in it — reuses onExternalFilterChange's existing
+  // single-value toggle contract (see useCatalog.js's setFilter) rather
+  // than needing a separate "reset to []" callback.
+  const handleClearLayer2 = () => {
+    if (!isControlled) return;
+    LAYER2_FILTER_IDS.forEach((id) => {
+      (externalFilters[id] ?? []).forEach((value) => onExternalFilterChange(id, value));
+    });
+  };
+
+  const handleCloseMoreFilters = () => {
+    setMoreFiltersOpen(false);
+    moreFiltersTriggerRef.current?.querySelector('button')?.focus();
   };
 
   return (
@@ -109,7 +147,39 @@ export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy })
             />
           );
         })}
-        <MoreFiltersButton />
+        {/* display:contents — invisible to the toolbar's flex layout, just gives Phase 8 a DOM ref for
+            focus-return and outside-click exclusion without touching MoreFiltersButton itself. */}
+        <div ref={moreFiltersTriggerRef} className="contents">
+          <MoreFiltersButton onOpen={() => setMoreFiltersOpen(true)} activeCount={activeLayer2Count} />
+        </div>
+      </div>
+
+      <div className="hidden lg:block">
+        <MoreFiltersPopover isOpen={moreFiltersOpen} onClose={handleCloseMoreFilters} triggerRef={moreFiltersTriggerRef}>
+          <MoreFiltersPanel
+            taxonomy={taxonomy}
+            activeFilters={filters}
+            onFilterChange={handleFilterChange}
+            onClearAll={handleClearLayer2}
+            onApply={handleCloseMoreFilters}
+            resultCount={null}
+            liveUpdate={true}
+          />
+        </MoreFiltersPopover>
+      </div>
+
+      <div className="lg:hidden">
+        <MoreFiltersBottomSheet isOpen={moreFiltersOpen} onClose={handleCloseMoreFilters}>
+          <MoreFiltersPanel
+            taxonomy={taxonomy}
+            activeFilters={filters}
+            onFilterChange={handleFilterChange}
+            onClearAll={handleClearLayer2}
+            onApply={handleCloseMoreFilters}
+            resultCount={null}
+            liveUpdate={false}
+          />
+        </MoreFiltersBottomSheet>
       </div>
     </div>
   );
