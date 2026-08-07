@@ -25,13 +25,15 @@ import { CatalogGrid } from '@/features/library/components/books/CatalogGrid';
 import { SectionHeader } from '@/features/library/components/shelves/SectionHeader';
 import { useCatalog } from '@/features/library/hooks/useCatalog';
 import { useTaxonomy } from '@/features/library/hooks/useTaxonomy';
+import Layout from '@/components/layout/Layout';
 
 export default function LibraryPage() {
   const catalog = useCatalog();
   const taxonomy = useTaxonomy();
 
   return (
-    <div className="min-h-screen bg-library-bg-primary">
+    <Layout>
+    <div className="bg-library-bg-primary">
 
       {/* Phase 1 — Hero */}
       <LibraryHero />
@@ -70,5 +72,6 @@ export default function LibraryPage() {
       </div>
 
     </div>
+    </Layout>
   );
 }
