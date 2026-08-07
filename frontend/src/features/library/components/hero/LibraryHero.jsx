@@ -16,6 +16,14 @@
  * Static in Phase 1. Phase 2+ passes onExplore/onSurpriseMe callbacks
  * down to HeroContent. Phase 7 adds searchProps, forwarded to HeroContent
  * unchanged — LibraryHero owns no search state itself.
+ *
+ * Sato's final artwork landed (2026-08-07) — a Japanese scholar's study
+ * overlooking Mount Fuji with cherry blossoms, frontend/public/assets/
+ * hero-library.webp (converted from the delivered PNG via Pillow,
+ * quality=85 -> 135KB, well under the 500KB budget). Its own dark left
+ * portion (bookshelf) happens to align with this layout's dark-content-
+ * zone-into-artwork design, reinforcing rather than fighting the
+ * gradient feather in HeroContent.jsx.
  */
 import HeroContent from './HeroContent';
 import HeroImage from './HeroImage';
@@ -29,7 +37,10 @@ export default function LibraryHero({ searchProps }) {
     <section className="relative w-full h-auto md:h-[480px] lg:h-[600px] overflow-hidden bg-library-bg-hero-dark lg:grid lg:grid-cols-[55fr_45fr]">
       {/* Artwork: hidden on mobile, full-bleed absolute background on tablet, real right column on desktop */}
       <div className="hidden md:block absolute inset-0 lg:static lg:col-start-2 lg:row-start-1">
-        <HeroImage alt="Zenzeii Library — Japanese literary landscape" />
+        <HeroImage
+          src="/assets/hero-library.webp"
+          alt="Zenzeii Library — a Japanese scholar's study overlooking Mount Fuji with cherry blossoms"
+        />
       </div>
 
       {/* Tablet-only dark tint over the full-bleed image — desktop's content column has its own dark background instead */}
