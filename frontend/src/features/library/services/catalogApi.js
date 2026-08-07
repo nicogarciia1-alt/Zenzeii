@@ -4,13 +4,36 @@
  * hooks never call axios/fetch directly.
  *
  * Uses process.env.REACT_APP_BACKEND_URL + axios, matching the existing
- * convention in frontend/src/lib/api.js — this app is built with
- * Create React App (react-scripts/craco), not Vite, so import.meta.env
- * is not available here.
+ * convention in frontend/src/lib/api.js exactly — including no
+ * hardcoded fallback URL. A silent production fallback would mask a
+ * misconfigured environment instead of surfacing it.
  */
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+/**
+ * Build a URLSearchParams object from a catalog query params object.
+ * Handles array values (repeatable params like genre[], mood[]) by
+ * appending each element as a separate occurrence of the key, and
+ * scalar values (a plain string, e.g. a single selected genre) by
+ * appending them directly — the backend accepts both a single
+ * occurrence and repeated occurrences of the same key identically.
+ * @param {Object} params
+ * @returns {URLSearchParams}
+ */
+function buildQueryParams(params) {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      value.forEach((v) => searchParams.append(key, v));
+    } else {
+      searchParams.append(key, String(value));
+    }
+  });
+  return searchParams;
+}
 
 /**
  * Fetch paginated catalog books with optional filters and sort.
@@ -37,8 +60,9 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
  * @returns {Promise<import('../types/catalogTypes').CatalogListResponse>}
  */
 export async function fetchCatalog(params = {}) {
-  // Phase 0: no call made yet.
-  // Phase 6: axios.get(`${API}/catalog`, { params })
+  const query = buildQueryParams(params);
+  const response = await axios.get(`${API}/catalog?${query}`);
+  return response.data;
 }
 
 /**
@@ -47,8 +71,8 @@ export async function fetchCatalog(params = {}) {
  * @returns {Promise<import('../types/catalogTypes').BookCatalogItem>}
  */
 export async function fetchBookById(bookId) {
-  // Phase 0: no call made yet.
-  // Phase 6: axios.get(`${API}/catalog/${bookId}`)
+  const response = await axios.get(`${API}/catalog/${bookId}`);
+  return response.data;
 }
 
 /**
@@ -56,8 +80,8 @@ export async function fetchBookById(bookId) {
  * @returns {Promise<import('../types/catalogTypes').Genre[]>}
  */
 export async function fetchGenres() {
-  // Phase 0: no call made yet.
-  // Phase 6: axios.get(`${API}/catalog/genres`)
+  const response = await axios.get(`${API}/catalog/genres`);
+  return response.data.genres;
 }
 
 /**
@@ -65,8 +89,8 @@ export async function fetchGenres() {
  * @returns {Promise<import('../types/catalogTypes').TaxonomyResponse>}
  */
 export async function fetchTaxonomy() {
-  // Phase 0: no call made yet.
-  // Phase 6: axios.get(`${API}/catalog/taxonomy`)
+  const response = await axios.get(`${API}/catalog/taxonomy`);
+  return response.data;
 }
 
 /**
@@ -75,6 +99,6 @@ export async function fetchTaxonomy() {
  * @returns {Promise<import('../types/catalogTypes').CulturalConcept>}
  */
 export async function fetchConceptDetail(conceptId) {
-  // Phase 0: no call made yet.
-  // Phase 6: axios.get(`${API}/catalog/concepts/${conceptId}`)
+  const response = await axios.get(`${API}/catalog/concepts/${conceptId}`);
+  return response.data;
 }

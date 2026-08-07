@@ -4,12 +4,10 @@
  * Renders the full horizontal filter strip with 6 primary filter chips
  * and the "More Filters" button. Sticky — stays visible on scroll.
  *
- * Phase 3: filter state is local only. All changes logged to console.
- * Phase 6: filter state lifted to useCatalog hook, onChange propagates
- *           to the catalog API query.
- *
- * No props in Phase 3 — self-contained with local state.
- * Phase 6: receives filters, onFilterChange from parent (LibraryPage).
+ * Phase 6: controlled by useCatalog/useTaxonomy via LibraryPage when
+ * externalFilters/onExternalFilterChange/taxonomy are passed. Falls back
+ * to local state and mock taxonomy when they're not — keeps FilterBar
+ * usable standalone (Phase 3 behavior unchanged for any other caller).
  */
 import { useState } from 'react';
 import { BookOpen, BarChart2, Languages, Clock, Leaf, Smile } from 'lucide-react';
@@ -29,19 +27,31 @@ const ICON_MAP = { BookOpen, BarChart2, Languages, Clock, Leaf, Smile };
 /** Maps a taxonomy entity (Genre/Theme/Mood shape) to a FilterOption. */
 const toFilterOption = (entity) => ({ value: entity.id, label: entity.name, labelJp: entity.name_jp });
 
+/** Local filter default when no externalFilters is provided (Phase 3 standalone mode). */
+const LOCAL_DEFAULT_FILTERS = {
+  genre: null,
+  difficulty: null,
+  jlpt: null,
+  length: null,
+  theme: null,
+  mood: null,
+};
+
 /**
- * Resolves a chip's options for Phase 3 (mock data). Phase 6 replaces
- * this with values sourced from useTaxonomy() — same FilterOption[]
- * shape either way, so only the source changes here, not the chips.
+ * Resolves a chip's options. genres/themes/moods chips prefer live
+ * taxonomy (Phase 6, via the `taxonomy` prop) and fall back to mock data
+ * when taxonomy hasn't loaded yet or isn't passed at all — same
+ * FilterOption[] shape either way, so the chips never know which source
+ * they're reading from.
  */
-function resolveOptions(chip) {
+function resolveOptions(chip, taxonomy) {
   switch (chip.optionsSource) {
     case 'genres':
-      return MOCK_GENRES.map(toFilterOption);
+      return (taxonomy?.genres?.length ? taxonomy.genres : MOCK_GENRES).map(toFilterOption);
     case 'themes':
-      return MOCK_THEMES.map(toFilterOption);
+      return (taxonomy?.themes?.length ? taxonomy.themes : MOCK_THEMES).map(toFilterOption);
     case 'moods':
-      return MOCK_MOODS.map(toFilterOption);
+      return (taxonomy?.moods?.length ? taxonomy.moods : MOCK_MOODS).map(toFilterOption);
     case 'static':
     default:
       if (chip.id === 'difficulty') return DIFFICULTY_OPTIONS;
@@ -51,21 +61,31 @@ function resolveOptions(chip) {
   }
 }
 
-export function FilterBar() {
-  const [filters, setFilters] = useState({
-    genre: null,
-    difficulty: null,
-    jlpt: null,
-    length: null,
-    theme: null,
-    mood: null,
-  });
+/**
+ * @param {Object} [props]
+ * @param {Object} [props.externalFilters] - Filter state from useCatalog (Phase 6).
+ *   When provided together with onExternalFilterChange, FilterBar is fully
+ *   controlled by the parent and its own local filter state goes unused.
+ * @param {function} [props.onExternalFilterChange] - Called with (filterId, value)
+ *   on selection, propagating to useCatalog. Without it, FilterBar manages
+ *   filter state locally (Phase 3 fallback).
+ * @param {Object} [props.taxonomy] - Live taxonomy data from useTaxonomy (Phase 6):
+ *   { genres, themes, moods, ... }. Falls back to mock taxonomy when omitted
+ *   or still loading.
+ */
+export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy }) {
+  const [localFilters, setLocalFilters] = useState(LOCAL_DEFAULT_FILTERS);
+
+  const isControlled = externalFilters != null && onExternalFilterChange != null;
+  const filters = isControlled ? externalFilters : localFilters;
 
   const handleFilterChange = (filterId, value) => {
-    console.log('[FilterBar] Filter changed:', { filterId, value });
-    // Phase 6: this is where onFilterChange(filterId, value) will be called
-    // to propagate the change up to useCatalog.
-    setFilters((prev) => ({ ...prev, [filterId]: value }));
+    if (isControlled) {
+      onExternalFilterChange(filterId, value);
+    } else {
+      console.log('[FilterBar] Filter changed:', { filterId, value }); // Phase 3 fallback — no catalog connected
+      setLocalFilters((prev) => ({ ...prev, [filterId]: value }));
+    }
   };
 
   return (
@@ -83,7 +103,7 @@ export function FilterBar() {
               filterId={chip.id}
               label={chip.label}
               icon={<Icon className="w-4 h-4" />}
-              options={resolveOptions(chip)}
+              options={resolveOptions(chip, taxonomy)}
               value={filters[chip.id]}
               onChange={(value) => handleFilterChange(chip.id, value)}
             />
