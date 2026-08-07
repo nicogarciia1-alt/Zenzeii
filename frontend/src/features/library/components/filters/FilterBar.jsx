@@ -163,7 +163,12 @@ export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy })
       <div
         role="toolbar"
         aria-label="Book discovery filters"
-        className="h-full flex items-stretch divide-x divide-library-border overflow-x-auto"
+        // overflow-y-visible isn't a no-op here: per the CSS spec, when
+        // overflow-x is set to anything but visible and overflow-y is left
+        // unset, the browser computes overflow-y as auto too — clipping
+        // FilterDropdown, which overflows this row vertically. overflow-x-auto
+        // is still needed for horizontal chip scroll on narrow viewports.
+        className="h-full flex items-stretch divide-x divide-library-border overflow-x-auto overflow-y-visible"
       >
         {FILTER_BAR_CHIPS.map((chip) => {
           const Icon = ICON_MAP[chip.icon];
