@@ -17,7 +17,7 @@
  * award/adaptation) that happen to be arrays instead of scalars. See
  * useCatalog.js for why theme/mood aren't among them.
  */
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { BookOpen, BarChart2, Languages, Clock, Leaf, Smile } from 'lucide-react';
 import { FilterChip } from './FilterChip';
 import { MoreFiltersButton } from './MoreFiltersButton';
@@ -53,20 +53,20 @@ const LOCAL_DEFAULT_FILTERS = {
 const LAYER2_FILTER_IDS = SECONDARY_FILTERS;
 
 /**
- * Resolves a chip's options. genres/themes/moods chips prefer live
- * taxonomy (Phase 6, via the `taxonomy` prop) and fall back to mock data
- * when taxonomy hasn't loaded yet or isn't passed at all — same
- * FilterOption[] shape either way, so the chips never know which source
- * they're reading from.
+ * Resolves a chip's options from a pre-mapped { genres, themes, moods }
+ * bundle (see useMemo calls in FilterBar below) for the three taxonomy-
+ * backed chips, or the static *_OPTIONS constants for the rest — those
+ * are already stable module-level references, no mapping work to redo
+ * per render.
  */
-function resolveOptions(chip, taxonomy) {
+function resolveOptions(chip, mappedTaxonomy) {
   switch (chip.optionsSource) {
     case 'genres':
-      return (taxonomy?.genres?.length ? taxonomy.genres : MOCK_GENRES).map(toFilterOption);
+      return mappedTaxonomy.genres;
     case 'themes':
-      return (taxonomy?.themes?.length ? taxonomy.themes : MOCK_THEMES).map(toFilterOption);
+      return mappedTaxonomy.themes;
     case 'moods':
-      return (taxonomy?.moods?.length ? taxonomy.moods : MOCK_MOODS).map(toFilterOption);
+      return mappedTaxonomy.moods;
     case 'static':
     default:
       if (chip.id === 'difficulty') return DIFFICULTY_OPTIONS;
@@ -95,6 +95,24 @@ export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy })
 
   const isControlled = externalFilters != null && onExternalFilterChange != null;
   const filters = isControlled ? externalFilters : localFilters;
+
+  // Recomputed only when the underlying taxonomy arrays actually change —
+  // useTaxonomy returns a memoized object, so these deps stay referentially
+  // stable across unrelated LibraryPage re-renders (every search keystroke,
+  // every filter change) instead of re-mapping on every FilterBar render.
+  const genreOptions = useMemo(
+    () => (taxonomy?.genres?.length ? taxonomy.genres : MOCK_GENRES).map(toFilterOption),
+    [taxonomy?.genres]
+  );
+  const themeOptions = useMemo(
+    () => (taxonomy?.themes?.length ? taxonomy.themes : MOCK_THEMES).map(toFilterOption),
+    [taxonomy?.themes]
+  );
+  const moodOptions = useMemo(
+    () => (taxonomy?.moods?.length ? taxonomy.moods : MOCK_MOODS).map(toFilterOption),
+    [taxonomy?.moods]
+  );
+  const mappedTaxonomy = { genres: genreOptions, themes: themeOptions, moods: moodOptions };
 
   const handleFilterChange = (filterId, value) => {
     if (isControlled) {
@@ -141,7 +159,7 @@ export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy })
               filterId={chip.id}
               label={chip.label}
               icon={<Icon className="w-4 h-4" />}
-              options={resolveOptions(chip, taxonomy)}
+              options={resolveOptions(chip, mappedTaxonomy)}
               value={filters[chip.id]}
               onChange={(value) => handleFilterChange(chip.id, value)}
             />

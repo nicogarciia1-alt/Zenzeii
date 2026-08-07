@@ -60,7 +60,7 @@ export function FeelingCard({ id, name, nameJp, bookCount, imageUrl, emoji, onCl
       style={!imageUrl ? { background: `linear-gradient(to bottom right, ${gradient.from}, ${gradient.to})` } : undefined}
     >
       {imageUrl && (
-        <img src={imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img src={imageUrl} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
       )}
 
       {/* Bottom gradient overlay for text legibility */}

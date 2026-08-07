@@ -21,6 +21,8 @@ export default function HeroImage({ src, alt }) {
         <img
           src={src}
           alt={alt}
+          loading="eager"
+          fetchPriority="high"
           className="w-full h-full object-cover"
         />
       ) : (

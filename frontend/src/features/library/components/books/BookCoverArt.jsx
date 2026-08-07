@@ -61,7 +61,7 @@ export function BookCoverArt({ bookId, titleJp, titleEn, authorJp, coverImage, s
   if (coverImage) {
     return (
       <div className={`${config.wrapper} shrink-0 rounded shadow-inner overflow-hidden`}>
-        <img src={coverImage} alt={label} className="w-full h-full object-cover" />
+        <img src={coverImage} alt={label} loading="lazy" className="w-full h-full object-cover" />
       </div>
     );
   }

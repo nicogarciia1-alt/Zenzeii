@@ -16,7 +16,7 @@
  *
  * Used by: FilterBar (genres + Layer 2 filter options)
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchGenres, fetchTaxonomy } from '../services/catalogApi';
 
 const EMPTY_DATA = {
@@ -107,5 +107,10 @@ export function useTaxonomy() {
     };
   }, []);
 
-  return { ...(data ?? EMPTY_DATA), loading, error };
+  // Without this, spreading into a new object literal on every render would
+  // hand FilterBar a new `taxonomy` reference on every LibraryPage
+  // re-render (e.g. every search keystroke) even when the underlying
+  // taxonomy data hasn't changed — defeating any memoization downstream
+  // and forcing FilterBar's option lists to recompute for no reason.
+  return useMemo(() => ({ ...(data ?? EMPTY_DATA), loading, error }), [data, loading, error]);
 }
