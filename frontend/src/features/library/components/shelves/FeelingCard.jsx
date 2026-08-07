@@ -56,7 +56,11 @@ export function FeelingCard({ id, name, nameJp, bookCount, imageUrl, emoji, onCl
       onClick={handleClick}
       aria-label={`${name} — ${bookCount} books`}
       title={nameJp}
-      className="relative w-[140px] h-[140px] md:w-[160px] md:h-[160px] rounded-lg overflow-hidden text-left hover:scale-[1.02] transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+      // rounded-library-lg (16px), not -xl (24px): the brief's Step 5 text says
+      // "rounded-xl (16px from new scale)" but Step 0's own scale defines
+      // lg=16px/xl=24px — honoring the stated 16px figure over the mislabeled
+      // token name.
+      className="relative w-[156px] h-[156px] md:w-[180px] md:h-[180px] rounded-library-lg overflow-hidden text-left shadow-library-card hover:scale-[1.03] hover:shadow-library-card-hover transition-all duration-slow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
       style={!imageUrl ? { background: `linear-gradient(to bottom right, ${gradient.from}, ${gradient.to})` } : undefined}
     >
       {imageUrl && (
@@ -66,7 +70,7 @@ export function FeelingCard({ id, name, nameJp, bookCount, imageUrl, emoji, onCl
       {/* Bottom gradient overlay for text legibility */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" aria-hidden="true" />
 
-      <div className="relative z-10 h-full p-3 flex flex-col">
+      <div className="relative z-10 h-full p-spacing-2 flex flex-col">
         {emoji && !imageUrl && (
           <span aria-hidden="true" className="text-3xl text-white">
             {emoji}
@@ -75,7 +79,7 @@ export function FeelingCard({ id, name, nameJp, bookCount, imageUrl, emoji, onCl
 
         <div className="mt-auto">
           <p className="font-garamond text-sm font-medium text-white">{name}</p>
-          <p className="text-xs text-white/70">{bookCount} books</p>
+          <p className="mt-spacing-1 text-xs text-white/70">{bookCount} books</p>
         </div>
       </div>
     </button>
