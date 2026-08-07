@@ -43,7 +43,7 @@ export function SectionHeader({
   return (
     <div className={className || 'mb-6'}>
       <div className="flex items-baseline justify-between gap-4">
-        <h2 className="flex items-center gap-2 font-playfair text-[22px] md:text-2xl font-semibold text-library-text-primary">
+        <h2 className="flex items-center gap-2 font-playfair text-h2 text-library-text-primary">
           {icon && (
             <span aria-hidden="true" className="text-library-red">
               {icon}
@@ -56,14 +56,14 @@ export function SectionHeader({
             type="button"
             onClick={onViewAll}
             aria-label={viewAllAriaLabel || viewAllLabel}
-            className="text-sm text-library-text-secondary hover:underline whitespace-nowrap rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+            className="text-caption text-library-text-muted hover:underline whitespace-nowrap rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
           >
             {viewAllLabel}
           </button>
         )}
       </div>
       {subtitle && (
-        <p aria-live={subtitleAriaLive} className="mt-1 text-[13px] text-library-text-secondary">
+        <p aria-live={subtitleAriaLive} className="mt-1 text-body-sm text-library-text-secondary">
           {subtitle}
         </p>
       )}

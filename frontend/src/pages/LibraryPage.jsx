@@ -67,7 +67,7 @@ export default function LibraryPage() {
           (opacity settles at 1, which does not create a stacking context)
           avoids the whole bug class rather than fixing it section by
           section. */}
-      <div className="animate-in fade-in-0 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
+      <div className="mt-spacing-12 animate-in fade-in-0 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
         <RecommendationSection />
       </div>
 
@@ -77,7 +77,7 @@ export default function LibraryPage() {
           positioning for the descendant the same way it breaks z-index
           above — same root cause (a lingering transform), two different
           symptoms. */}
-      <div className="animate-in fade-in-0 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
+      <div className="mt-spacing-8 animate-in fade-in-0 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
         <FilterBar
           externalFilters={catalog.filters}
           onExternalFilterChange={catalog.setFilter}
@@ -86,7 +86,7 @@ export default function LibraryPage() {
       </div>
 
       {/* Phase 4 — Shelves, still mock data */}
-      <div className="animate-in fade-in-0 duration-500" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
+      <div className="mt-spacing-8 animate-in fade-in-0 duration-500" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
         <ShelvesSection />
       </div>
 
@@ -94,7 +94,7 @@ export default function LibraryPage() {
       <section
         id={CATALOG_SECTION_ID}
         aria-label="All books"
-        className="max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 animate-in fade-in-0 duration-500"
+        className="mt-spacing-12 max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 animate-in fade-in-0 duration-500"
         style={{ animationDelay: '400ms', animationFillMode: 'both' }}
       >
         <SectionHeader
