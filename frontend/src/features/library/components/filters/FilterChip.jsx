@@ -97,6 +97,7 @@ export function FilterChip({ filterId, label, icon, options, value, onChange, di
         onSelect={handleSelect}
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
+        anchorRef={chipRef}
       />
     </div>
   );
