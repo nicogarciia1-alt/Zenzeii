@@ -17,7 +17,7 @@ export function QuizPromptCard() {
     <div
       role="region"
       aria-label="Book recommendation quiz"
-      className="relative overflow-hidden bg-library-bg-card rounded-lg border border-library-border/40 shadow-library-card-sm p-spacing-4 lg:p-spacing-6 h-full flex flex-col"
+      className="relative overflow-hidden bg-library-bg-card rounded-lg border border-library-border/40 shadow-library-card-sm hover:shadow-library-card hover:-translate-y-0.5 transition-all duration-base p-spacing-4 lg:p-spacing-6 h-full flex flex-col"
     >
       <p className="mb-spacing-2 text-xs uppercase tracking-wide text-library-text-muted">Not sure what to read?</p>
 
@@ -32,7 +32,7 @@ export function QuizPromptCard() {
       <button
         type="button"
         onClick={handleFindMyBook}
-        className="self-start h-12 border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-4 rounded text-sm font-medium transition-colors flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+        className="self-start h-12 border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-4 rounded text-sm font-medium transition-colors duration-fast flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
       >
         Find My Book
         <span aria-hidden="true">→</span>

@@ -64,7 +64,7 @@ export function BookInfoBlock({ book, onViewDetails = DEFAULT_VIEW_DETAILS, onBo
           type="button"
           onClick={() => onViewDetails(book)}
           aria-label={`View details for ${book.title_en}`}
-          className="flex-1 h-12 border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-spacing-3 rounded text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+          className="flex-1 h-12 border border-library-border text-library-text-primary hover:bg-library-bg-shelf px-spacing-3 rounded text-sm font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
         >
           View Details
         </button>
@@ -72,7 +72,7 @@ export function BookInfoBlock({ book, onViewDetails = DEFAULT_VIEW_DETAILS, onBo
           type="button"
           onClick={() => onBookmark(book)}
           aria-label={isBookmarked ? 'Remove from library' : `Add ${book.title_en} to your library`}
-          className="shrink-0 border border-library-border text-library-text-secondary hover:text-library-red hover:border-library-red p-spacing-2 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+          className="shrink-0 border border-library-border text-library-text-secondary hover:text-library-red hover:border-library-red p-spacing-2 rounded transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
         >
           <Bookmark className="w-5 h-5" fill={isBookmarked ? 'currentColor' : 'none'} aria-hidden="true" />
         </button>

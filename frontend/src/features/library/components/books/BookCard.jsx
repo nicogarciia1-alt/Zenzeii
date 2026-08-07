@@ -92,7 +92,8 @@ const VARIANT_CONFIG = {
     supportsAddButton: false,
   },
   grid: {
-    container: 'flex flex-col gap-2 w-[160px] shadow-library-card-sm',
+    container:
+      'flex flex-col gap-2 w-[160px] shadow-library-card-sm hover:shadow-library-card hover:-translate-y-0.5 transition-all duration-base',
     coverSize: 'md',
     titleClass: 'text-sm font-semibold font-garamond line-clamp-2 text-library-text-primary',
     jpTitleClass: 'text-xs text-library-text-secondary line-clamp-1',
@@ -183,7 +184,7 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
             disabled={buttonProps.disabled}
             aria-live="polite"
             aria-label={`${book.title_en}: ${buttonProps.label}`}
-            className={`mt-1 w-full text-xs rounded px-2 py-1.5 border transition-colors duration-200 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${buttonProps.className}`}
+            className={`mt-1 w-full text-xs rounded px-2 py-1.5 border transition-colors duration-fast flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${buttonProps.className}`}
           >
             {/* Keyed by status so each transition (idle -> importing -> completed/failed)
                 mounts fresh content and fades in, rather than the icon silently swapping
@@ -199,7 +200,7 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
               type="button"
               onClick={handleReadNow}
               aria-label={`Read ${book.title_en} now`}
-              className="w-full text-xs text-library-red hover:underline text-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+              className="w-full text-xs text-library-red hover:underline text-center rounded transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
             >
               Read now →
             </button>
@@ -214,7 +215,7 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           aria-label={`Buy ${book.title_en} — opens external site`}
-          className="mt-1 w-full text-xs rounded px-2 py-1.5 border border-library-border/40 text-library-text-secondary hover:bg-library-bg-shelf text-center block transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+          className="mt-1 w-full text-xs rounded px-2 py-1.5 border border-library-border/40 text-library-text-secondary hover:bg-library-bg-shelf text-center block transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
         >
           Buy →
         </a>

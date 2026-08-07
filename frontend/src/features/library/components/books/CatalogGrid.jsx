@@ -76,7 +76,7 @@ function Pagination({ page, pages, onPageChange }) {
         onClick={() => onPageChange(page - 1)}
         disabled={page <= 1}
         aria-label="Previous page"
-        className={`px-3 py-1.5 text-sm rounded border border-library-border text-library-text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${
+        className={`px-3 py-1.5 text-sm rounded border border-library-border text-library-text-secondary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${
           page <= 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-library-bg-shelf'
         }`}
       >
@@ -91,7 +91,7 @@ function Pagination({ page, pages, onPageChange }) {
             onClick={() => onPageChange(entry)}
             aria-label={`Page ${entry}`}
             aria-current={entry === page ? 'page' : undefined}
-            className={`min-w-[32px] px-2 py-1.5 text-sm rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${
+            className={`min-w-[32px] px-2 py-1.5 text-sm rounded transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${
               entry === page
                 ? 'bg-library-red text-white'
                 : 'text-library-text-secondary hover:bg-library-bg-shelf'
@@ -169,7 +169,7 @@ export function CatalogGrid({ books, total, page, pages, loading, error, onPageC
           <button
             type="button"
             onClick={onClearFilters}
-            className="mt-4 text-sm text-library-red hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+            className="mt-4 text-sm text-library-red hover:underline rounded transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
           >
             Clear all filters
           </button>

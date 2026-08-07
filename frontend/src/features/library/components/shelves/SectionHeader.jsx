@@ -56,7 +56,7 @@ export function SectionHeader({
             type="button"
             onClick={onViewAll}
             aria-label={viewAllAriaLabel || viewAllLabel}
-            className="text-caption text-library-text-muted hover:underline whitespace-nowrap rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
+            className="text-caption text-library-text-muted hover:underline whitespace-nowrap rounded transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
           >
             {viewAllLabel}
           </button>
