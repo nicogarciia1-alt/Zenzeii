@@ -71,23 +71,23 @@ export default function LibraryPage() {
         <RecommendationSection />
       </div>
 
+      {/* Phase 4 — Shelves, still mock data */}
+      <div className="mt-spacing-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
+        <ShelvesSection />
+      </div>
+
       {/* Phase 3 — Filter Bar, live-wired to useCatalog + useTaxonomy (Phase 6).
           Also fade-only for its own separate reason: FilterBar's root is
           position: sticky, and a transform on an ancestor can break sticky
           positioning for the descendant the same way it breaks z-index
           above — same root cause (a lingering transform), two different
           symptoms. */}
-      <div className="mt-spacing-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
+      <div className="mt-spacing-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
         <FilterBar
           externalFilters={catalog.filters}
           onExternalFilterChange={catalog.setFilter}
           taxonomy={taxonomy}
         />
-      </div>
-
-      {/* Phase 4 — Shelves, still mock data */}
-      <div className="mt-spacing-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
-        <ShelvesSection />
       </div>
 
       {/* Phase 6 — Catalog: all books, filterable. Phase 7: also the search results view. */}
