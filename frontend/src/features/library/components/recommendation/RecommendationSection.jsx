@@ -20,7 +20,7 @@ const featuredBook = MOCK_CATALOG_BOOKS.find((b) => b.id === 'aozora-kokoro');
 
 export function RecommendationSection() {
   return (
-    <section aria-label="Your next book" className="max-w-[1440px] mx-auto px-0 pt-4 pb-12">
+    <section aria-label="Your next book" className="max-w-[1440px] mx-auto px-0 pt-0 pb-12">
       <SectionHeader icon="✦" title="Your next book" subtitle="Recommended for you" className="mb-spacing-6" />
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
         {featuredBook && (
