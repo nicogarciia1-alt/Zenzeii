@@ -4,6 +4,7 @@ import HeroSection from '@/components/landing/HeroSection';
 import DiscoverByFeeling from '@/components/landing/DiscoverByFeeling';
 import ExploreStories from '@/components/landing/ExploreStories';
 import FeaturesSection from '@/components/landing/FeaturesSection';
+import StatsBar from '@/components/landing/StatsBar';
 
 const LandingPage = () => {
   return (
@@ -13,6 +14,7 @@ const LandingPage = () => {
       <DiscoverByFeeling />
       <ExploreStories />
       <FeaturesSection />
+      <StatsBar />
     </div>
   );
 };
