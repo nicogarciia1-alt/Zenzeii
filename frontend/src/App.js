@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
 // Pages
+import LandingPage from "@/pages/LandingPage";
 import HomePage from "@/pages/HomePage";
 import ReaderPage from "@/pages/ReaderPage";
 import VocabularyPage from "@/pages/VocabularyPage";
@@ -46,7 +47,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/auth" element={isAuthenticated ? <Navigate to="/" replace /> : <AuthPage />} />
-      <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
+      <Route path="/" element={isAuthenticated ? <ProtectedRoute><HomePage /></ProtectedRoute> : <LandingPage />} />
       <Route path="/read/:bookId" element={<ProtectedRoute><ReaderPage /></ProtectedRoute>} />
       <Route path="/read/:bookId/:chapterId" element={<ProtectedRoute><ReaderPage /></ProtectedRoute>} />
       <Route path="/vocabulary" element={<ProtectedRoute><VocabularyPage /></ProtectedRoute>} />
