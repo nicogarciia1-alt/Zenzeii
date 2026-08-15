@@ -67,12 +67,12 @@ export default function LibraryPage() {
           (opacity settles at 1, which does not create a stacking context)
           avoids the whole bug class rather than fixing it section by
           section. */}
-      <div className="mt-0 pt-0 animate-in fade-in-0 duration-slow" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
+      <div className="mt-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
         <RecommendationSection />
       </div>
 
       {/* Phase 4 — Shelves, still mock data */}
-      <div className="mt-spacing-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
+      <div className="mt-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
         <ShelvesSection />
       </div>
 
