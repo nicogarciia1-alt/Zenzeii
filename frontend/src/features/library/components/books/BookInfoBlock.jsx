@@ -29,8 +29,6 @@ export function BookInfoBlock({ book, onViewDetails = DEFAULT_VIEW_DETAILS, onBo
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs uppercase tracking-widest text-library-red font-medium">Recommended</p>
-
       <div>
         <h3 className="font-playfair text-h3 text-library-text-primary">
           {book.title_en}
