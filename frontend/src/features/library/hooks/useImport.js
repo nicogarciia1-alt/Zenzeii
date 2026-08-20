@@ -30,6 +30,13 @@
  * AuthContext.js sets axios.defaults.headers.common['Authorization']
  * globally on login, so every axios call in the app already carries it.
  *
+ * The actual poll loop (interval, 40-attempt timeout, getBookStatus) lives
+ * in usePollBookStatus.js now — the acquisition flow's EPUB upload needs
+ * the exact same polling with no equivalent of this hook's triggerImport
+ * step, so it was extracted rather than duplicated. This hook is just
+ * usePollBookStatus plus the catalog-specific POST /api/books/import
+ * trigger and the resulting idle/importing/completed/failed state.
+ *
  * @param {string} bookId - The catalog book ID to import (e.g. "aozora-kokoro")
  * @param {function} [onComplete] - Called with { alreadyOwned } when import completes successfully
  * @param {function} [onError] - Called with a human-readable message when import fails
@@ -42,11 +49,9 @@
  *   reset: function,
  * }}
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { importBook, getBookStatus } from '@/lib/api';
-
-const POLL_INTERVAL_MS = 3000;
-const MAX_POLL_ATTEMPTS = 40;
+import { useCallback, useState } from 'react';
+import { importBook } from '@/lib/api';
+import { usePollBookStatus } from './usePollBookStatus';
 
 /**
  * Builds the /api/books/import payload for a catalog book id. See the
@@ -69,47 +74,17 @@ function buildImportPayload(bookId) {
 
 export function useImport(bookId, onComplete, onError, initialStatus = 'idle') {
   const [importStatus, setImportStatus] = useState(initialStatus);
-  const pollRef = useRef(null);
-  const pollCountRef = useRef(0);
 
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
+  const { startPolling, stopPolling } = usePollBookStatus(
+    () => {
+      setImportStatus('completed');
+      onComplete?.({ alreadyOwned: false });
+    },
+    (message) => {
+      setImportStatus('failed');
+      onError?.(message);
     }
-    pollCountRef.current = 0;
-  }, []);
-
-  const startPolling = useCallback(() => {
-    pollCountRef.current = 0;
-    pollRef.current = setInterval(async () => {
-      pollCountRef.current += 1;
-
-      if (pollCountRef.current > MAX_POLL_ATTEMPTS) {
-        stopPolling();
-        setImportStatus('failed');
-        onError?.('Import timed out. Please try again later.');
-        return;
-      }
-
-      try {
-        const { data } = await getBookStatus(bookId);
-        if (data.status === 'completed') {
-          stopPolling();
-          setImportStatus('completed');
-          onComplete?.({ alreadyOwned: false });
-        } else if (data.status === 'failed') {
-          stopPolling();
-          setImportStatus('failed');
-          onError?.('Import failed. Please try again.');
-        }
-        // 'importing' / 'preparing' → keep polling
-      } catch (err) {
-        // Network error during polling — don't abort, keep trying until MAX_POLL_ATTEMPTS
-        console.warn('[useImport] Poll request failed, retrying:', err.message);
-      }
-    }, POLL_INTERVAL_MS);
-  }, [bookId, onComplete, onError, stopPolling]);
+  );
 
   const triggerImport = useCallback(async () => {
     if (importStatus === 'importing' || importStatus === 'completed') return;
@@ -128,7 +103,7 @@ export function useImport(bookId, onComplete, onError, initialStatus = 'idle') {
       }
 
       // status === 'importing' → begin polling for real completion
-      startPolling();
+      startPolling(bookId);
     } catch (err) {
       setImportStatus('failed');
       onError?.(err.response?.data?.detail || err.message || 'Failed to start import.');
@@ -139,9 +114,6 @@ export function useImport(bookId, onComplete, onError, initialStatus = 'idle') {
     stopPolling();
     setImportStatus('idle');
   }, [stopPolling]);
-
-  // Cleanup on unmount
-  useEffect(() => stopPolling, [stopPolling]);
 
   return {
     importStatus,

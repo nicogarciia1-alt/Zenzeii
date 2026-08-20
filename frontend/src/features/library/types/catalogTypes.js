@@ -57,6 +57,10 @@
  * @property {'public_domain'|'copyrighted'|'unknown'} copyright_status
  * @property {number} save_count
  * @property {boolean} is_marked
+ * @property {string|null} shelved_at - ISO timestamp the current user added this book to their shelf, if any
+ * @property {string|null} linked_upload_id - book_id of the user's own EPUB copy of this book, if imported via the acquisition flow (availability="buy") — separate from this book's own id, since 'buy' catalog entries have no readable content of their own
+ * @property {string|null} linked_upload_status - import_status ('importing'|'completed'|'failed') of linked_upload_id
+ * @property {string|null} linked_upload_at - ISO timestamp linked_upload_id was created
  * @property {number|null} my_rating - The current user's own 1-5 rating, if any
  * @property {string[]} theme_ids
  * @property {string[]} mood_ids

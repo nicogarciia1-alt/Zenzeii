@@ -35,7 +35,22 @@ export default function BookDetailPage() {
     setBook((prev) => (prev ? { ...prev, ...partial } : prev));
   };
 
-  const handleImported = () => handleBookUpdate({ is_on_shelf: true });
+  // ImportButton (free books) calls this with no args — is_on_shelf is the
+  // only thing that changes. AcquisitionButton's modal (buy books) calls it
+  // with { linkedUploadId, linkedUploadStatus, linkedUploadAt } instead —
+  // the imported EPUB is a separate book record, not this book's own shelf
+  // status (see AcquisitionModal's fileoverview).
+  const handleImported = (payload) => {
+    if (payload?.linkedUploadId) {
+      handleBookUpdate({
+        linked_upload_id: payload.linkedUploadId,
+        linked_upload_status: payload.linkedUploadStatus,
+        linked_upload_at: payload.linkedUploadAt,
+      });
+      return;
+    }
+    handleBookUpdate({ is_on_shelf: true });
+  };
 
   return (
     <Layout>

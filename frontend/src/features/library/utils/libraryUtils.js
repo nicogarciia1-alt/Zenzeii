@@ -41,6 +41,22 @@ export function formatRatingCount(count) {
 }
 
 /**
+ * Formats book.shelved_at (an ISO timestamp) for the sticky bar's
+ * "Imported on {date}" label. Returns null for a missing/invalid
+ * timestamp so callers can omit the label entirely rather than render
+ * "Imported on Invalid Date".
+ *
+ * @param {string|null|undefined} isoTimestamp
+ * @returns {string|null}
+ */
+export function formatShelvedDate(isoTimestamp) {
+  if (!isoTimestamp) return null;
+  const date = new Date(isoTimestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/**
  * Resolves an array of taxonomy entity IDs (e.g. book.genre_ids,
  * book.theme_ids) to their display names, in the order given.
  *

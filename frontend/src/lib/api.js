@@ -23,10 +23,12 @@ export const searchAozora = (query) => axios.get(`${API}/books/search/aozora`, {
 export const importBook = (data) => axios.post(`${API}/books/import`, data);
 export const cancelImport = (bookId) => axios.post(`${API}/books/cancel`, { book_id: bookId });
 export const prioritizeImport = (bookId) => axios.post(`${API}/books/prioritize`, { book_id: bookId });
-export const uploadBook = (file, title, author) => {
+export const uploadBook = (file, title, author, sourceCatalogId = null) => {
   const formData = new FormData();
   formData.append('file', file);
-  return axios.post(`${API}/books/upload?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`, formData, {
+  const params = new URLSearchParams({ title, author });
+  if (sourceCatalogId) params.set('source_catalog_id', sourceCatalogId);
+  return axios.post(`${API}/books/upload?${params.toString()}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
 };
