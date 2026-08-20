@@ -13,7 +13,7 @@ Usage:
 --dry-run validates and prints the summary without writing anything.
 
 --------------------------------------------------------------------------
-ID generation — three sources, checked in this order per row:
+ID generation — four sources, checked in this order per row:
 --------------------------------------------------------------------------
 
 1. `gutenberg_id` column populated (numeric) → id = f"gutenberg-{gutenberg_id}"
@@ -35,19 +35,27 @@ ID generation — three sources, checked in this order per row:
    import fetcher parses; the card page will fail or produce garbage.
    The script warns (not blocks) if aozora_url looks like a card page.
 
-3. No `aozora_book_key` but `aozora_id` (Aozora Bunko card id — descriptive
-   metadata only, not used to build the id) is populated → falls back to
-   id = f"aozora-{slugify(title_en)}", ALWAYS flagged NEW/unverified. Most
-   of AOZORA_BOOKS's real keys are romanized Japanese, not English-title
-   slugs (e.g. "No Longer Human" → key "ningen-shikkaku", not
-   "no-longer-human") — a title-based guess is very often wrong, hence the
-   mandatory flag rather than silent trust.
+3. No `aozora_book_key` but `aozora_url` is populated → title_en is matched
+   exactly (case-insensitive) against AOZORA_BOOKS[*]['title_en'] first, so
+   a book that's already hardcoded (just not told to us by key) lands on
+   its real, already-working key instead of a guess — slugifying title_en
+   is NOT a substitute for this, since most AOZORA_BOOKS keys are romanized
+   Japanese ('wagahai-wa-neko'), not English slugs. No match → falls back
+   to id = f"aozora-{slugify(title_en)}", flagged for confirmation (though
+   the row's own aozora_url already makes it importable regardless).
 
-4. Neither signal present → id = f"catalog-{slugify(title_en)}". Buy-only
-   books never go through /books/import, so no key-matching concern.
+4. No `aozora_book_key`/`aozora_url` but `aozora_id` (Aozora Bunko card id —
+   descriptive metadata only, not used to build the id) is populated →
+   same slugify(title_en) fallback as above, ALWAYS flagged NEW/unverified
+   — here there's no aozora_url either, so an unverified id is also not yet
+   importable until one is added.
 
-Both a `gutenberg_id` and an Aozora signal on the same row is treated as
-an ambiguous source — the row is skipped with an error.
+5. None of the above → id = f"catalog-{slugify(title_en)}". Buy-only books
+   never go through /books/import, so no key-matching concern.
+
+A `gutenberg_id` together with any Aozora signal (`aozora_book_key`,
+`aozora_url`, or `aozora_id`) on the same row is treated as an ambiguous
+source — the row is skipped with an error.
 
 --------------------------------------------------------------------------
 Collision handling
@@ -119,7 +127,7 @@ RECOGNIZED_COLUMNS = {
     "availability", "difficulty", "jlpt_level", "language", "page_count",
     "publication_year", "cover_image", "aozora_id", "aozora_book_key", "aozora_url",
     "gutenberg_id", "buy_link", "original_publisher", "copyright_status",
-    "description_short", "description_long", "upload_allowed",
+    "description_short", "description_long", "upload_allowed", "has_translation",
     *LIST_COLUMNS,
 }
 
@@ -182,6 +190,15 @@ def parse_list(value: Optional[str]) -> List[str]:
     return [v.strip() for v in value.split("|") if v.strip()]
 
 
+def parse_optional_bool(value: Optional[str]) -> Optional[bool]:
+    """Tri-state (unknown/yes/no) — unlike upload_allowed, a blank value means
+    None (unknown), not an assumed default in either direction."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    return value.lower() in ("true", "1", "yes", "y")
+
+
 def check_aozora_url_format(aozora_url: Optional[str]) -> Optional[str]:
     """Soft warning — the import fetcher needs the files/ URL, not the card page."""
     if not aozora_url:
@@ -200,19 +217,34 @@ def check_aozora_url_format(aozora_url: Optional[str]) -> Optional[str]:
 # ID generation
 # --------------------------------------------------------------------------
 
+def find_aozora_key_by_title(title_en: str) -> Optional[str]:
+    """Exact, case-insensitive match against AOZORA_BOOKS[*]['title_en'] — the
+    only reliable join key available when a row gives aozora_url but no
+    aozora_book_key. Slugifying title_en is NOT a substitute for this: most
+    AOZORA_BOOKS keys are romanized Japanese ('wagahai-wa-neko'), not English
+    slugs, but their title_en values ('I Am a Cat') match CSV titles exactly.
+    """
+    title_lower = title_en.strip().lower()
+    for key, info in AOZORA_BOOKS.items():
+        if (info.get("title_en") or "").strip().lower() == title_lower:
+            return key
+    return None
+
+
 def generate_id(row: dict) -> Tuple[str, str]:
     """Returns (id, flag_note). flag_note is "" unless the row needs a summary callout."""
     gutenberg_id = (row.get("gutenberg_id") or "").strip()
     aozora_book_key = (row.get("aozora_book_key") or "").strip()
     aozora_id = (row.get("aozora_id") or "").strip()
+    aozora_url = (row.get("aozora_url") or "").strip()
 
     has_gutenberg = bool(gutenberg_id)
-    has_aozora = bool(aozora_book_key or aozora_id)
+    has_aozora = bool(aozora_book_key or aozora_id or aozora_url)
 
     if has_gutenberg and has_aozora:
         raise RowError(
             "ambiguous source — both gutenberg_id and an Aozora signal "
-            "(aozora_book_key/aozora_id) are populated"
+            "(aozora_book_key/aozora_id/aozora_url) are populated"
         )
 
     if has_gutenberg:
@@ -230,6 +262,26 @@ def generate_id(row: dict) -> Tuple[str, str]:
             f"NEW Aozora book — '{aozora_book_key}' is not yet in AOZORA_BOOKS "
             f"(services/book_import.py). Needs an entry there, or this row's own "
             f"aozora_url, for 'Add to Library' to actually work."
+        )
+
+    if aozora_url:
+        # No explicit book_key — try to resolve to an existing hardcoded
+        # entry by title before falling back to a guessed slug, so books
+        # that are already in AOZORA_BOOKS (just not told to us by key)
+        # land on their real, already-working id.
+        title_en = (row.get("title_en") or "").strip()
+        matched_key = find_aozora_key_by_title(title_en)
+        if matched_key:
+            return f"aozora-{matched_key}", ""
+        slug = slugify(title_en)
+        if not slug:
+            raise RowError(f"could not generate a slug from title_en {title_en!r}")
+        return f"aozora-{slug}", (
+            f"NEW/unverified Aozora book — no aozora_book_key given and title_en "
+            f"{title_en!r} matched no existing AOZORA_BOOKS entry, id guessed as "
+            f"'aozora-{slug}'. This row's own aozora_url makes it importable as-is "
+            f"(via the dynamic-import fallback) — the flag is just to confirm the id "
+            f"looks right, not that it's broken."
         )
 
     if aozora_id:
@@ -255,7 +307,7 @@ def generate_id(row: dict) -> Tuple[str, str]:
 # Row -> book_catalog fields
 # --------------------------------------------------------------------------
 
-def build_fields(row: dict) -> Tuple[dict, Optional[str]]:
+def build_fields(row: dict, force_publish: bool = False) -> Tuple[dict, Optional[str]]:
     missing = [f for f in REQUIRED_FIELDS if not (row.get(f) or "").strip()]
     if missing:
         raise RowError(f"missing required field(s): {', '.join(missing)}")
@@ -274,7 +326,9 @@ def build_fields(row: dict) -> Tuple[dict, Optional[str]]:
 
     length_category = compute_length_category(page_count)
     entity_status = (
-        EntityStatus.PUBLISHED.value if (difficulty and language) else EntityStatus.DRAFT.value
+        EntityStatus.PUBLISHED.value
+        if (force_publish or (difficulty and language))
+        else EntityStatus.DRAFT.value
     )
 
     fields = {
@@ -301,6 +355,7 @@ def build_fields(row: dict) -> Tuple[dict, Optional[str]]:
         "copyright_status": copyright_status or CopyrightStatus.UNKNOWN.value,
         "description_short": (row.get("description_short") or "").strip() or None,
         "description_long": (row.get("description_long") or "").strip() or None,
+        "has_translation": parse_optional_bool(row.get("has_translation")),
         "rating_avg": 0.0,
         "rating_count": 0,
         "popularity_score": 0,
@@ -324,7 +379,7 @@ def build_fields(row: dict) -> Tuple[dict, Optional[str]]:
 # Ingestion loop
 # --------------------------------------------------------------------------
 
-async def ingest(db, csv_path: Path, dry_run: bool):
+async def ingest(db, csv_path: Path, dry_run: bool, force_publish: bool = False):
     inserted = updated = skipped = 0
     errors: List[str] = []
     notes: List[str] = []
@@ -340,7 +395,7 @@ async def ingest(db, csv_path: Path, dry_run: bool):
         for line_no, row in enumerate(reader, start=2):  # header is line 1
             try:
                 book_id, note = generate_id(row)
-                fields, url_warning = build_fields(row)
+                fields, url_warning = build_fields(row, force_publish=force_publish)
                 title_en = fields["title_en"]
                 author_name = fields["author_name"]
 
@@ -436,6 +491,17 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="Ingest a catalog CSV into book_catalog.")
     parser.add_argument("csv_path", type=Path, help="Path to the catalog CSV file")
     parser.add_argument("--dry-run", action="store_true", help="Validate and report without writing")
+    parser.add_argument(
+        "--force-publish",
+        action="store_true",
+        help=(
+            "One-time override: publish every row in THIS run regardless of "
+            "missing difficulty/language, instead of the normal hybrid gate "
+            "(published only if both are present, else draft). Does not change "
+            "the gate for any other run — omit this flag and the default rule "
+            "applies as usual."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.csv_path.exists():
@@ -452,7 +518,9 @@ async def main() -> None:
     if not args.dry_run:
         await ensure_catalog_indexes(db)
 
-    inserted, updated, skipped, errors, notes, warnings = await ingest(db, args.csv_path, args.dry_run)
+    inserted, updated, skipped, errors, notes, warnings = await ingest(
+        db, args.csv_path, args.dry_run, force_publish=args.force_publish
+    )
     print_summary(inserted, updated, skipped, errors, notes, warnings, args.dry_run)
 
     client.close()
