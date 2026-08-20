@@ -263,23 +263,28 @@ async def fetch_gutenberg_text(gutenberg_id: int) -> Optional[str]:
     return None
 
 
-async def fetch_aozora_text(aozora_id: str, file_path: str) -> Optional[str]:
+async def fetch_aozora_text_from_url(url: str) -> Optional[str]:
     """
-    Fetch book text from Aozora Bunko.
-    Aozora uses HTML files with Japanese text in Shift-JIS encoding.
+    Fetch and extract book text directly from an Aozora Bunko full-text file
+    URL (the .../cards/{author_id}/files/{book}_{rev}.html page — NOT the
+    .../cards/{author_id}/card{id}.html info page; only the former has the
+    <div class="main_text"> structure extract_aozora_text_from_html expects).
+
+    Shared by both AOZORA_BOOKS's hardcoded aozora_id+file_path lookups
+    (via fetch_aozora_text below) and catalog books that store their own
+    aozora_url directly — same fetch/decode/extract logic either way, so
+    it lives in one place rather than two.
     """
-    base_url = f"https://www.aozora.gr.jp/cards/{aozora_id}/{file_path}"
-    
-    logger.info(f"Fetching Aozora text from: {base_url}")
-    
+    logger.info(f"Fetching Aozora text from: {url}")
+
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
         try:
-            response = await client.get(base_url)
-            
+            response = await client.get(url)
+
             if response.status_code != 200:
-                logger.warning(f"Aozora returned status {response.status_code} for {base_url}")
+                logger.warning(f"Aozora returned status {response.status_code} for {url}")
                 return None
-            
+
             # Aozora files are Shift-JIS encoded - must decode from bytes
             try:
                 text = response.content.decode('shift-jis')
@@ -288,23 +293,33 @@ async def fetch_aozora_text(aozora_id: str, file_path: str) -> Optional[str]:
                     text = response.content.decode('euc-jp')
                 except UnicodeDecodeError:
                     text = response.content.decode('utf-8', errors='replace')
-            
+
             # Extract main text from HTML
             extracted = extract_aozora_text_from_html(text)
-            
+
             if extracted and len(extracted) > 100:
                 logger.info(f"Successfully fetched Aozora book: {len(extracted)} characters")
                 return extracted
             else:
-                logger.warning(f"Extracted text too short or empty from {base_url}")
+                logger.warning(f"Extracted text too short or empty from {url}")
                 return None
-                
+
         except httpx.TimeoutException:
-            logger.error(f"Timeout fetching from Aozora: {base_url}")
+            logger.error(f"Timeout fetching from Aozora: {url}")
             return None
         except Exception as e:
             logger.error(f"Error fetching Aozora text: {e}")
             return None
+
+
+async def fetch_aozora_text(aozora_id: str, file_path: str) -> Optional[str]:
+    """
+    Fetch book text from Aozora Bunko using the legacy aozora_id + file_path
+    split (AOZORA_BOOKS's hardcoded entries). Builds the same full-text URL
+    fetch_aozora_text_from_url expects and delegates to it.
+    """
+    base_url = f"https://www.aozora.gr.jp/cards/{aozora_id}/{file_path}"
+    return await fetch_aozora_text_from_url(base_url)
 
 
 def extract_aozora_text_from_html(html: str) -> Optional[str]:

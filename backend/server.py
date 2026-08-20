@@ -27,6 +27,7 @@ from pymongo import ReturnDocument
 from services.book_import import (
     fetch_gutenberg_text,
     fetch_aozora_text,
+    fetch_aozora_text_from_url,
     clean_gutenberg_text,
     clean_aozora_text,
     split_into_chapters,
@@ -1261,6 +1262,7 @@ async def import_book(
         )
 
     elif source == "aozora":
+        aozora_url = None
         if request.book_key and request.book_key in AOZORA_BOOKS:
             book_info = AOZORA_BOOKS[request.book_key]
             book_id = f"aozora-{request.book_key}"
@@ -1271,6 +1273,24 @@ async def import_book(
             genre = book_info.get("genre", "literature")
             difficulty = book_info.get("difficulty", "intermediate")
             language = "ja"
+        elif request.book_key:
+            # Not a hardcoded AOZORA_BOOKS entry — fall back to whatever
+            # aozora_url is stored on the matching catalog book (populated by
+            # the CSV ingestion script for books not yet added to
+            # AOZORA_BOOKS). See fetch_aozora_text_from_url's docstring for
+            # why this must be the files/ full-text URL, not the card page.
+            book_id = f"aozora-{request.book_key}"
+            catalog_doc = await db.book_catalog.find_one({"id": book_id})
+            if not catalog_doc or not catalog_doc.get("aozora_url"):
+                raise HTTPException(status_code=400, detail="Must provide valid book_key for Aozora")
+            aozora_id = None
+            file_path = None
+            aozora_url = catalog_doc["aozora_url"]
+            title = catalog_doc.get("title_jp") or catalog_doc.get("title_en")
+            author = catalog_doc.get("author_name_jp") or catalog_doc.get("author_name")
+            genre = "literature"
+            difficulty = catalog_doc.get("difficulty") or "intermediate"
+            language = catalog_doc.get("language") or "ja"
         else:
             raise HTTPException(status_code=400, detail="Must provide valid book_key for Aozora")
 
@@ -1293,7 +1313,7 @@ async def import_book(
         background_tasks.add_task(
             process_book_import_aozora,
             book_id, aozora_id, file_path, title, author, genre, difficulty, language,
-            request.priority or 0, current_user["id"]
+            request.priority or 0, current_user["id"], aozora_url
         )
     else:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
@@ -1486,7 +1506,8 @@ async def process_book_import_aozora(
     difficulty: str,
     language: str = "ja",
     priority: int = 0,
-    user_id: str = ""
+    user_id: str = "",
+    aozora_url: Optional[str] = None
 ):
     """Import book from Aozora Bunko (Japanese source)"""
     try:
@@ -1504,8 +1525,20 @@ async def process_book_import_aozora(
         # Strip "aozora-" prefix to get the dict key (e.g. "aozora-kokoro" → "kokoro")
         base_key = book_id.removeprefix("aozora-")
         book_info = AOZORA_BOOKS.get(base_key, {})
-        title_en = book_info.get("title_en", title)
-        author_en = book_info.get("author_en", author)
+        title_en = book_info.get("title_en")
+        author_en = book_info.get("author_en")
+        if not title_en or not author_en:
+            # Not a hardcoded entry (or it's incomplete) — this is a
+            # catalog-sourced book (aozora_url path), whose real English
+            # title/author live on book_catalog, not AOZORA_BOOKS. Without
+            # this fallback, title_en/author_en would silently end up being
+            # the Japanese title/author passed in below.
+            catalog_doc = await db.book_catalog.find_one({"id": book_id})
+            if catalog_doc:
+                title_en = title_en or catalog_doc.get("title_en")
+                author_en = author_en or catalog_doc.get("author_name")
+        title_en = title_en or title
+        author_en = author_en or author
 
         book_doc = {
             "id": book_id,
@@ -1526,14 +1559,19 @@ async def process_book_import_aozora(
             "source": "aozora",
             "book_language": language,
             "aozora_id": aozora_id,
+            "aozora_url": aozora_url,
             "priority": priority,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         await db.books.update_one({"id": book_id}, {"$set": book_doc}, upsert=True)
-        
-        # Fetch text using new file_path format
-        raw_text = await fetch_aozora_text(aozora_id, file_path)
+
+        # Fetch text — a catalog-sourced aozora_url fetches directly;
+        # otherwise fall back to the legacy aozora_id + file_path split.
+        if aozora_url:
+            raw_text = await fetch_aozora_text_from_url(aozora_url)
+        else:
+            raw_text = await fetch_aozora_text(aozora_id, file_path)
         if not raw_text:
             logger.error(f"Failed to fetch Aozora text for {book_id}")
             await db.books.update_one(
