@@ -10,6 +10,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import ValidationError
 
 from models.catalog_models import (
     AdaptationTypeResponse,
@@ -500,6 +501,16 @@ async def list_catalog(
 
     Raises ValueError (mapped to HTTP 400 by the router) if any requested
     Layer 1 or Layer 2 filter id is unknown to its taxonomy collection.
+
+    A book_catalog doc that fails BookCatalogItem validation (e.g.
+    entity_status="published" with difficulty/language still null — reachable
+    via ingest_catalog.py's --force-publish override) is logged and skipped
+    rather than failing the whole request; pydantic.ValidationError is a
+    ValueError subclass, so without this the router's `except ValueError`
+    would turn one malformed row into a 400 for every book on the page.
+    `total`/`pages` still reflect the raw query count, not the post-skip
+    count — a page can render fewer than `limit` books while a malformed doc
+    exists, which self-corrects once that doc is fixed.
     """
     await validate_filter_ids(db, params)
 
@@ -517,10 +528,12 @@ async def list_catalog(
     raw_books = [doc async for doc in cursor]
 
     shelved_ids = await get_shelved_book_ids(db, user_id, [doc["id"] for doc in raw_books])
-    books = [
-        BookCatalogItem(**doc, is_on_shelf=doc["id"] in shelved_ids)
-        for doc in raw_books
-    ]
+    books = []
+    for doc in raw_books:
+        try:
+            books.append(BookCatalogItem(**doc, is_on_shelf=doc["id"] in shelved_ids))
+        except ValidationError as exc:
+            logger.warning(f"Skipping malformed book_catalog doc {doc.get('id')!r} in catalog list: {exc}")
 
     pages = (total + params.limit - 1) // params.limit if total > 0 else 0
 
@@ -544,8 +557,14 @@ async def get_book_by_id(
     Fetches a single published catalog entry.
 
     Returns None (mapped to HTTP 404 by the router) if the book doesn't
-    exist, or exists but is not entity_status="published" — draft and
-    archived entries are never visible through this endpoint.
+    exist, exists but is not entity_status="published" (draft/archived
+    entries are never visible through this endpoint), or exists but fails
+    BookCatalogDetail validation (e.g. difficulty/language still null
+    despite entity_status="published" — reachable via ingest_catalog.py's
+    --force-publish override). The last case logs a warning since it's a
+    real data gap, not an absent book, but is otherwise indistinguishable
+    from 404 to the caller — same as list_catalog's handling of the same
+    condition, see its docstring.
     """
     doc = await db.book_catalog.find_one({
         "id": book_id,
@@ -560,17 +579,21 @@ async def get_book_by_id(
     marked = await is_book_marked(db, user_id, book_id)
     my_rating = await get_my_rating(db, user_id, book_id)
     distribution = await get_rating_distribution(db, book_id)
-    return BookCatalogDetail(
-        **doc,
-        is_on_shelf=book_id in shelved_ids,
-        shelved_at=shelved_at,
-        linked_upload_id=linked_upload["id"] if linked_upload else None,
-        linked_upload_status=linked_upload["import_status"] if linked_upload else None,
-        linked_upload_at=linked_upload["created_at"] if linked_upload else None,
-        is_marked=marked,
-        my_rating=my_rating,
-        rating_distribution=distribution,
-    )
+    try:
+        return BookCatalogDetail(
+            **doc,
+            is_on_shelf=book_id in shelved_ids,
+            shelved_at=shelved_at,
+            linked_upload_id=linked_upload["id"] if linked_upload else None,
+            linked_upload_status=linked_upload["import_status"] if linked_upload else None,
+            linked_upload_at=linked_upload["created_at"] if linked_upload else None,
+            is_marked=marked,
+            my_rating=my_rating,
+            rating_distribution=distribution,
+        )
+    except ValidationError as exc:
+        logger.warning(f"book_catalog doc {book_id!r} is published but fails validation: {exc}")
+        return None
 
 
 async def list_genres(db: AsyncIOMotorDatabase) -> List[GenreResponse]:
