@@ -1664,6 +1664,7 @@ async def upload_book(
     file: UploadFile = File(...),
     title: str = Query(...),
     author: str = Query(...),
+    source_catalog_id: Optional[str] = Query(None),
     background_tasks: BackgroundTasks = None,
     current_user: dict = Depends(get_current_user)
 ):
@@ -1690,12 +1691,12 @@ async def upload_book(
         text = file_bytes.decode("utf-8", errors="replace")
 
     book_id = f"upload-{current_user['id'][:8]}-{str(uuid.uuid4())[:8]}"
-    background_tasks.add_task(process_upload_fast, book_id, text, title, author, current_user["id"])
+    background_tasks.add_task(process_upload_fast, book_id, text, title, author, current_user["id"], source_catalog_id)
 
     return {"message": "Upload started", "book_id": book_id, "status": "importing"}
 
 
-async def process_upload_fast(book_id: str, text: str, title: str, author: str, user_id: str = ""):
+async def process_upload_fast(book_id: str, text: str, title: str, author: str, user_id: str = "", source_catalog_id: Optional[str] = None):
     """Process uploaded book with fast import"""
     try:
         book_doc = {
@@ -1715,6 +1716,7 @@ async def process_upload_fast(book_id: str, text: str, title: str, author: str, 
             "source": "upload",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "uploaded_by": user_id,
+            "source_catalog_id": source_catalog_id,
         }
         await db.books.insert_one(book_doc)
         await _add_to_shelf(user_id, book_id)

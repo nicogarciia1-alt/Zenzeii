@@ -580,6 +580,10 @@ class BookCatalogDetail(BookCatalogItem):
     copyright_status: CopyrightStatus = CopyrightStatus.UNKNOWN
     save_count: int = 0
     is_marked: bool = False
+    shelved_at: Optional[str] = None
+    linked_upload_id: Optional[str] = None
+    linked_upload_status: Optional[str] = None
+    linked_upload_at: Optional[str] = None
     my_rating: Optional[int] = None
     rating_distribution: Dict[str, int] = Field(
         default_factory=lambda: {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}

@@ -411,6 +411,40 @@ async def get_shelved_book_ids(
     return {doc["book_id"] async for doc in cursor}
 
 
+async def get_linked_upload(db: AsyncIOMotorDatabase, user_id: Optional[str], book_id: str) -> Optional[dict]:
+    """
+    The user's most recent EPUB upload made through this catalog book's
+    acquisition flow, if any — see server.py's upload_book/process_upload_fast,
+    which stamp source_catalog_id onto the uploaded book_doc.
+
+    Uploads always get their own book_id, entirely separate from the
+    catalog entry (buy-availability catalog books have no chapters/sentences
+    of their own to read), so this is the only way to answer "has this user
+    already imported a copy of this specific catalog book" — book_id's own
+    is_on_shelf/shelved_at track shelving of the catalog entry itself, which
+    never happens for a 'buy' book.
+    """
+    if not user_id:
+        return None
+    doc = await db.books.find_one(
+        {"source_catalog_id": book_id, "uploaded_by": user_id},
+        {"id": 1, "import_status": 1, "created_at": 1},
+        sort=[("created_at", -1)],
+    )
+    return doc
+
+
+async def get_shelved_at(db: AsyncIOMotorDatabase, user_id: Optional[str], book_id: str) -> Optional[str]:
+    """
+    When the given user added this book to their shelf, or None if it isn't
+    there (or unauthenticated) — same shape as is_book_marked/get_my_rating.
+    """
+    if not user_id:
+        return None
+    doc = await db.user_shelves.find_one({"user_id": user_id, "book_id": book_id}, {"added_at": 1})
+    return doc["added_at"] if doc else None
+
+
 async def is_book_marked(db: AsyncIOMotorDatabase, user_id: Optional[str], book_id: str) -> bool:
     """
     Whether the given user has marked this book, independent of shelf status.
@@ -521,12 +555,18 @@ async def get_book_by_id(
         return None
 
     shelved_ids = await get_shelved_book_ids(db, user_id, [book_id])
+    shelved_at = await get_shelved_at(db, user_id, book_id)
+    linked_upload = await get_linked_upload(db, user_id, book_id)
     marked = await is_book_marked(db, user_id, book_id)
     my_rating = await get_my_rating(db, user_id, book_id)
     distribution = await get_rating_distribution(db, book_id)
     return BookCatalogDetail(
         **doc,
         is_on_shelf=book_id in shelved_ids,
+        shelved_at=shelved_at,
+        linked_upload_id=linked_upload["id"] if linked_upload else None,
+        linked_upload_status=linked_upload["import_status"] if linked_upload else None,
+        linked_upload_at=linked_upload["created_at"] if linked_upload else None,
         is_marked=marked,
         my_rating=my_rating,
         rating_distribution=distribution,
