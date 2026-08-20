@@ -17,6 +17,7 @@ import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import PricingPage from "@/pages/PricingPage";
 import AudioPacksPage from "@/pages/AudioPacksPage";
 import LibraryPage from "@/pages/LibraryPage";
+import BookDetailPage from "@/pages/BookDetailPage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -53,6 +54,7 @@ function AppRoutes() {
       <Route path="/vocabulary" element={<ProtectedRoute><VocabularyPage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
+      <Route path="/library/:bookId" element={<ProtectedRoute><BookDetailPage /></ProtectedRoute>} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />

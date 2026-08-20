@@ -39,6 +39,35 @@
  */
 
 /**
+ * @typedef {Object} BookCatalogDetail
+ * Full shape returned by GET /api/catalog/{bookId}, used by the book
+ * detail page. Extends BookCatalogItem with fields not needed in list/card
+ * view — mirrors backend/models/catalog_models.py BookCatalogDetail exactly.
+ * @property {string|null} description_short
+ * @property {string|null} description_long
+ * @property {boolean|null} has_translation
+ * @property {string|null} featured_quote
+ * @property {string|null} featured_quote_source
+ * @property {string|null} aozora_id
+ * @property {string|null} aozora_url
+ * @property {string|null} gutenberg_id
+ * @property {string|null} buy_link
+ * @property {boolean} upload_allowed
+ * @property {string|null} original_publisher
+ * @property {'public_domain'|'copyrighted'|'unknown'} copyright_status
+ * @property {number} save_count
+ * @property {boolean} is_marked
+ * @property {number|null} my_rating - The current user's own 1-5 rating, if any
+ * @property {string[]} theme_ids
+ * @property {string[]} mood_ids
+ * @property {string[]} setting_ids
+ * @property {string[]} period_ids
+ * @property {string[]} cultural_concept_ids
+ * @property {Object[]} award_ids
+ * @property {string[]} adaptation_types
+ */
+
+/**
  * @typedef {Object} CatalogListResponse
  * @property {number} total
  * @property {number} page

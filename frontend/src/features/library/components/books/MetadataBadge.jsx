@@ -3,7 +3,7 @@
  *
  * Renders a small pill-shaped label for book metadata (JLPT level,
  * difficulty, reading time, etc.). Reused by RecommendationCard (Phase 2),
- * BookCard (Phase 5), and BookDetailModal (Phase 9) — no book-specific
+ * BookCard (Phase 5), and BookDetailInfo (Phase 9) — no book-specific
  * logic lives inside it, just label + variant + optional icon.
  */
 

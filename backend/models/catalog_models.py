@@ -487,6 +487,9 @@ class BookCatalog(BaseModel):
     cover_image: Optional[str] = None
     description_short: Optional[str] = Field(default=None, max_length=280)
     description_long: Optional[str] = None
+    has_translation: Optional[bool] = None
+    featured_quote: Optional[str] = None
+    featured_quote_source: Optional[str] = None
 
     # --- Community (Layer 1 sort signals) ---
     rating_avg: float = 0.0
@@ -556,9 +559,18 @@ class BookCatalogDetail(BookCatalogItem):
     raw ID references, resolved into full entities by the caller via
     GET /api/catalog/taxonomy, not denormalized here. Still excludes
     ontology_version and entity_status, per the brief.
+
+    `is_marked` mirrors `is_on_shelf`: computed per-request from the
+    caller's auth context against the `marked_books` collection, never
+    stored on the book_catalog document itself. Marking is independent of
+    owning a book — any published catalog book can be marked, whether or
+    not it's on the user's shelf.
     """
     description_short: Optional[str] = None
     description_long: Optional[str] = None
+    has_translation: Optional[bool] = None
+    featured_quote: Optional[str] = None
+    featured_quote_source: Optional[str] = None
     aozora_id: Optional[str] = None
     aozora_url: Optional[str] = None
     gutenberg_id: Optional[str] = None
@@ -567,6 +579,11 @@ class BookCatalogDetail(BookCatalogItem):
     original_publisher: Optional[str] = None
     copyright_status: CopyrightStatus = CopyrightStatus.UNKNOWN
     save_count: int = 0
+    is_marked: bool = False
+    my_rating: Optional[int] = None
+    rating_distribution: Dict[str, int] = Field(
+        default_factory=lambda: {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
+    )
 
     theme_ids: List[str] = Field(default_factory=list)
     mood_ids: List[str] = Field(default_factory=list)

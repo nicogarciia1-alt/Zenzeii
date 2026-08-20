@@ -2,9 +2,10 @@
  * @fileoverview Reusable star rating display component.
  *
  * Renders filled gold stars + numeric rating + optional review count.
- * Read-only in all current phases — not interactive. Reused by
- * RecommendationCard (Phase 2), BookCard (Phase 5), and BookDetailModal
- * (Phase 9).
+ * Reused by RecommendationCard (Phase 2), BookCard (Phase 5), and the book
+ * detail page (Phase 9) — read-only everywhere except BookDetailReviews,
+ * which renders its own separate clickable star row for submission rather
+ * than making this shared display component interactive.
  *
  * Partial-star rendering uses an overlay-clip technique: a full row of
  * outline (stroke-only) stars sits underneath a full row of solid gold
@@ -16,6 +17,7 @@ import { formatRatingCount } from '../../utils/libraryUtils';
 const SIZE_CLASSES = {
   sm: 'w-3.5 h-3.5',
   md: 'w-5 h-5',
+  lg: 'w-7 h-7',
 };
 
 /** @param {{ className: string, filled: boolean }} props */
@@ -37,7 +39,7 @@ function Star({ className, filled }) {
  * @param {Object} props
  * @param {number} props.rating - Numeric rating (0-5, supports decimals)
  * @param {number} [props.count] - Number of ratings (displayed as "1.2k" if >= 1000)
- * @param {'sm'|'md'} [props.size] - Star size: sm for cards, md for detail
+ * @param {'sm'|'md'|'lg'} [props.size] - Star size: sm for cards, md for detail info, lg for the reviews summary
  */
 export function StarRating({ rating, count, size = 'sm' }) {
   const clamped = Math.max(0, Math.min(5, rating));

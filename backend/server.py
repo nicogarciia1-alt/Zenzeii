@@ -49,6 +49,7 @@ from services.translation import (
 
 # Import routers
 from routers.catalog import catalog_router
+from services import catalog_service
 
 # Import rate limiting constants
 IMPORT_LIMIT_PER_HOUR = 3
@@ -110,6 +111,14 @@ async def ensure_indexes(db):
     # user_shelves — which books each user has added
     await db.user_shelves.create_index([("user_id", 1), ("book_id", 1)], unique=True)
     await db.user_shelves.create_index([("user_id", 1)])
+
+    # marked_books — wishlist-style bookmarks, independent of user_shelves
+    await db.marked_books.create_index([("user_id", 1), ("book_id", 1)], unique=True)
+    await db.marked_books.create_index([("user_id", 1)])
+
+    # ratings — one rating per user per book_catalog entry
+    await db.ratings.create_index([("user_id", 1), ("book_id", 1)], unique=True)
+    await db.ratings.create_index([("book_id", 1)])
 
     # chapters
     await db.chapters.create_index([("book_id", 1), ("chapter_number", 1)])
@@ -477,6 +486,9 @@ class TranslateRequest(BaseModel):
 
 class CreateCheckoutSessionRequest(BaseModel):
     tier: str
+
+class RatingRequest(BaseModel):
+    rating: int = Field(ge=1, le=5)
 
 class AudioPurchaseRequest(BaseModel):
     pack_id: str  # "starter_10" | "standard_30" | "library_60"
@@ -1784,6 +1796,77 @@ async def get_book_status(book_id: str):
         "total_sentences": book.get("sentences_count", 0),
         "translated_sentences": translated,
         "total_chapters": book.get("total_chapters", 0)
+    }
+
+
+@api_router.post("/books/{book_id}/mark")
+async def toggle_mark_book(book_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Toggles a bookmark on a catalog book for the current user.
+
+    Independent of user_shelves — any published catalog book can be marked,
+    whether or not the user owns it. Second call on the same book unmarks it.
+    """
+    book = await db.book_catalog.find_one({"id": book_id, "entity_status": "published"}, {"_id": 1})
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found in catalog")
+
+    existing = await db.marked_books.find_one({"user_id": current_user["id"], "book_id": book_id})
+    if existing:
+        await db.marked_books.delete_one({"_id": existing["_id"]})
+        return {"marked": False}
+
+    await db.marked_books.insert_one({
+        "user_id": current_user["id"],
+        "book_id": book_id,
+        "marked_at": datetime.now(timezone.utc),
+    })
+    return {"marked": True}
+
+
+@api_router.post("/books/{book_id}/rate")
+async def rate_book(book_id: str, request: RatingRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Submits or updates the current user's rating for a catalog book.
+
+    One rating per user per book (upsert on user_id+book_id). Recomputes
+    book_catalog.rating_avg/rating_count from the full ratings collection
+    after every submission, so the two never drift — no incremental
+    running-average math to keep in sync.
+    """
+    book = await db.book_catalog.find_one({"id": book_id, "entity_status": "published"}, {"_id": 1})
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found in catalog")
+
+    now = datetime.now(timezone.utc)
+    await db.ratings.update_one(
+        {"user_id": current_user["id"], "book_id": book_id},
+        {
+            "$set": {"rating": request.rating, "updated_at": now},
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+    pipeline = [
+        {"$match": {"book_id": book_id}},
+        {"$group": {"_id": "$book_id", "avg": {"$avg": "$rating"}, "count": {"$sum": 1}}},
+    ]
+    agg_result = await db.ratings.aggregate(pipeline).to_list(1)
+    rating_avg = round(agg_result[0]["avg"], 2) if agg_result else 0.0
+    rating_count = agg_result[0]["count"] if agg_result else 0
+
+    await db.book_catalog.update_one(
+        {"id": book_id},
+        {"$set": {"rating_avg": rating_avg, "rating_count": rating_count}},
+    )
+
+    distribution = await catalog_service.get_rating_distribution(db, book_id)
+    return {
+        "rating_avg": rating_avg,
+        "rating_count": rating_count,
+        "rating_distribution": distribution,
+        "my_rating": request.rating,
     }
 
 

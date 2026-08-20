@@ -43,6 +43,20 @@ export const AVAILABILITY_LABELS = {
   upload: 'Upload Your Own',
 };
 
+/** Book detail page metadata panel — availability subtitle, one level more descriptive than AVAILABILITY_LABELS */
+export const AVAILABILITY_SUBTITLES = {
+  free: 'Included with Zenzeii — add this book to your library and start reading.',
+  buy: 'Purchase this book from its publisher to read it.',
+  upload: 'Upload your own copy of this book to start reading.',
+};
+
+/** Original-language display labels */
+export const LANGUAGE_LABELS = {
+  ja: 'Japanese',
+  ja_en: 'Japanese / English',
+  en: 'English',
+};
+
 /** Default pagination */
 export const DEFAULT_PAGE_SIZE = 24;
 export const MAX_PAGE_SIZE = 48;

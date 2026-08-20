@@ -102,3 +102,26 @@ export async function fetchConceptDetail(conceptId) {
   const response = await axios.get(`${API}/catalog/concepts/${conceptId}`);
   return response.data;
 }
+
+/**
+ * Toggle the current user's bookmark on a catalog book. Requires auth —
+ * the Authorization header is set globally by AuthContext on login, same
+ * as every other authenticated call in the app (see useImport.js).
+ * @param {string} bookId
+ * @returns {Promise<{marked: boolean}>}
+ */
+export async function markBook(bookId) {
+  const response = await axios.post(`${API}/books/${bookId}/mark`);
+  return response.data;
+}
+
+/**
+ * Submit or update the current user's 1-5 rating for a catalog book.
+ * @param {string} bookId
+ * @param {number} rating - 1-5
+ * @returns {Promise<{rating_avg: number, rating_count: number}>}
+ */
+export async function rateBook(bookId, rating) {
+  const response = await axios.post(`${API}/books/${bookId}/rate`, { rating });
+  return response.data;
+}

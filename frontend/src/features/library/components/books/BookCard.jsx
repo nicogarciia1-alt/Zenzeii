@@ -10,12 +10,14 @@
  * Composes BookCoverArt, MetadataBadge, and StarRating from Phase 2.
  *
  * Phase 5: static, no click-through navigation.
- * Phase 9: onCardClick opens BookDetailModal (deferred — book detail design pending).
- * Phase 10: the grid variant's "Add to Library" button is wired to
- * useImport. useImport is called unconditionally (Rules of Hooks — a
- * component can't call a hook only for some variants), but it's inert
- * until triggerImport() is actually invoked, which only ever happens
- * from the grid-variant button below.
+ * Phase 9: clicking any card variant navigates to /library/:bookId
+ * (BookDetailPage). No parent ever passed an onCardClick prop before this
+ * phase — navigation lives directly in BookCard now rather than through an
+ * indirection nothing used.
+ * Phase 10/9: the grid variant's "Add to Library" button — and Phase 9's
+ * detail/sticky buttons — are now all owned by the shared ImportButton
+ * component (see detail/ImportButton.jsx), so useImport's state machine is
+ * wired in exactly one place across the whole Library feature.
  *
  * Root is <article>, not <button>, even though the whole card is
  * keyboard-actionable: the 'grid' variant nests real interactive
@@ -25,52 +27,11 @@
  * keyboard-actionable without that HTML validity violation.
  */
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
-import { Loader2, Check } from 'lucide-react';
 import { BookCoverArt } from './BookCoverArt';
 import { MetadataBadge } from './MetadataBadge';
 import { StarRating } from './StarRating';
 import { DIFFICULTY_LABELS } from '../../constants/libraryConstants';
-import { useImport } from '../../hooks/useImport';
-
-/**
- * Button presentation for each useImport status. Centralized here so the
- * JSX below only ever reads `buttonProps.*` — no scattered per-status
- * className branching to keep in sync.
- */
-function getImportButtonProps(importStatus) {
-  switch (importStatus) {
-    case 'importing':
-      return {
-        label: 'Importing...',
-        className: 'opacity-60 cursor-not-allowed border-library-border/40 text-library-text-muted',
-        disabled: true,
-        icon: <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />,
-      };
-    case 'completed':
-      return {
-        label: 'In your library',
-        className: 'bg-library-bg-shelf border-library-border/40 text-library-text-secondary cursor-default',
-        disabled: true,
-        icon: <Check className="h-3 w-3" aria-hidden="true" />,
-      };
-    case 'failed':
-      return {
-        label: 'Try again',
-        className: 'border-red-300 text-red-600 hover:bg-red-50',
-        disabled: false,
-        icon: null,
-      };
-    default: // 'idle'
-      return {
-        label: '+ Add to Library',
-        className:
-          'border-library-border/40 text-library-text-secondary hover:bg-library-bg-shelf hover:text-library-text-primary',
-        disabled: false,
-        icon: null,
-      };
-  }
-}
+import { ImportButton } from '../detail/ImportButton';
 
 /**
  * Class/behavior configuration for each BookCard variant. Add new
@@ -118,37 +79,15 @@ const VARIANT_CONFIG = {
  * @param {Object} props
  * @param {import('../../types/catalogTypes').BookCatalogItem} props.book
  * @param {'shelf'|'grid'|'compact'} [props.variant] - Display variant (default: 'shelf')
- * @param {function} [props.onCardClick] - Called when card is clicked (Phase 9)
  * @param {boolean} [props.showAddButton] - Whether to show the add-to-library button (default: false)
  */
-export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton = false }) {
+export function BookCard({ book, variant = 'shelf', showAddButton = false }) {
   const config = VARIANT_CONFIG[variant] ?? VARIANT_CONFIG.shelf;
   const isHorizontal = config.layout === 'horizontal';
   const navigate = useNavigate();
 
-  const { importStatus, triggerImport } = useImport(
-    book.id,
-    ({ alreadyOwned } = {}) => {
-      toast.success(alreadyOwned ? 'Already in your library' : `${book.title_en} added to your library`);
-    },
-    (message) => toast.error(message || 'Import failed'),
-    book.is_on_shelf ? 'completed' : 'idle'
-  );
-  const buttonProps = getImportButtonProps(importStatus);
-
-  // TODO: Phase 9 (deferred — book detail design pending) opens BookDetailModal here by default.
   const handleCardClick = () => {
-    if (onCardClick) onCardClick(book);
-  };
-
-  const handleImportClick = (e) => {
-    e.stopPropagation();
-    triggerImport();
-  };
-
-  const handleReadNow = (e) => {
-    e.stopPropagation();
-    navigate(`/read/${book.id}`);
+    navigate(`/library/${book.id}`);
   };
 
   const detailsContent = (
@@ -176,49 +115,8 @@ export function BookCard({ book, variant = 'shelf', onCardClick, showAddButton =
 
       <StarRating rating={book.rating_avg} count={book.rating_count} size="sm" />
 
-      {showAddButton && config.supportsAddButton && book.availability === 'free' && (
-        <>
-          <button
-            type="button"
-            onClick={handleImportClick}
-            disabled={buttonProps.disabled}
-            aria-live="polite"
-            aria-label={`${book.title_en}: ${buttonProps.label}`}
-            className={`mt-1 w-full text-xs rounded px-2 py-1.5 border transition-colors duration-fast flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2 ${buttonProps.className}`}
-          >
-            {/* Keyed by status so each transition (idle -> importing -> completed/failed)
-                mounts fresh content and fades in, rather than the icon silently swapping
-                mid-frame — a spinner-to-checkmark crossfade instead of a jump cut. */}
-            <span key={importStatus} className="flex items-center gap-1 animate-in fade-in-0 duration-200">
-              {buttonProps.icon}
-              {buttonProps.label}
-            </span>
-          </button>
-
-          {importStatus === 'completed' && (
-            <button
-              type="button"
-              onClick={handleReadNow}
-              aria-label={`Read ${book.title_en} now`}
-              className="w-full text-xs text-library-red hover:underline text-center rounded transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
-            >
-              Read now →
-            </button>
-          )}
-        </>
-      )}
-
-      {showAddButton && config.supportsAddButton && book.availability === 'buy' && book.buy_link && (
-        <a
-          href={book.buy_link}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          aria-label={`Buy ${book.title_en} — opens external site`}
-          className="mt-1 w-full text-xs rounded px-2 py-1.5 border border-library-border/40 text-library-text-secondary hover:bg-library-bg-shelf text-center block transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-library-red focus-visible:ring-offset-2"
-        >
-          Buy →
-        </a>
+      {showAddButton && config.supportsAddButton && (
+        <ImportButton book={book} variant="grid" />
       )}
     </>
   );

@@ -411,6 +411,47 @@ async def get_shelved_book_ids(
     return {doc["book_id"] async for doc in cursor}
 
 
+async def is_book_marked(db: AsyncIOMotorDatabase, user_id: Optional[str], book_id: str) -> bool:
+    """
+    Whether the given user has marked this book, independent of shelf status.
+
+    Returns False with no query when user_id is None, matching
+    get_shelved_book_ids's handling of unauthenticated requests.
+    """
+    if not user_id:
+        return False
+    doc = await db.marked_books.find_one({"user_id": user_id, "book_id": book_id}, {"_id": 1})
+    return doc is not None
+
+
+async def get_my_rating(db: AsyncIOMotorDatabase, user_id: Optional[str], book_id: str) -> Optional[int]:
+    """
+    The given user's own 1-5 rating for this book, or None if unrated
+    (or unauthenticated) — distinct from book_catalog.rating_avg, which is
+    the aggregate across all users.
+    """
+    if not user_id:
+        return None
+    doc = await db.ratings.find_one({"user_id": user_id, "book_id": book_id}, {"rating": 1})
+    return doc["rating"] if doc else None
+
+
+async def get_rating_distribution(db: AsyncIOMotorDatabase, book_id: str) -> Dict[str, int]:
+    """
+    Count of ratings at each star value (1-5) for a book, for the Reviews
+    tab's distribution bars. Every key is always present (0 when no ratings
+    exist at that value) so the caller never needs a defensive .get().
+    """
+    distribution = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
+    pipeline = [
+        {"$match": {"book_id": book_id}},
+        {"$group": {"_id": "$rating", "count": {"$sum": 1}}},
+    ]
+    async for doc in db.ratings.aggregate(pipeline):
+        distribution[str(doc["_id"])] = doc["count"]
+    return distribution
+
+
 # --------------------------------------------------------------------------
 # Read operations
 # --------------------------------------------------------------------------
@@ -480,7 +521,16 @@ async def get_book_by_id(
         return None
 
     shelved_ids = await get_shelved_book_ids(db, user_id, [book_id])
-    return BookCatalogDetail(**doc, is_on_shelf=book_id in shelved_ids)
+    marked = await is_book_marked(db, user_id, book_id)
+    my_rating = await get_my_rating(db, user_id, book_id)
+    distribution = await get_rating_distribution(db, book_id)
+    return BookCatalogDetail(
+        **doc,
+        is_on_shelf=book_id in shelved_ids,
+        is_marked=marked,
+        my_rating=my_rating,
+        rating_distribution=distribution,
+    )
 
 
 async def list_genres(db: AsyncIOMotorDatabase) -> List[GenreResponse]:
