@@ -141,9 +141,12 @@ export function BookCard({ book, variant = 'shelf', showAddButton = false }) {
           bookId={book.id}
           titleJp={book.title_jp}
           titleEn={book.title_en}
-          authorJp={book.author_name_jp || book.author_name}
+          titleRomaji={book.title_romaji}
+          authorJp={book.author_name_jp}
+          authorRomaji={book.author_name}
           coverImage={book.cover_image}
           size={config.coverSize}
+          genre_ids={book.genre_ids}
         />
       </div>
 

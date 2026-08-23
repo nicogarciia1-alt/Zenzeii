@@ -26,9 +26,12 @@ export function RecommendationCard({ book, onViewDetails, onBookmark, isBookmark
         bookId={book.id}
         titleJp={book.title_jp}
         titleEn={book.title_en}
-        authorJp={book.author_name_jp || book.author_name}
+        titleRomaji={book.title_romaji}
+        authorJp={book.author_name_jp}
+        authorRomaji={book.author_name}
         coverImage={book.cover_image}
         size="rec"
+        genre_ids={book.genre_ids}
       />
       <BookInfoBlock
         book={book}
