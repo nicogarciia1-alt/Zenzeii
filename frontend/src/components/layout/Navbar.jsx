@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, Library, Moon, Sun, LogOut, Settings, BookMarked } from 'lucide-react';
+import { BookOpen, Library, Moon, Sun, LogOut, Settings, BookMarked, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,6 +61,7 @@ export const Navbar = () => {
   const navItems = [
     { path: '/', icon: Library, label: 'My Books' },
     { path: '/vocabulary', icon: BookOpen, label: 'Vocabulary' },
+    { path: '/zenzeii', icon: MessageCircle, label: 'Zenzeii' },
     { path: '/library', icon: BookMarked, label: 'Library' },
   ];
 

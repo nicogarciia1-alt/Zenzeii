@@ -18,6 +18,7 @@ import PricingPage from "@/pages/PricingPage";
 import AudioPacksPage from "@/pages/AudioPacksPage";
 import LibraryPage from "@/pages/LibraryPage";
 import BookDetailPage from "@/pages/BookDetailPage";
+import ZenzeiiPage from "@/pages/ZenzeiiPage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -52,6 +53,7 @@ function AppRoutes() {
       <Route path="/read/:bookId" element={<ProtectedRoute><ReaderPage /></ProtectedRoute>} />
       <Route path="/read/:bookId/:chapterId" element={<ProtectedRoute><ReaderPage /></ProtectedRoute>} />
       <Route path="/vocabulary" element={<ProtectedRoute><VocabularyPage /></ProtectedRoute>} />
+      <Route path="/zenzeii" element={<ProtectedRoute><ZenzeiiPage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
       <Route path="/library/:bookId" element={<ProtectedRoute><BookDetailPage /></ProtectedRoute>} />

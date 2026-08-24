@@ -1,17 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
+import React, { useRef, useEffect } from 'react';
+import { useZenzeiiChat } from '@/hooks/useZenzeiiChat';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
-
-const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: 'Good day. I am Zenzeii, your literary companion. Ask me anything about the text you are reading.',
-    },
-  ]);
-  const [input, setInput] = useState('');
-  const [thinking, setThinking] = useState(false);
+const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose, aiUsage = null, onAiUsed, onAiLimitReached }) => {
+  const { messages, input, setInput, thinking, handleSend, handleKeyDown, limitReached } = useZenzeiiChat({
+    bookTitle,
+    currentSentence,
+    onAiUsed,
+    onAiLimitReached,
+  });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -37,43 +33,6 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
     const isMobile = window.innerWidth <= 768;
     if (isOpen && !isMobile) inputRef.current?.focus();
   }, [isOpen]);
-
-  const handleSend = async () => {
-    const message = input.trim();
-    if (!message || thinking) return;
-
-    // messages in this closure is the state before the new user message
-    const historyToSend = messages.map((m) => ({ role: m.role, content: m.content }));
-
-    setMessages((prev) => [...prev, { role: 'user', content: message }]);
-    setInput('');
-    setThinking(true);
-
-    try {
-      const res = await axios.post(`${API_BASE}/ai/chat`, {
-        message,
-        book_title: bookTitle || '',
-        current_sentence: currentSentence || '',
-        chat_history: historyToSend,
-      });
-      setMessages((prev) => [...prev, { role: 'assistant', content: res.data.reply }]);
-    } catch (err) {
-      const errMsg =
-        err.response?.status === 503
-          ? 'AI chat is not configured on this server.'
-          : 'I encountered a difficulty. Please try again.';
-      setMessages((prev) => [...prev, { role: 'assistant', content: errMsg }]);
-    } finally {
-      setThinking(false);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -183,6 +142,25 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
               whiteSpace: 'pre-wrap',
             }}>
               {msg.content}
+              {msg.isLimit && (
+                <a
+                  href="/upgrade"
+                  style={{
+                    display: 'block',
+                    marginTop: '10px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    backgroundColor: 'hsl(var(--primary))',
+                    color: 'hsl(var(--primary-foreground))',
+                    fontSize: '0.8rem',
+                    textAlign: 'center',
+                    textDecoration: 'none',
+                    fontFamily: garamond,
+                  }}
+                >
+                  Upgrade — €5.99/month
+                </a>
+              )}
             </div>
           </div>
         ))}
@@ -220,8 +198,8 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask Zenzeii…"
-          disabled={thinking}
+          placeholder={limitReached ? 'Daily limit reached' : 'Ask Zenzeii…'}
+          disabled={thinking || limitReached}
           style={{
             flex: 1,
             padding: '8px 12px',
@@ -232,11 +210,12 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
             fontFamily: garamond,
             fontSize: '16px',
             outline: 'none',
+            opacity: limitReached ? 0.5 : 1,
           }}
         />
         <button
           onClick={handleSend}
-          disabled={thinking || !input.trim()}
+          disabled={thinking || !input.trim() || limitReached}
           style={{
             padding: '8px 16px',
             borderRadius: '4px',
@@ -245,8 +224,8 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose }) => {
             color: 'hsl(var(--primary-foreground))',
             fontFamily: garamond,
             fontSize: '0.9rem',
-            cursor: thinking || !input.trim() ? 'not-allowed' : 'pointer',
-            opacity: thinking || !input.trim() ? 0.55 : 1,
+            cursor: thinking || !input.trim() || limitReached ? 'not-allowed' : 'pointer',
+            opacity: thinking || !input.trim() || limitReached ? 0.55 : 1,
             transition: 'opacity 0.15s',
           }}
         >
