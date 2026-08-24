@@ -22,7 +22,6 @@
  *   </LibraryPage>
  */
 import LibraryHero from '@/features/library/components/hero/LibraryHero';
-import { RecommendationSection } from '@/features/library/components/recommendation/RecommendationSection';
 import { FilterBar } from '@/features/library/components/filters/FilterBar';
 import { ShelvesSection } from '@/features/library/components/shelves/ShelvesSection';
 import { CatalogGrid } from '@/features/library/components/books/CatalogGrid';
@@ -53,23 +52,6 @@ export default function LibraryPage() {
           it's the first thing visible on load, so fading it in would only add
           a delay before the user sees anything at all. */}
       <LibraryHero searchProps={searchProps} />
-
-      {/* Phase 2 — Recommendation.
-          Fade-only entrance everywhere below (no slide/transform) — see
-          Bug 2 fix note: a transform held past its animation's end via
-          animationFillMode: 'both' establishes a permanent new stacking
-          context on that element. Any such wrapper positioned after
-          FilterBar in the DOM then paints its entire subtree on top of
-          FilterBar's z-40 dropdown, regardless of that z-index — stacking
-          contexts aren't comparable across that boundary, only DOM/paint
-          order is, once a sibling creates its own context. This bit
-          FilterBar → ShelvesSection/CatalogGrid in production; fade-only
-          (opacity settles at 1, which does not create a stacking context)
-          avoids the whole bug class rather than fixing it section by
-          section. */}
-      <div className="mt-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
-        <RecommendationSection />
-      </div>
 
       {/* Phase 4 — Shelves, still mock data */}
       <div className="mt-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>

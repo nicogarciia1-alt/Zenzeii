@@ -12,7 +12,6 @@
  * No props — data sourced from mock.
  */
 import { RecommendationCard } from './RecommendationCard';
-import { QuizPromptCard } from './QuizPromptCard';
 import { MOCK_CATALOG_BOOKS } from '../../data/mockCatalog';
 
 const featuredBook = MOCK_CATALOG_BOOKS.find((b) => b.id === 'aozora-kokoro');
@@ -20,11 +19,10 @@ const featuredBook = MOCK_CATALOG_BOOKS.find((b) => b.id === 'aozora-kokoro');
 export function RecommendationSection() {
   return (
     <section aria-label="Your next book" className="max-w-[1440px] mx-auto px-0 pt-0 pb-12">
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {featuredBook && (
           <RecommendationCard book={featuredBook} isBookmarked={featuredBook.is_on_shelf} />
         )}
-        <QuizPromptCard />
       </div>
     </section>
   );
