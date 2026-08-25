@@ -1,7 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, Library, Moon, Sun, LogOut, Settings, BookMarked, MessageCircle } from 'lucide-react';
+import { BookOpen, Library, Moon, Sun, LogOut, Settings, BookMarked, MessageCircle, User, Star, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
@@ -12,23 +19,11 @@ export const Navbar = () => {
   const { theme, toggleTheme } = useTheme();
   const { logout, user } = useAuth();
   const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportText, setReportText] = useState('');
   const [reportSending, setReportSending] = useState(false);
   const [reportSent, setReportSent] = useState(false);
-  const menuRef = useRef(null);
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-  
   const handleReport = async (e) => {
     e.preventDefault();
     if (!reportText.trim()) return;
@@ -111,58 +106,44 @@ export const Navbar = () => {
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
             
-            <div ref={menuRef} style={{ position: 'relative' }}>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="text-muted-foreground"
-              >
-                <Settings className="h-5 w-5" />
-              </Button>
-              {menuOpen && (
-                <div style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: '110%',
-                  background: 'var(--background)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '4px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                  minWidth: '180px',
-                  zIndex: 100,
-                  fontFamily: 'EB Garamond, serif',
-                }}>
-                  <button
-                    onClick={() => { setMenuOpen(false); navigate('/profile'); }}
-                    style={{ display: 'block', width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '15px', color: 'var(--foreground)', fontFamily: 'EB Garamond, serif' }}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground"
+                >
+                  <Settings className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[200px] font-sans">
+                <DropdownMenuItem onSelect={() => navigate('/profile')}>
+                  <User className="h-4 w-4" />
+                  Edit Profile
+                </DropdownMenuItem>
+                {user?.subscription_tier === 'free' && (
+                  <DropdownMenuItem
+                    onSelect={() => navigate('/pricing')}
+                    className="text-[#B5294E] focus:text-[#B5294E]"
                   >
-                    ✦ Edit Profile
-                  </button>
-                  {user?.subscription_tier === 'free' && (
-                    <button
-                      onClick={() => { setMenuOpen(false); navigate('/pricing'); }}
-                      style={{ display: 'block', width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '15px', color: '#B5294E', fontFamily: 'EB Garamond, serif' }}
-                    >
-                      ✦ Upgrade to Premium
-                    </button>
-                  )}
-                  <button
-                    onClick={() => { setMenuOpen(false); setReportOpen(true); }}
-                    style={{ display: 'block', width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '15px', color: 'var(--foreground)', fontFamily: 'EB Garamond, serif' }}
-                  >
-                    ✦ Report Problem
-                  </button>
-                  <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
-                  <button
-                    onClick={() => { setMenuOpen(false); logout(); }}
-                    style={{ display: 'block', width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '15px', color: '#B5294E', fontFamily: 'EB Garamond, serif' }}
-                  >
-                    ✦ Log Out
-                  </button>
-                </div>
-              )}
-            </div>
+                    <Star className="h-4 w-4" />
+                    Upgrade to Premium
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={() => setReportOpen(true)}>
+                  <Flag className="h-4 w-4" />
+                  Report Problem
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => logout()}
+                  className="text-[#B5294E] focus:text-[#B5294E]"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Log Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
