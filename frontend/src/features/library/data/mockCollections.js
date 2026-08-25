@@ -21,10 +21,10 @@ export const FEELING_SHELVES = [
 ];
 
 export const DISCOVER_JAPAN_SHELVES = [
-  { id: 'tokyo_stories', name: 'Tokyo Stories', name_jp: '東京の物語', book_count: 35, image_url: null },
-  { id: 'kyoto_tradition', name: 'Kyoto & Tradition', name_jp: '京都と伝統', book_count: 42, image_url: null },
-  { id: 'countryside_life', name: 'Countryside Life', name_jp: '田舎暮らし', book_count: 31, image_url: null },
-  { id: 'edo_period', name: 'Edo Period', name_jp: '江戸時代', book_count: 28, image_url: null },
-  { id: 'tea_ceremony', name: 'Tea Ceremony', name_jp: '茶道', book_count: 18, image_url: null },
-  { id: 'samurai_history', name: 'Samurai & History', name_jp: '侍と歴史', book_count: 26, image_url: null },
+  { id: 'tokyo_stories', name: 'Tokyo Stories', name_jp: '東京の物語', book_count: 35, image_url: '/assets/discover-japan/tokyo-stories.png' },
+  { id: 'kyoto_tradition', name: 'Kyoto & Tradition', name_jp: '京都と伝統', book_count: 42, image_url: '/assets/discover-japan/kyoto-tradition.png' },
+  { id: 'countryside_life', name: 'Countryside Life', name_jp: '田舎暮らし', book_count: 31, image_url: '/assets/discover-japan/countryside-life.png' },
+  { id: 'edo_period', name: 'Edo Period', name_jp: '江戸時代', book_count: 28, image_url: '/assets/discover-japan/edo-period.png' },
+  { id: 'tea_ceremony', name: 'Tea Ceremony', name_jp: '茶道', book_count: 18, image_url: '/assets/discover-japan/tea-ceremony.png' },
+  { id: 'samurai_history', name: 'Samurai & History', name_jp: '侍と歴史', book_count: 26, image_url: '/assets/discover-japan/samurai-history.png' },
 ];
