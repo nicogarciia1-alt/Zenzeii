@@ -355,7 +355,7 @@ export const DictionaryPopup = ({ wordData, position, onClose, savedWords = [], 
                       href="/upgrade"
                       className="flex-1 text-xs px-2 py-1.5 rounded bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-center"
                     >
-                      Upgrade — €5.99/month
+                      Upgrade — €3.99/month
                     </a>
                   </div>
                 </div>

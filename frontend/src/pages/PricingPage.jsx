@@ -94,7 +94,7 @@ export default function PricingPage() {
 
               <div className="mt-auto">
                 <div className="text-center mb-6">
-                  <span className="font-serif text-3xl text-foreground">€5.99</span>
+                  <span className="font-serif text-3xl text-foreground">€3.99</span>
                   <span className="text-muted-foreground"> / month</span>
                 </div>
                 <Button

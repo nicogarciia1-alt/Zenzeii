@@ -158,7 +158,7 @@ const ZenzeiiChat = ({ bookTitle, currentSentence, isOpen, onClose, aiUsage = nu
                     fontFamily: garamond,
                   }}
                 >
-                  Upgrade — €5.99/month
+                  Upgrade — €3.99/month
                 </a>
               )}
             </div>

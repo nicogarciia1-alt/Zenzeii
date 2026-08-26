@@ -143,7 +143,7 @@ export default function ZenzeiiPage() {
                       fontFamily: garamond,
                     }}
                   >
-                    Upgrade — €5.99/month
+                    Upgrade — €3.99/month
                   </a>
                 )}
               </div>
