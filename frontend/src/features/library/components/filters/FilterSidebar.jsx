@@ -71,7 +71,7 @@ export function FilterSidebar({ totalBooks = 0, onResetFilters }) {
   return (
     <aside
       aria-label="Library filters"
-      className="w-[260px] shrink-0 sticky top-0 h-screen overflow-y-auto bg-library-bg-primary border-r border-library-border px-6 pt-7 flex flex-col"
+      className="w-[320px] shrink-0 sticky top-0 h-screen overflow-y-auto bg-library-bg-primary border-r border-library-border px-6 pt-7 flex flex-col"
     >
       {/* Header block */}
       <div>

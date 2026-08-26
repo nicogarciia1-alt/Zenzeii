@@ -66,7 +66,7 @@ export default function LibraryPage() {
       <div className="flex">
         <FilterSidebar totalBooks={catalog.total} onResetFilters={catalog.clearAllFilters} />
 
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 px-8">
           {/* Phase 4 — Shelves, still mock data */}
           <div className="mt-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
             <ShelvesSection />
@@ -76,7 +76,7 @@ export default function LibraryPage() {
           <section
             id={CATALOG_SECTION_ID}
             aria-label="All books"
-            className="mt-spacing-8 max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 animate-in fade-in-0 duration-slow"
+            className="mt-spacing-8 py-8 animate-in fade-in-0 duration-slow"
             style={{ animationDelay: '400ms', animationFillMode: 'both' }}
           >
             <LibraryContentHeader total={catalog.total} />

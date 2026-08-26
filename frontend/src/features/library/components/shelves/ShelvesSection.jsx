@@ -20,7 +20,7 @@ import { MOCK_CATALOG_BOOKS } from '../../data/mockCatalog';
 
 export function ShelvesSection() {
   return (
-    <div className="max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 space-y-spacing-12">
+    <div className="py-8 space-y-spacing-12">
       {/* Discover Japan through stories */}
       <section aria-label="Discover Japan through stories">
         <SectionHeader
