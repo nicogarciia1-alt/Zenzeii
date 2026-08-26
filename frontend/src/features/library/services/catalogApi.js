@@ -14,7 +14,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 /**
  * Build a URLSearchParams object from a catalog query params object.
- * Handles array values (repeatable params like genre[], mood[]) by
+ * Handles array values (repeatable params like genre[], theme[]) by
  * appending each element as a separate occurrence of the key, and
  * scalar values (a plain string, e.g. a single selected genre) by
  * appending them directly — the backend accepts both a single
@@ -48,7 +48,6 @@ function buildQueryParams(params) {
  * @param {number} [params.year_from] - Publication year range start
  * @param {number} [params.year_to] - Publication year range end
  * @param {string[]} [params.theme] - Theme IDs (Layer 2)
- * @param {string[]} [params.mood] - Mood IDs (Layer 2)
  * @param {string[]} [params.setting] - Setting IDs (Layer 2)
  * @param {string[]} [params.period] - Historical period IDs (Layer 2)
  * @param {string[]} [params.concept] - Cultural concept IDs (Layer 2)

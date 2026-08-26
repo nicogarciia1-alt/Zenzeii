@@ -22,7 +22,6 @@ import { fetchGenres, fetchTaxonomy } from '../services/catalogApi';
 const EMPTY_DATA = {
   genres: [],
   themes: [],
-  moods: [],
   settings: [],
   periods: [],
   concepts: [],
@@ -30,7 +29,7 @@ const EMPTY_DATA = {
   adaptations: [],
 };
 
-/** Resolved { genres, themes, moods, ... } once loaded, or null before the first successful fetch. */
+/** Resolved { genres, themes, ... } once loaded, or null before the first successful fetch. */
 let cachedData = null;
 /** Shared in-flight promise — dedupes concurrent fetches from multiple mounted consumers. */
 let inFlightPromise = null;
@@ -44,7 +43,6 @@ function loadTaxonomy() {
       cachedData = {
         genres,
         themes: taxonomy.themes,
-        moods: taxonomy.moods,
         settings: taxonomy.settings,
         periods: taxonomy.historical_periods,
         concepts: taxonomy.cultural_concepts,
@@ -66,7 +64,6 @@ function loadTaxonomy() {
  * @returns {{
  *   genres: import('../types/catalogTypes').Genre[],
  *   themes: Object[],
- *   moods: import('../types/catalogTypes').Mood[],
  *   settings: Object[],
  *   periods: Object[],
  *   concepts: import('../types/catalogTypes').CulturalConcept[],

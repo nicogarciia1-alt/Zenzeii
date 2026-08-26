@@ -3,9 +3,9 @@
  *
  * Renders the five Layer 2 discovery filters that live only behind
  * "More Filters" — setting, historical period, cultural concept, award,
- * adaptation. Theme and mood are Layer 2 taxonomy too, but they already
- * have a single-select home in the primary FilterBar chips (see
- * useCatalog.js), so they're deliberately not duplicated here.
+ * adaptation. Theme is Layer 2 taxonomy too, but it already has a
+ * single-select home in the primary FilterBar chips (see useCatalog.js),
+ * so it's deliberately not duplicated here.
  *
  * Purely presentational — receives current filter state and callbacks
  * via props. Rendered inside MoreFiltersPopover (desktop) or

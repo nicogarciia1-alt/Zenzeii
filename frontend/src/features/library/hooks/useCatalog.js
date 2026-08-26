@@ -7,19 +7,24 @@
  *
  * Filter state is scalar (one selected value per filter, or null) for
  * every Layer 1 filter — q, genre, difficulty, jlpt, length, language,
- * availability, year_from, year_to, theme, mood — matching FilterChip's
+ * availability, year_from, year_to, theme — matching FilterChip's
  * existing single-select UI exactly.
  *
  * The five Layer 2 filters exposed only through MoreFiltersPanel
  * (Phase 8) — setting, period, concept, award, adaptation — are array
  * state instead: multiple values OR'd together, matching FilterPill's
  * checkbox UI and the repeated-param OR-logic the backend already
- * supports. theme/mood stay scalar and out of that panel entirely —
- * they already have a single-select home in the primary FilterBar chips,
- * and giving them a second, differently-shaped entry point would put two
+ * supports. theme stays scalar and out of that panel entirely —
+ * it already has a single-select home in the primary FilterBar chips,
+ * and giving it a second, differently-shaped entry point would put two
  * UIs writing incompatible value types into the same filter key.
  *
- * Used by: LibraryPage (passed down to FilterBar and CatalogGrid)
+ * Mood removed (UI Refinement, Aug 2026) — not a Zenzeii filter, per
+ * COO/Nico instruction. The backend's `mood` query param still exists
+ * (backend changes were out of scope for that brief) but nothing here
+ * sends it anymore. Do not re-add it.
+ *
+ * Used by: LibraryPage (passed down to FilterSidebar and CatalogGrid)
  */
 import { useEffect, useState } from 'react';
 import { fetchCatalog } from '../services/catalogApi';
@@ -41,7 +46,6 @@ const DEFAULT_FILTERS = {
   year_from: null,
   year_to: null,
   theme: null,
-  mood: null,
   setting: [],
   period: [],
   concept: [],
@@ -100,7 +104,6 @@ export function useCatalog(initialParams = {}) {
       year_from: filters.year_from,
       year_to: filters.year_to,
       theme: filters.theme,
-      mood: filters.mood,
       setting: filters.setting,
       period: filters.period,
       concept: filters.concept,
@@ -137,7 +140,6 @@ export function useCatalog(initialParams = {}) {
     filters.year_from,
     filters.year_to,
     filters.theme,
-    filters.mood,
     filters.setting,
     filters.period,
     filters.concept,

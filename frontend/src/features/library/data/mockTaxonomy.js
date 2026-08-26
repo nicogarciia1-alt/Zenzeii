@@ -6,10 +6,13 @@
  * A subset of each collection, using exact IDs, names, and descriptions
  * from backend/scripts/seed_catalog.py (genres) and
  * backend/scripts/seed_layer2_taxonomy.py (everything else) — no invented
- * values. The real seed has more entries per collection (e.g. 24 moods,
- * 32 settings, 23 cultural concepts); this file carries only what Phase 0
- * needs to exercise the UI, sized above each stated minimum
- * (5 genres, 8 moods, 6 settings, 5 themes, 4 cultural concepts).
+ * values. The real seed has more entries per collection (e.g. 32 settings,
+ * 23 cultural concepts); this file carries only what Phase 0 needs to
+ * exercise the UI, sized above each stated minimum
+ * (5 genres, 6 settings, 5 themes, 4 cultural concepts).
+ *
+ * MOCK_MOODS removed (UI Refinement, Aug 2026) — Mood is not a Zenzeii
+ * filter, per COO/Nico instruction. Do not re-add it.
  */
 
 /** @type {import('../types/catalogTypes').Genre[]} */
@@ -33,19 +36,6 @@ export const MOCK_THEMES = [
   { id: 'theme_survival', name: 'Survival', name_jp: '生存', description: 'Endurance under extreme conditions' },
   { id: 'theme_justice', name: 'Justice', name_jp: '正義', description: 'Fairness, law, and moral reckoning' },
   { id: 'theme_dreams', name: 'Dreams', name_jp: '夢', description: 'Aspiration, fantasy, and the subconscious' },
-];
-
-/** @type {import('../types/catalogTypes').Mood[]} */
-export const MOCK_MOODS = [
-  { id: 'mood_cozy', name: 'Cozy', name_jp: 'ほっこり', description: 'Warm, safe, and comforting — like a blanket on a rainy day' },
-  { id: 'mood_reflective', name: 'Reflective', name_jp: '内省的', description: 'Invites quiet contemplation and slow reading' },
-  { id: 'mood_melancholic', name: 'Melancholic', name_jp: '哀愁', description: 'Tinged with sadness and longing' },
-  { id: 'mood_dark', name: 'Dark', name_jp: '暗い', description: 'Heavy, difficult, unflinching' },
-  { id: 'mood_dreamlike', name: 'Dreamlike', name_jp: '夢幻的', description: 'Surreal, lyrical, slightly unreal' },
-  { id: 'mood_suspenseful', name: 'Suspenseful', name_jp: '緊張感', description: 'Keeps you reading, afraid to stop' },
-  { id: 'mood_mysterious', name: 'Mysterious', name_jp: '神秘的', description: 'Something withheld, something unexplained' },
-  { id: 'mood_peaceful', name: 'Peaceful', name_jp: '穏やか', description: 'Quiet, unhurried, no urgency' },
-  { id: 'mood_bittersweet', name: 'Bittersweet', name_jp: '切ない', description: 'Joy and sorrow held together' },
 ];
 
 /** @type {Object[]} Setting entities (settings collection) */

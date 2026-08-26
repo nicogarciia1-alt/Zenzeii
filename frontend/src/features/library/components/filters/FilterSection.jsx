@@ -14,7 +14,7 @@ import { FilterPill } from './FilterPill';
 
 /**
  * @param {Object} props
- * @param {string} props.title - Section title (e.g. "Mood", "Setting")
+ * @param {string} props.title - Section title (e.g. "Award", "Setting")
  * @param {string} [props.titleJp] - Japanese section title (optional)
  * @param {Object[]} props.options - Taxonomy options for this section (FilterOption[] shape: value/label/labelJp)
  * @param {string[]} props.selectedValues - Currently selected option values

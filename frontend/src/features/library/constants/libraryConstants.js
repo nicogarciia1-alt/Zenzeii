@@ -72,19 +72,22 @@ export const SEARCH_DEBOUNCE_MS = 300;
 export const CATALOG_SECTION_ID = 'library-catalog-section';
 
 /** Filter bar primary filters — shown without "More Filters" */
-export const PRIMARY_FILTERS = ['genre', 'difficulty', 'jlpt', 'length', 'theme', 'mood'];
+export const PRIMARY_FILTERS = ['genre', 'difficulty', 'jlpt', 'length', 'theme'];
 
 /** Filter bar secondary filters — shown inside "More Filters" panel */
 export const SECONDARY_FILTERS = ['setting', 'period', 'concept', 'award', 'adaptation'];
 
 /**
- * Configuration for the 6 primary FilterBar chips (Phase 3). `icon` is a
+ * Configuration for the 5 primary FilterBar chips (Phase 3). `icon` is a
  * lucide-react export name, resolved to a component by FilterBar — kept
  * as a string here so this file stays plain data, no JSX/React import.
  * `optionsSource` of 'static' means the chip's options come from the
- * *_OPTIONS constants below; 'genres'/'themes'/'moods' means they're
+ * *_OPTIONS constants below; 'genres'/'themes' means they're
  * mapped from mockTaxonomy.js in Phase 3, and from useTaxonomy() in
  * Phase 6 — same FilterOption[] shape either way.
+ *
+ * Mood removed (UI Refinement, Aug 2026) — not a Zenzeii filter, per
+ * COO/Nico instruction. Do not re-add it.
  */
 export const FILTER_BAR_CHIPS = [
   { id: 'genre', label: 'Genre', icon: 'BookOpen', optionsSource: 'genres' },
@@ -92,7 +95,6 @@ export const FILTER_BAR_CHIPS = [
   { id: 'jlpt', label: 'JLPT Level', icon: 'Languages', optionsSource: 'static' },
   { id: 'length', label: 'Length', icon: 'Clock', optionsSource: 'static' },
   { id: 'theme', label: 'Theme', icon: 'Leaf', optionsSource: 'themes' },
-  { id: 'mood', label: 'Mood', icon: 'Smile', optionsSource: 'moods' },
 ];
 
 /**

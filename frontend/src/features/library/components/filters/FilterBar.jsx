@@ -15,10 +15,13 @@
  * externalFilters/onExternalFilterChange pair as the primary chips — no
  * new state management, just five more keys (setting/period/concept/
  * award/adaptation) that happen to be arrays instead of scalars. See
- * useCatalog.js for why theme/mood aren't among them.
+ * useCatalog.js for why theme isn't among them.
+ *
+ * Mood removed (UI Refinement, Aug 2026) — not a Zenzeii filter, per
+ * COO/Nico instruction. Do not re-add it.
  */
 import { useMemo, useRef, useState } from 'react';
-import { BookOpen, BarChart2, Languages, Clock, Leaf, Smile } from 'lucide-react';
+import { BookOpen, BarChart2, Languages, Clock, Leaf } from 'lucide-react';
 import { FilterChip } from './FilterChip';
 import { MoreFiltersButton } from './MoreFiltersButton';
 import { MoreFiltersPanel } from './MoreFiltersPanel';
@@ -31,12 +34,12 @@ import {
   LENGTH_OPTIONS,
   SECONDARY_FILTERS,
 } from '../../constants/libraryConstants';
-import { MOCK_GENRES, MOCK_THEMES, MOCK_MOODS } from '../../data/mockTaxonomy';
+import { MOCK_GENRES, MOCK_THEMES } from '../../data/mockTaxonomy';
 
 /** lucide-react icon lookup — FILTER_BAR_CHIPS stores icon names as plain strings. */
-const ICON_MAP = { BookOpen, BarChart2, Languages, Clock, Leaf, Smile };
+const ICON_MAP = { BookOpen, BarChart2, Languages, Clock, Leaf };
 
-/** Maps a taxonomy entity (Genre/Theme/Mood shape) to a FilterOption. */
+/** Maps a taxonomy entity (Genre/Theme shape) to a FilterOption. */
 const toFilterOption = (entity) => ({ value: entity.id, label: entity.name, labelJp: entity.name_jp });
 
 /** Local filter default when no externalFilters is provided (Phase 3 standalone mode). */
@@ -46,14 +49,13 @@ const LOCAL_DEFAULT_FILTERS = {
   jlpt: null,
   length: null,
   theme: null,
-  mood: null,
 };
 
 /** The five Layer 2 filters that live only behind "More Filters" — see useCatalog.js's ARRAY_FILTER_IDS. */
 const LAYER2_FILTER_IDS = SECONDARY_FILTERS;
 
 /** Chip optionsSource values backed by useTaxonomy — the only chips that have anything to wait on. */
-const TAXONOMY_DEPENDENT_SOURCES = new Set(['genres', 'themes', 'moods']);
+const TAXONOMY_DEPENDENT_SOURCES = new Set(['genres', 'themes']);
 
 /** Placeholder shown in place of a taxonomy-backed FilterChip while useTaxonomy is still loading. Same footprint as a real chip so nothing reflows when it's replaced. */
 function FilterChipSkeleton() {
@@ -67,8 +69,8 @@ function FilterChipSkeleton() {
 }
 
 /**
- * Resolves a chip's options from a pre-mapped { genres, themes, moods }
- * bundle (see useMemo calls in FilterBar below) for the three taxonomy-
+ * Resolves a chip's options from a pre-mapped { genres, themes }
+ * bundle (see useMemo calls in FilterBar below) for the two taxonomy-
  * backed chips, or the static *_OPTIONS constants for the rest — those
  * are already stable module-level references, no mapping work to redo
  * per render.
@@ -79,8 +81,6 @@ function resolveOptions(chip, mappedTaxonomy) {
       return mappedTaxonomy.genres;
     case 'themes':
       return mappedTaxonomy.themes;
-    case 'moods':
-      return mappedTaxonomy.moods;
     case 'static':
     default:
       if (chip.id === 'difficulty') return DIFFICULTY_OPTIONS;
@@ -99,7 +99,7 @@ function resolveOptions(chip, mappedTaxonomy) {
  *   on selection, propagating to useCatalog. Without it, FilterBar manages
  *   filter state locally (Phase 3 fallback).
  * @param {Object} [props.taxonomy] - Live taxonomy data from useTaxonomy (Phase 6):
- *   { genres, themes, moods, ... }. Falls back to mock taxonomy when omitted
+ *   { genres, themes, ... }. Falls back to mock taxonomy when omitted
  *   or still loading.
  */
 export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy }) {
@@ -122,11 +122,7 @@ export function FilterBar({ externalFilters, onExternalFilterChange, taxonomy })
     () => (taxonomy?.themes?.length ? taxonomy.themes : MOCK_THEMES).map(toFilterOption),
     [taxonomy?.themes]
   );
-  const moodOptions = useMemo(
-    () => (taxonomy?.moods?.length ? taxonomy.moods : MOCK_MOODS).map(toFilterOption),
-    [taxonomy?.moods]
-  );
-  const mappedTaxonomy = { genres: genreOptions, themes: themeOptions, moods: moodOptions };
+  const mappedTaxonomy = { genres: genreOptions, themes: themeOptions };
 
   const handleFilterChange = (filterId, value) => {
     if (isControlled) {

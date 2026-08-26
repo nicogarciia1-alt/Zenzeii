@@ -22,10 +22,10 @@
  *   </LibraryPage>
  */
 import LibraryHero from '@/features/library/components/hero/LibraryHero';
-import { FilterBar } from '@/features/library/components/filters/FilterBar';
+import { FilterSidebar } from '@/features/library/components/filters/FilterSidebar';
+import { LibraryContentHeader } from '@/features/library/components/filters/LibraryContentHeader';
 import { ShelvesSection } from '@/features/library/components/shelves/ShelvesSection';
 import { CatalogGrid } from '@/features/library/components/books/CatalogGrid';
-import { SectionHeader } from '@/features/library/components/shelves/SectionHeader';
 import { useCatalog } from '@/features/library/hooks/useCatalog';
 import { useTaxonomy } from '@/features/library/hooks/useTaxonomy';
 import { useSearch } from '@/features/library/hooks/useSearch';
@@ -50,57 +50,50 @@ export default function LibraryPage() {
 
       {/* Phase 1 — Hero, search-wired Phase 7. Entrance animation skipped here —
           it's the first thing visible on load, so fading it in would only add
-          a delay before the user sees anything at all. */}
+          a delay before the user sees anything at all. Full-width, sits above
+          the sidebar/content flex row below — not part of it. */}
       <LibraryHero searchProps={searchProps} />
 
-      {/* Phase 4 — Shelves, still mock data */}
-      <div className="mt-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
-        <ShelvesSection />
-      </div>
+      {/* UI Refinement (Aug 2026) — vertical FilterSidebar + content column,
+          replacing the old horizontal FilterBar. The sidebar sits beside
+          BOTH the shelves and the catalog, not just the catalog — so the
+          flex row wraps everything below the Hero, and Shelves/Catalog
+          stack inside the flex-1 content column instead of being direct
+          children of the page. min-w-0 on that column is required: without
+          it a flex child won't shrink below its content's intrinsic width,
+          and ShelfScrollContainer's horizontal-scrolling row would push the
+          column (and the whole page) wider than intended. */}
+      <div className="flex">
+        <FilterSidebar totalBooks={catalog.total} onResetFilters={catalog.clearAllFilters} />
 
-      {/* Phase 3 — Filter Bar, live-wired to useCatalog + useTaxonomy (Phase 6).
-          Also fade-only for its own separate reason: FilterBar's root is
-          position: sticky, and a transform on an ancestor can break sticky
-          positioning for the descendant the same way it breaks z-index
-          above — same root cause (a lingering transform), two different
-          symptoms. */}
-      <div className="mt-spacing-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
-        <FilterBar
-          externalFilters={catalog.filters}
-          onExternalFilterChange={catalog.setFilter}
-          taxonomy={taxonomy}
-        />
-      </div>
+        <div className="flex-1 min-w-0">
+          {/* Phase 4 — Shelves, still mock data */}
+          <div className="mt-8 animate-in fade-in-0 duration-slow" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
+            <ShelvesSection />
+          </div>
 
-      {/* Phase 6 — Catalog: all books, filterable. Phase 7: also the search results view. */}
-      <section
-        id={CATALOG_SECTION_ID}
-        aria-label="All books"
-        className="mt-spacing-12 max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 animate-in fade-in-0 duration-slow"
-        style={{ animationDelay: '400ms', animationFillMode: 'both' }}
-      >
-        <SectionHeader
-          title="All books"
-          subtitle={
-            catalog.total > 0
-              ? `${catalog.total} book${catalog.total === 1 ? '' : 's'} found`
-              : 'Explore the collection'
-          }
-          subtitleAriaLive="polite"
-          icon="📚"
-        />
-        <CatalogGrid
-          books={catalog.books}
-          total={catalog.total}
-          page={catalog.page}
-          pages={catalog.pages}
-          loading={catalog.loading}
-          error={catalog.error}
-          onPageChange={catalog.setPage}
-          onClearFilters={catalog.clearAllFilters}
-          hasActiveFilters={catalog.hasActiveFilters}
-        />
-      </section>
+          {/* Phase 6 — Catalog: all books, filterable. Phase 7: also the search results view. */}
+          <section
+            id={CATALOG_SECTION_ID}
+            aria-label="All books"
+            className="mt-spacing-12 max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 animate-in fade-in-0 duration-slow"
+            style={{ animationDelay: '400ms', animationFillMode: 'both' }}
+          >
+            <LibraryContentHeader total={catalog.total} />
+            <CatalogGrid
+              books={catalog.books}
+              total={catalog.total}
+              page={catalog.page}
+              pages={catalog.pages}
+              loading={catalog.loading}
+              error={catalog.error}
+              onPageChange={catalog.setPage}
+              onClearFilters={catalog.clearAllFilters}
+              hasActiveFilters={catalog.hasActiveFilters}
+            />
+          </section>
+        </div>
+      </div>
 
     </div>
     </Layout>
