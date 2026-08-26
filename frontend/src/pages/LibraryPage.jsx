@@ -76,7 +76,7 @@ export default function LibraryPage() {
           <section
             id={CATALOG_SECTION_ID}
             aria-label="All books"
-            className="mt-spacing-4 max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 animate-in fade-in-0 duration-slow"
+            className="mt-spacing-6 max-w-[1440px] mx-auto px-5 md:px-12 lg:px-20 py-8 animate-in fade-in-0 duration-slow"
             style={{ animationDelay: '400ms', animationFillMode: 'both' }}
           >
             <LibraryContentHeader total={catalog.total} />
