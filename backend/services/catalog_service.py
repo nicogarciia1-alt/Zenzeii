@@ -516,9 +516,11 @@ async def list_catalog(
     Raises ValueError (mapped to HTTP 400 by the router) if any requested
     Layer 1 or Layer 2 filter id is unknown to its taxonomy collection.
 
-    A book_catalog doc that fails BookCatalogItem validation (e.g.
-    entity_status="published" with difficulty/language still null — reachable
-    via ingest_catalog.py's --force-publish override) is logged and skipped
+    A book_catalog doc that fails BookCatalogItem validation (difficulty is
+    optional precisely so a missing value doesn't trigger this — see its
+    field comment; this now only fires for a genuinely malformed doc, e.g.
+    language null despite entity_status="published", reachable via
+    ingest_catalog.py's --force-publish override) is logged and skipped
     rather than failing the whole request; pydantic.ValidationError is a
     ValueError subclass, so without this the router's `except ValueError`
     would turn one malformed row into a 400 for every book on the page.
@@ -573,8 +575,9 @@ async def get_book_by_id(
     Returns None (mapped to HTTP 404 by the router) if the book doesn't
     exist, exists but is not entity_status="published" (draft/archived
     entries are never visible through this endpoint), or exists but fails
-    BookCatalogDetail validation (e.g. difficulty/language still null
-    despite entity_status="published" — reachable via ingest_catalog.py's
+    BookCatalogDetail validation (difficulty missing no longer causes this —
+    see BookCatalog.difficulty's field comment; e.g. language still null
+    despite entity_status="published" would, reachable via ingest_catalog.py's
     --force-publish override). The last case logs a warning since it's a
     real data gap, not an absent book, but is otherwise indistinguishable
     from 404 to the caller — same as list_catalog's handling of the same

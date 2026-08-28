@@ -464,7 +464,11 @@ class BookCatalog(BaseModel):
 
     # --- Classification (Layer 1) ---
     genre_ids: List[str] = Field(default_factory=list)
-    difficulty: Difficulty
+    # Optional despite being a core Layer 1 field: force-published rows
+    # (ingest_catalog.py's --force-publish) can land here with difficulty
+    # still unset, pending Pass 2 enrichment — never required for a
+    # document to exist, so the read model can't require it either.
+    difficulty: Optional[Difficulty] = None
     jlpt_level: Optional[JLPTLevel] = None
     language: CatalogLanguage
     page_count: Optional[int] = None
@@ -536,7 +540,11 @@ class BookCatalogItem(BaseModel):
     author_name_jp: Optional[str] = None
     cover_image: Optional[str] = None
     genre_ids: List[str] = Field(default_factory=list)
-    difficulty: Difficulty
+    # Optional — see BookCatalog.difficulty. A book missing it (pending Pass
+    # 2 enrichment) must still render; the frontend badge already needs to
+    # handle an unset difficulty, since a force-published row can reach the
+    # catalog/shelf UI before enrichment runs.
+    difficulty: Optional[Difficulty] = None
     jlpt_level: Optional[JLPTLevel] = None
     language: CatalogLanguage
     length_category: Optional[LengthCategory] = None
