@@ -64,7 +64,13 @@ export default function LibraryPage() {
           and ShelfScrollContainer's horizontal-scrolling row would push the
           column (and the whole page) wider than intended. */}
       <div className="flex">
-        <FilterSidebar totalBooks={catalog.total} onResetFilters={catalog.clearAllFilters} />
+        <FilterSidebar
+          totalBooks={catalog.total}
+          onResetFilters={catalog.clearAllFilters}
+          filters={catalog.filters}
+          onFilterChange={catalog.setFilter}
+          taxonomy={taxonomy}
+        />
 
         <div className="flex-1 min-w-0 px-8">
           {/* Phase 4 — Shelves, still mock data */}

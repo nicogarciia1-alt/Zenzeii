@@ -2,29 +2,35 @@
  * @fileoverview Library discovery filter sidebar.
  *
  * Fixed 260px vertical sidebar replacing the horizontal FilterBar strip.
- * Renders every filter row in its collapsed (closed accordion) state only
- * — no expand/collapse logic, no options rendering, no backend wiring for
- * the 5 secondary rows. See the COO redesign brief (Library Filter Sidebar
- * Redesign, Aug 2026) for the full visual spec this implements pixel-for-
- * pixel against the designer's mockup.
+ * See the COO redesign brief (Library Filter Sidebar Redesign, Aug 2026)
+ * for the full visual spec this implements pixel-for-pixel against the
+ * designer's mockup — this file only adds interaction on top of it, it
+ * does not touch colors, spacing, typography, or layout of the collapsed
+ * appearance.
  *
  * Mood (気分) is deliberately absent — removed per COO/Nico instruction,
  * it is not a Zenzeii filter. Do not re-add it here or anywhere else.
  *
  * Primary rows (Genre, Difficulty, JLPT Level, Length, Theme) reuse the
  * same filters/onFilterChange contract FilterBar already used from
- * useCatalog, so wiring the real accordion + options in a later pass is
- * additive, not a rewire. Secondary rows (Format, Publication Year,
- * Ratings, Availability, Language) are visual shells only — clicking them
- * does nothing yet, per the brief.
+ * useCatalog — one row open at a time (accordion), options rendered
+ * inline below the row rather than via FilterDropdown: FilterDropdown's
+ * position:fixed exists solely to escape FilterBar's horizontal
+ * overflow-x-auto clipping, a problem this vertical, normally-scrolling
+ * sidebar doesn't have. Secondary rows (Format, Publication Year,
+ * Ratings, Availability, Language) stay visual shells only — clicking
+ * them does nothing yet, per COO instruction (fast-follow commit).
  *
  * Both "Clear all" (top row) and "Reset filters" (status card) are wired
  * to the same onResetFilters callback (useCatalog.clearAllFilters) — one
  * function, two entry points to it, matching the brief's visual spec.
  */
-import { BookOpen, BarChart2, Clock, Leaf, AlignLeft, Calendar, Star, RefreshCw, MessageSquare, ChevronDown } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { BookOpen, BarChart2, Clock, Leaf, AlignLeft, Calendar, Star, RefreshCw, MessageSquare, ChevronDown, Check } from 'lucide-react';
+import { DIFFICULTY_OPTIONS, JLPT_OPTIONS, LENGTH_OPTIONS } from '../../constants/libraryConstants';
+import { MOCK_GENRES, MOCK_THEMES } from '../../data/mockTaxonomy';
 
-/** Primary filter rows — collapsed-only for this pass. `key` matches the useCatalog filter id these will drive once accordion logic lands. */
+/** Primary filter rows — the only ones with real options/backend support behind them. `key` matches the useCatalog filter id. */
 const PRIMARY_ROWS = [
   { key: 'genre', icon: BookOpen, jp: 'ジャンル', en: 'Genre' },
   { key: 'difficulty', icon: BarChart2, jp: '難易度', en: 'Difficulty' },
@@ -42,22 +48,77 @@ const SECONDARY_ROWS = [
   { key: 'language', icon: MessageSquare, jp: '言語', en: 'Language' },
 ];
 
-/** One collapsed filter row — shared shape for both primary and secondary sections. */
-function FilterRow({ icon: Icon, glyph, jp, en }) {
+/** Maps a taxonomy entity (Genre/Theme shape) to a FilterOption — same mapping FilterBar uses. */
+const toFilterOption = (entity) => ({ value: entity.id, label: entity.name });
+
+/** Always-first "clear this filter" option, matching FilterDropdown's ALL_OPTION. */
+const ALL_OPTION = { value: null, label: 'All' };
+
+/**
+ * One filter row, collapsed or expanded. Collapsed appearance is
+ * pixel-identical to before when no value is selected; a selected value
+ * tints the icon/subtitle red and the row background, reusing the exact
+ * isActive treatment FilterChip already uses elsewhere in this feature —
+ * no new colors introduced.
+ */
+function FilterRow({ icon: Icon, glyph, jp, en, isActive, isExpanded, onToggle }) {
   return (
-    <div className="h-11 flex items-center w-full border-b border-library-border hover:bg-library-bg-shelf transition-colors duration-150 cursor-pointer">
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={onToggle ? isExpanded : undefined}
+      className={`h-11 flex items-center w-full text-left border-b border-library-border hover:bg-library-bg-shelf transition-colors duration-150 cursor-pointer ${
+        isActive || isExpanded ? 'bg-library-filter-active' : ''
+      }`}
+    >
       {Icon ? (
-        <Icon className="w-4 h-4 text-library-text-secondary shrink-0" />
+        <Icon className={`w-4 h-4 shrink-0 transition-colors duration-150 ${isActive ? 'text-library-red' : 'text-library-text-secondary'}`} />
       ) : (
-        <span className="w-4 h-4 shrink-0 flex items-center justify-center font-garamond text-[11px] text-library-text-secondary">
+        <span
+          className={`w-4 h-4 shrink-0 flex items-center justify-center font-garamond text-[11px] transition-colors duration-150 ${
+            isActive ? 'text-library-red' : 'text-library-text-secondary'
+          }`}
+        >
           {glyph}
         </span>
       )}
       <div className="ml-3 flex flex-col leading-tight">
         <span className="font-garamond text-sm text-library-text-primary">{jp}</span>
-        <span className="text-[10px] text-library-text-secondary">{en}</span>
+        <span className={`text-[10px] transition-colors duration-150 ${isActive ? 'text-library-red' : 'text-library-text-secondary'}`}>{en}</span>
       </div>
-      <ChevronDown className="w-3 h-3 text-library-text-secondary ml-auto shrink-0" />
+      <ChevronDown
+        className={`w-3 h-3 text-library-text-secondary ml-auto shrink-0 transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`}
+      />
+    </button>
+  );
+}
+
+/**
+ * Inline options list for one expanded primary row. Indented to pl-7
+ * (icon width + its ml-3 gap) so options line up under the row's label,
+ * not its icon.
+ */
+function FilterOptionsList({ options, selectedValue, onSelect }) {
+  const combined = [ALL_OPTION, ...options];
+  return (
+    <div role="listbox" className="border-b border-library-border py-1">
+      {combined.map((option) => {
+        const isSelected = option.value === selectedValue;
+        return (
+          <div
+            key={option.value ?? '__all__'}
+            role="option"
+            aria-selected={isSelected}
+            onClick={() => onSelect(option.value)}
+            className={`flex items-center justify-between gap-2 pl-7 pr-3 py-2 font-garamond text-sm cursor-pointer hover:bg-library-bg-shelf ${
+              isSelected ? 'text-library-red' : 'text-library-text-primary'
+            }`}
+          >
+            <span>{option.label}</span>
+            {isSelected && <Check className="w-3.5 h-3.5" aria-hidden="true" />}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -66,8 +127,39 @@ function FilterRow({ icon: Icon, glyph, jp, en }) {
  * @param {Object} props
  * @param {number} [props.totalBooks] - Live filtered book count for the status card. Defaults to 0 when not yet loaded.
  * @param {function} [props.onResetFilters] - Wired to useCatalog.clearAllFilters. Drives both the top "Clear all" row and the status card's "Reset filters" link.
+ * @param {Object} [props.filters] - Current filter state from useCatalog (only the 5 primary keys are read).
+ * @param {function} [props.onFilterChange] - Wired to useCatalog.setFilter, called with (filterId, value) on option select.
+ * @param {Object} [props.taxonomy] - Live taxonomy data from useTaxonomy: { genres, themes, loading, ... }. Falls back to mock taxonomy when omitted or still loading, same as FilterBar.
  */
-export function FilterSidebar({ totalBooks = 0, onResetFilters }) {
+export function FilterSidebar({ totalBooks = 0, onResetFilters, filters, onFilterChange, taxonomy }) {
+  const [expandedRow, setExpandedRow] = useState(null);
+  const isWired = filters != null && onFilterChange != null;
+
+  const genreOptions = useMemo(
+    () => (taxonomy?.genres?.length ? taxonomy.genres : MOCK_GENRES).map(toFilterOption),
+    [taxonomy?.genres]
+  );
+  const themeOptions = useMemo(
+    () => (taxonomy?.themes?.length ? taxonomy.themes : MOCK_THEMES).map(toFilterOption),
+    [taxonomy?.themes]
+  );
+  const optionsByRow = {
+    genre: genreOptions,
+    difficulty: DIFFICULTY_OPTIONS,
+    jlpt: JLPT_OPTIONS,
+    length: LENGTH_OPTIONS,
+    theme: themeOptions,
+  };
+
+  const handleToggle = (rowKey) => {
+    if (!isWired) return;
+    setExpandedRow((current) => (current === rowKey ? null : rowKey));
+  };
+
+  const handleSelect = (rowKey, value) => {
+    onFilterChange(rowKey, value);
+    setExpandedRow(null);
+  };
   return (
     <aside
       aria-label="Library filters"
@@ -96,9 +188,30 @@ export function FilterSidebar({ totalBooks = 0, onResetFilters }) {
 
       {/* Primary filter rows */}
       <div>
-        {PRIMARY_ROWS.map((row) => (
-          <FilterRow key={row.key} icon={row.icon} glyph={row.glyph} jp={row.jp} en={row.en} />
-        ))}
+        {PRIMARY_ROWS.map((row) => {
+          const value = filters?.[row.key] ?? null;
+          const isExpanded = expandedRow === row.key;
+          return (
+            <div key={row.key}>
+              <FilterRow
+                icon={row.icon}
+                glyph={row.glyph}
+                jp={row.jp}
+                en={row.en}
+                isActive={value != null}
+                isExpanded={isExpanded}
+                onToggle={isWired ? () => handleToggle(row.key) : undefined}
+              />
+              {isExpanded && (
+                <FilterOptionsList
+                  options={optionsByRow[row.key] ?? []}
+                  selectedValue={value}
+                  onSelect={(newValue) => handleSelect(row.key, newValue)}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* More filters divider */}
