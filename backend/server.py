@@ -49,7 +49,7 @@ from services.translation import (
 )
 
 # Import routers
-from routers.catalog import catalog_router
+from routers.catalog import catalog_router, shelves_router
 from services import catalog_service
 
 # Import rate limiting constants
@@ -2885,6 +2885,7 @@ async def root():
 
 app.include_router(api_router)
 app.include_router(catalog_router, prefix="/api")
+app.include_router(shelves_router, prefix="/api")
 
 # ========================
 # STRIPE WEBHOOK

@@ -31,6 +31,8 @@ from models.catalog_models import (
     PERIOD_MULTI_YEAR_START,
     PERIOD_OPEN_ENDED_YEAR,
     SettingResponse,
+    ShelfDetail,
+    ShelfSummary,
     SortOption,
     TaxonomyResponse,
     ThemeResponse,
@@ -196,6 +198,18 @@ async def ensure_layer2_indexes(db: AsyncIOMotorDatabase) -> None:
     # existing single-field indexes above; there's no compound-index shape that fixes this.
 
     logger.info("Layer 2 taxonomy and book_catalog reference indexes ensured")
+
+
+async def ensure_shelves_indexes(db: AsyncIOMotorDatabase) -> None:
+    """
+    Creates the index required by the `shelves` collection.
+
+    Not wired into server.py's own startup, same as ensure_catalog_indexes
+    and ensure_layer2_indexes — called explicitly from scripts/seed_shelves.py
+    instead. Safe to call repeatedly.
+    """
+    await db.shelves.create_index([("slug", 1)], unique=True)
+    logger.info("shelves indexes ensured")
 
 
 # --------------------------------------------------------------------------
@@ -645,3 +659,84 @@ async def get_concept_by_id(db: AsyncIOMotorDatabase, concept_id: str) -> Option
     if doc is None:
         return None
     return CulturalConceptDetail(**doc)
+
+
+# --------------------------------------------------------------------------
+# Shelves — curated book collections
+# --------------------------------------------------------------------------
+
+async def list_shelves(db: AsyncIOMotorDatabase) -> List[ShelfSummary]:
+    """
+    Returns every shelf for the main library's Discover Japan section.
+
+    book_count is the number of a shelf's book_ids that actually resolve to
+    a published book_catalog entry right now (one count query per shelf) —
+    not simply len(book_ids), so a shelf never advertises more books than
+    it can actually render. Fine as N+1 queries while shelves stay in the
+    single digits; revisit with an aggregation $lookup if that changes.
+    """
+    summaries = []
+    async for doc in db.shelves.find():
+        book_ids = doc.get("book_ids", [])
+        book_count = await db.book_catalog.count_documents(
+            {"id": {"$in": book_ids}, "entity_status": EntityStatus.PUBLISHED.value}
+        )
+        summaries.append(
+            ShelfSummary(
+                slug=doc["slug"],
+                title=doc["title"],
+                title_jp=doc["title_jp"],
+                description=doc["description"],
+                image_url=doc["image_url"],
+                book_count=book_count,
+            )
+        )
+    return summaries
+
+
+async def get_shelf_by_slug(
+    db: AsyncIOMotorDatabase,
+    slug: str,
+    user_id: Optional[str] = None,
+) -> Optional[ShelfDetail]:
+    """
+    Fetches a single shelf with its books resolved and ordered to match the
+    shelf's own curated book_ids — not catalog default sort.
+
+    Returns None (mapped to HTTP 404 by the router) if slug is unknown. A
+    book_id on the shelf that no longer resolves to a published
+    book_catalog entry (missing, draft, or archived) is silently omitted
+    from `books`, same as list_catalog/get_book_by_id's own handling of a
+    doc that fails BookCatalogItem validation — see their docstrings.
+    """
+    shelf_doc = await db.shelves.find_one({"slug": slug})
+    if shelf_doc is None:
+        return None
+
+    book_ids = shelf_doc.get("book_ids", [])
+    cursor = db.book_catalog.find(
+        {"id": {"$in": book_ids}, "entity_status": EntityStatus.PUBLISHED.value}
+    )
+    docs_by_id = {doc["id"]: doc async for doc in cursor}
+
+    shelved_ids = await get_shelved_book_ids(db, user_id, list(docs_by_id.keys()))
+    books = []
+    for book_id in book_ids:
+        doc = docs_by_id.get(book_id)
+        if doc is None:
+            continue
+        try:
+            books.append(BookCatalogItem(**doc, is_on_shelf=book_id in shelved_ids))
+        except ValidationError as exc:
+            logger.warning(f"Skipping malformed book_catalog doc {book_id!r} on shelf {slug!r}: {exc}")
+
+    return ShelfDetail(
+        slug=shelf_doc["slug"],
+        title=shelf_doc["title"],
+        title_jp=shelf_doc["title_jp"],
+        description=shelf_doc["description"],
+        kanji_text=shelf_doc["kanji_text"],
+        image_url=shelf_doc["image_url"],
+        book_count=len(books),
+        books=books,
+    )

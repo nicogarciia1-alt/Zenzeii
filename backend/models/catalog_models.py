@@ -599,6 +599,64 @@ class BookCatalogDetail(BookCatalogItem):
 
 
 # --------------------------------------------------------------------------
+# Shelf — curated book collections (`shelves` collection), e.g. "Tokyo
+# Stories". Independent of Layer 1/2 taxonomy: a shelf is a hand-picked,
+# ordered list of book_ids rather than a filterable attribute on the books
+# themselves.
+# --------------------------------------------------------------------------
+
+class Shelf(BaseModel):
+    """A single shelf document as stored in the `shelves` collection."""
+    model_config = ConfigDict(extra="ignore")
+
+    slug: str
+    title: str
+    title_jp: str
+    description: str
+    kanji_text: str
+    image_url: str
+    book_ids: List[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ShelfSummary(BaseModel):
+    """Shelf shape for GET /api/shelves — the main library's Discover Japan section."""
+    model_config = ConfigDict(extra="ignore")
+
+    slug: str
+    title: str
+    title_jp: str
+    description: str
+    image_url: str
+    book_count: int
+
+
+class ShelfListResponse(BaseModel):
+    """Response body for GET /api/shelves."""
+    shelves: List[ShelfSummary]
+
+
+class ShelfDetail(BaseModel):
+    """
+    Full shelf shape for GET /api/shelves/{slug}, with book_ids resolved
+    into BookCatalogItem — same book shape used by the main catalog grid,
+    including the caller's is_on_shelf status — and ordered to match the
+    shelf's own curated book_ids, not catalog default sort.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    slug: str
+    title: str
+    title_jp: str
+    description: str
+    kanji_text: str
+    image_url: str
+    book_count: int
+    books: List[BookCatalogItem]
+
+
+# --------------------------------------------------------------------------
 # Query parameters — parsed representation of a GET /api/catalog request.
 # Built by the router from FastAPI Query() parameters and handed to
 # catalog_service, so the service layer never touches FastAPI request

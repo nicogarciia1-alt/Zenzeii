@@ -32,6 +32,8 @@ from models.catalog_models import (
     JLPTLevel,
     LengthCategory,
     MAX_PAGE_LIMIT,
+    ShelfDetail,
+    ShelfListResponse,
     TAXONOMY_CACHE_MAX_AGE_SECONDS,
     TaxonomyResponse,
 )
@@ -40,6 +42,12 @@ from services import catalog_service
 logger = logging.getLogger(__name__)
 
 catalog_router = APIRouter(prefix="/catalog", tags=["catalog"])
+
+# Separate router (its own top-level "/shelves" prefix, not nested under
+# "/catalog") so shelves land at GET /api/shelves and /api/shelves/{slug},
+# not /api/catalog/shelves — matches the brief's endpoint spec. Lives in
+# this file per the brief; registered independently in server.py.
+shelves_router = APIRouter(prefix="/shelves", tags=["shelves"])
 
 # Unlike server.security (HTTPBearer with auto_error=True, used by
 # get_current_user for endpoints that require login), catalog browsing
@@ -210,3 +218,31 @@ async def get_catalog_book(
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found in catalog")
     return book
+
+
+@shelves_router.get("", response_model=ShelfListResponse)
+async def get_shelves(db: AsyncIOMotorDatabase = Depends(get_db)):
+    """
+    Returns every shelf for the main library's Discover Japan section —
+    slug, title, title_jp, description, image_url, and resolved book_count.
+    """
+    shelves = await catalog_service.list_shelves(db)
+    return ShelfListResponse(shelves=shelves)
+
+
+@shelves_router.get("/{slug}", response_model=ShelfDetail)
+async def get_shelf(
+    slug: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    user_id: Optional[str] = Depends(get_optional_user_id),
+):
+    """
+    Returns a single shelf with its books resolved in curation order.
+
+    Raises:
+        404 — no shelf with this slug.
+    """
+    shelf = await catalog_service.get_shelf_by_slug(db, slug, user_id=user_id)
+    if shelf is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    return shelf
