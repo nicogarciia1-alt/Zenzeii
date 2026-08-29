@@ -18,6 +18,7 @@ import PricingPage from "@/pages/PricingPage";
 import AudioPacksPage from "@/pages/AudioPacksPage";
 import LibraryPage from "@/pages/LibraryPage";
 import BookDetailPage from "@/pages/BookDetailPage";
+import ShelfDetailPage from "@/pages/ShelfDetailPage";
 import ZenzeiiPage from "@/pages/ZenzeiiPage";
 
 // Protected Route Component
@@ -57,6 +58,7 @@ function AppRoutes() {
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
       <Route path="/library/:bookId" element={<ProtectedRoute><BookDetailPage /></ProtectedRoute>} />
+      <Route path="/bookshelves/:slug" element={<ProtectedRoute><ShelfDetailPage /></ProtectedRoute>} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />

@@ -20,11 +20,18 @@ export const FEELING_SHELVES = [
   { id: 'funny', name: 'Funny', name_jp: '面白い', emoji: '😄', book_count: 23, image_url: null },
 ];
 
+/**
+ * `slug` maps each card to its real /bookshelves/:slug route. Only
+ * 'tokyo-stories' has a seeded `shelves` document today (see
+ * backend/scripts/seed_shelves.py) — the other five will 404 on
+ * ShelfDetailPage until Nico's follow-up data is ingested and seeded,
+ * which is expected, not a bug (see brief's Pending section).
+ */
 export const DISCOVER_JAPAN_SHELVES = [
-  { id: 'tokyo_stories', name: 'Tokyo Stories', name_jp: '東京の物語', book_count: 35, image_url: '/assets/discover-japan/tokyo-stories.png' },
-  { id: 'kyoto_tradition', name: 'Kyoto & Tradition', name_jp: '京都と伝統', book_count: 42, image_url: '/assets/discover-japan/kyoto-tradition.png' },
-  { id: 'countryside_life', name: 'Countryside Life', name_jp: '田舎暮らし', book_count: 31, image_url: '/assets/discover-japan/countryside-life.png' },
-  { id: 'edo_period', name: 'Edo Period', name_jp: '江戸時代', book_count: 28, image_url: '/assets/discover-japan/edo-period.png' },
-  { id: 'tea_ceremony', name: 'Tea Ceremony', name_jp: '茶道', book_count: 18, image_url: '/assets/discover-japan/tea-ceremony.png' },
-  { id: 'samurai_history', name: 'Samurai & History', name_jp: '侍と歴史', book_count: 26, image_url: '/assets/discover-japan/samurai-history.png' },
+  { id: 'tokyo_stories', slug: 'tokyo-stories', name: 'Tokyo Stories', name_jp: '東京の物語', book_count: 35, image_url: '/assets/discover-japan/tokyo-stories.png' },
+  { id: 'kyoto_tradition', slug: 'kyoto-tradition', name: 'Kyoto & Tradition', name_jp: '京都と伝統', book_count: 42, image_url: '/assets/discover-japan/kyoto-tradition.png' },
+  { id: 'countryside_life', slug: 'countryside-life', name: 'Countryside Life', name_jp: '田舎暮らし', book_count: 31, image_url: '/assets/discover-japan/countryside-life.png' },
+  { id: 'edo_period', slug: 'edo-period', name: 'Edo Period', name_jp: '江戸時代', book_count: 28, image_url: '/assets/discover-japan/edo-period.png' },
+  { id: 'tea_ceremony', slug: 'tea-ceremony', name: 'Tea Ceremony', name_jp: '茶道', book_count: 18, image_url: '/assets/discover-japan/tea-ceremony.png' },
+  { id: 'samurai_history', slug: 'samurai-history', name: 'Samurai & History', name_jp: '侍と歴史', book_count: 26, image_url: '/assets/discover-japan/samurai-history.png' },
 ];

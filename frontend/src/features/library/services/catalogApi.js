@@ -75,6 +75,17 @@ export async function fetchBookById(bookId) {
 }
 
 /**
+ * Fetch a single curated shelf by slug, with its books resolved in
+ * curation order (see backend ShelfDetail model).
+ * @param {string} slug - Shelf slug (e.g. "tokyo-stories")
+ * @returns {Promise<{slug: string, title: string, title_jp: string, description: string, kanji_text: string, image_url: string, book_count: number, books: import('../types/catalogTypes').BookCatalogItem[]}>}
+ */
+export async function fetchShelf(slug) {
+  const response = await axios.get(`${API}/shelves/${slug}`);
+  return response.data;
+}
+
+/**
  * Fetch all genres for the filter UI.
  * @returns {Promise<import('../types/catalogTypes').Genre[]>}
  */

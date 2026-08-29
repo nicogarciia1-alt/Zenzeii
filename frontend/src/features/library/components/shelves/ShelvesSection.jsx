@@ -10,7 +10,16 @@
  * fetchCatalog() swap the way FilterBar/CatalogGrid were.
  *
  * No props — self-contained with mock data.
+ *
+ * Card navigation (Step 3, Aug 2026): each Discover Japan card now
+ * navigates to /bookshelves/:slug via FeelingCard's existing onClick
+ * prop — the card visuals are untouched. Only 'tokyo-stories' is
+ * seeded; the rest 404 on ShelfDetailPage until Nico's data lands, per
+ * DISCOVER_JAPAN_SHELVES's own comment. This does NOT wire the section
+ * itself to live shelf data — still deliberately mock, per COO
+ * instruction, until all 6 shelves are seeded.
  */
+import { useNavigate } from 'react-router-dom';
 import { SectionHeader } from './SectionHeader';
 import { ShelfScrollContainer } from './ShelfScrollContainer';
 import { FeelingCard } from './FeelingCard';
@@ -19,6 +28,8 @@ import { DISCOVER_JAPAN_SHELVES } from '../../data/mockCollections';
 import { MOCK_CATALOG_BOOKS } from '../../data/mockCatalog';
 
 export function ShelvesSection() {
+  const navigate = useNavigate();
+
   return (
     <div className="py-8 space-y-spacing-12">
       {/* Discover Japan through stories */}
@@ -41,6 +52,7 @@ export function ShelvesSection() {
               bookCount={shelf.book_count}
               imageUrl={shelf.image_url}
               emoji={shelf.emoji}
+              onClick={() => navigate(`/bookshelves/${shelf.slug}`)}
             />
           ))}
         </ShelfScrollContainer>
