@@ -13,10 +13,10 @@
  *
  * Card navigation (Step 3, Aug 2026): each Discover Japan card now
  * navigates to /bookshelves/:slug via FeelingCard's existing onClick
- * prop — the card visuals are untouched. Only 'tokyo-stories' is
- * seeded; the rest 404 on ShelfDetailPage until Nico's data lands, per
- * DISCOVER_JAPAN_SHELVES's own comment. This does NOT wire the section
- * itself to live shelf data — still deliberately mock, per COO
+ * prop — the card visuals are untouched. See DISCOVER_JAPAN_SHELVES's
+ * own comment for which slugs currently have real books vs. an empty
+ * placeholder shelf. This does NOT wire the section itself to live
+ * shelf data — still deliberately mock, per COO
  * instruction, until all 6 shelves are seeded.
  */
 import { useNavigate } from 'react-router-dom';
