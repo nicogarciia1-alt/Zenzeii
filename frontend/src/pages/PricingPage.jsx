@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import {
   Infinity as InfinityIcon,
   BookOpen,
@@ -7,19 +6,10 @@ import {
   Bookmark,
   Users,
   Landmark,
-  Library as LibraryIcon,
   Lock,
-  ChevronDown,
-  Settings,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import Navbar from '@/components/layout/Navbar';
 
 const SIDEBAR_BG = '#1C0B0B';
 const MAIN_BG = '#FFFFFF';
@@ -159,70 +149,19 @@ const BotanicalWatermark = () => (
   </div>
 );
 
-const NAV_ITEMS = [
-  { label: 'My Books', path: '/', icon: BookOpen },
-  { label: 'Bookshelves', path: '/library', icon: LibraryIcon },
-  { label: 'Zenzeii', path: '/zenzeii', icon: MessageCircle },
-  { label: 'Library', path: '/library', icon: Landmark, active: true },
-];
-
 export default function PricingPage() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-
   const handleGetPass = () => {
     // TODO: wire to checkout/payments backend
     toast('Checkout coming soon.');
   };
 
   return (
-    <div className="relative w-full" style={{ height: 900, overflow: 'hidden', background: MAIN_BG }}>
-      {/* Nav bar */}
-        <div
-          className="flex items-center justify-between"
-          style={{ height: 52, background: MAIN_BG, borderBottom: `1px solid ${NAV_BORDER}`, padding: '0 24px' }}
-        >
-          <Link to="/" className="flex items-center gap-2">
-            <span className="text-xl font-serif" style={{ color: ACCENT_RED }}>祝</span>
-            <span className="text-base font-medium font-serif" style={{ color: HEADING }}>Zenzeii</span>
-          </Link>
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', minHeight: '100vh', overflow: 'hidden', background: MAIN_BG }}>
+      <Navbar />
 
-          <div className="flex items-center gap-7">
-            {NAV_ITEMS.map(({ label, path, icon: Icon, active }) => (
-              <Link
-                key={label}
-                to={path}
-                className="flex items-center gap-1.5 text-[13px]"
-                style={{ color: active ? ACCENT_RED : '#4A4540', fontWeight: active ? 600 : 400 }}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </Link>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1 text-[13px]" style={{ color: '#4A4540' }}>
-                  {user?.username || 'account'}
-                  <ChevronDown className="h-3 w-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[160px] font-sans">
-                <DropdownMenuItem onSelect={() => navigate('/profile')}>Edit Profile</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => logout()}>Log Out</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <button onClick={() => navigate('/profile')} aria-label="Settings">
-              <Settings className="h-4 w-4" style={{ color: '#4A4540' }} />
-            </button>
-          </div>
-        </div>
-
-        {/* Sidebar + content row */}
-        <div className="flex" style={{ height: 848 }}>
-          {/* Sidebar */}
+      {/* Sidebar + content row */}
+      <div className="flex" style={{ flex: 1 }}>
+        {/* Sidebar */}
           <div
             className="relative flex-shrink-0 flex flex-col items-center overflow-hidden"
             style={{ width: 148, background: SIDEBAR_BG }}
