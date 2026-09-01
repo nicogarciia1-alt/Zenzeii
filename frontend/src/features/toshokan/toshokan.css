@@ -1,0 +1,591 @@
+/* Toshokan Pass — feature-scoped layout. Tokens below are scoped to
+   .toshokan-page (not :root) so they don't leak into the rest of the app. */
+
+.toshokan-page {
+  --navbar-height: 64px;
+  --font-literary-serif: 'Noto Serif JP', 'Merriweather', serif;
+
+  position: relative;
+  min-height: calc(100vh - var(--navbar-height));
+  display: grid;
+  grid-template-columns: 144px minmax(0, 1fr);
+  background:
+    radial-gradient(
+      circle at 70% 20%,
+      rgba(255, 255, 255, 0.5),
+      transparent 40%
+    ),
+    #f8f4ec;
+}
+
+/* ---------- Left rail ---------- */
+
+.toshokan-rail {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  background: linear-gradient(180deg, #26100f 0%, #321313 48%, #210d0c 100%);
+  border-right: 1px solid rgba(91, 46, 38, 0.2);
+}
+
+.toshokan-rail__branch {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 12px;
+}
+
+.toshokan-rail__text {
+  position: relative;
+  writing-mode: vertical-rl;
+  font-family: var(--font-literary-serif);
+  color: #8a7264;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  line-height: 2;
+  margin-top: 15%;
+}
+
+.toshokan-rail__seal {
+  position: relative;
+  margin-top: auto;
+  margin-bottom: 24px;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #9d2825;
+}
+
+.toshokan-rail__seal span {
+  font-size: 8px;
+  font-family: var(--font-literary-serif);
+  color: #e8c877;
+}
+
+/* ---------- Content shell ---------- */
+
+.toshokan-content {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.toshokan-edge-accent {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 64px;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.toshokan-layout {
+  position: relative;
+  width: min(1480px, calc(100% - 80px));
+  margin: 0 auto;
+  padding: 56px 0 28px;
+
+  display: grid;
+  grid-template-columns: minmax(520px, 1.05fr) minmax(440px, 0.9fr);
+  column-gap: clamp(56px, 5vw, 100px);
+  row-gap: 28px;
+  align-items: start;
+}
+
+/* ---------- Intro / copy ---------- */
+
+.toshokan-intro {
+  max-width: 640px;
+}
+
+.toshokan-title {
+  max-width: 620px;
+  font-family: var(--font-literary-serif);
+  font-size: clamp(44px, 3.25vw, 62px);
+  font-weight: 500;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  color: #1a1614;
+  margin: 0 0 20px;
+}
+
+.toshokan-description {
+  max-width: 610px;
+  font-size: 17px;
+  font-weight: 300;
+  line-height: 1.65;
+  color: #645c56;
+  margin: 0;
+}
+
+.toshokan-rule {
+  width: 44px;
+  height: 2px;
+  background: #9d2825;
+  margin-top: 24px;
+}
+
+/* ---------- Benefits ---------- */
+
+.pass-benefits {
+  margin-top: 34px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 36px;
+}
+
+.pass-benefit {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 14px;
+  padding: 15px 0;
+  border-bottom: 1px solid rgba(92, 68, 55, 0.17);
+}
+
+.pass-benefit__icon {
+  display: flex;
+  color: #9d2825;
+  margin-top: 3px;
+}
+
+.pass-benefit__glyph {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.pass-benefit__title {
+  font-family: var(--font-literary-serif);
+  font-size: 17px;
+  font-weight: 600;
+  color: #1a1614;
+  margin: 0 0 4px;
+}
+
+.pass-benefit__body {
+  margin: 0;
+  color: #625b55;
+  font-size: 14px;
+  line-height: 1.52;
+}
+
+/* ---------- Membership panel ---------- */
+
+.toshokan-membership {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.pass-card {
+  width: min(100%, 560px);
+  aspect-ratio: 1.586 / 1;
+  margin: 0 auto;
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #100f0d;
+  box-shadow:
+    0 22px 50px rgba(34, 18, 14, 0.18),
+    0 4px 12px rgba(34, 18, 14, 0.12);
+}
+
+.pass-card__branch {
+  position: absolute;
+  right: -8%;
+  bottom: -12%;
+  width: 46%;
+  aspect-ratio: 220 / 340;
+  pointer-events: none;
+}
+
+.pass-card__top {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 7% 6% 0 6%;
+}
+
+.pass-card__mark {
+  font-family: var(--font-literary-serif);
+  font-size: 30px;
+  line-height: 1;
+  color: #c4541a;
+  margin: 0;
+}
+
+.pass-card__mark-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #c8a830;
+  margin-top: 8px;
+}
+
+.pass-card__brand {
+  font-family: var(--font-literary-serif);
+  font-size: 34px;
+  line-height: 1.1;
+  color: #c8a830;
+  margin: 0;
+  text-align: right;
+}
+
+.pass-card__brand-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #c8a830;
+  margin-top: 4px;
+  text-align: right;
+}
+
+.pass-card__bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 6% 8%;
+}
+
+.pass-card__label {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: #9a9490;
+  margin: 0;
+}
+
+.pass-card__value {
+  font-size: 17px;
+  color: #c8a830;
+  margin: 2px 0 0;
+}
+
+.pass-card__label--since {
+  margin-top: 12px;
+}
+
+.pass-card__seal {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #9d2825;
+}
+
+.pass-card__seal span {
+  font-family: var(--font-literary-serif);
+  font-size: 9px;
+  color: #c8a830;
+}
+
+.pass-card-caption {
+  margin-top: 18px;
+  font-style: italic;
+  text-align: center;
+  font-size: 12px;
+  color: #9a9490;
+}
+
+.pass-price {
+  margin-top: 26px;
+  font-family: var(--font-literary-serif);
+  font-size: 46px;
+  line-height: 1;
+  color: #171310;
+}
+
+.pass-price span {
+  margin-left: 8px;
+  font-size: 18px;
+  color: #665f58;
+}
+
+.pass-cta {
+  display: block;
+  width: min(100%, 480px);
+  min-height: 62px;
+  margin-top: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #8e2726, #76201f);
+  color: #fff9f1;
+  font-family: var(--font-literary-serif);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.pass-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(112, 30, 29, 0.18);
+}
+
+.pass-fineprint {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 11px;
+  color: #9a9490;
+  max-width: 480px;
+}
+
+/* ---------- iOS delivery ---------- */
+
+.ios-delivery {
+  grid-column: 1 / -1;
+  min-height: 190px;
+  margin-top: 2px;
+  display: grid;
+  grid-template-columns: 260px minmax(360px, 1fr) minmax(360px, 0.9fr);
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(92, 68, 55, 0.16);
+  border-radius: 8px;
+  background: rgba(246, 238, 225, 0.72);
+}
+
+.ios-phone-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.ios-phone {
+  width: 132px;
+  height: 268px;
+  border-radius: 22px;
+  border: 6px solid #1a1614;
+  background: #f1e8d8;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 12px 28px rgba(34, 18, 14, 0.22);
+}
+
+.ios-phone__status {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px 0;
+  font-size: 7px;
+  color: #2e2015;
+}
+
+.ios-phone__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px 0;
+  font-family: var(--font-literary-serif);
+  font-size: 9px;
+  color: #2e2015;
+}
+
+.ios-phone__book {
+  margin: 6px 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: rgba(26, 22, 20, 0.06);
+}
+
+.ios-phone__cover {
+  width: 14px;
+  height: 18px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  background: #9d2825;
+}
+
+.ios-phone__book-title {
+  font-size: 7px;
+  color: #c4541a;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.ios-phone__book-author {
+  font-size: 6px;
+  color: #6e5c4c;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.ios-phone__text {
+  position: relative;
+  margin-top: 10px;
+  padding: 0 10px;
+  font-size: 9px;
+  line-height: 2.1;
+  color: #2e2015;
+}
+
+.ios-phone__text .word {
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.ios-phone__text .word--selected {
+  background: #c8a830;
+  color: #2e2015;
+  box-shadow: 0 0 0 1px rgba(157, 40, 37, 0.4);
+}
+
+.ios-phone__text ruby rt {
+  font-size: 6px;
+  color: #6e5c4c;
+}
+
+.ios-phone__popover {
+  position: absolute;
+  left: 8px;
+  top: 58px;
+  width: 108px;
+  border-radius: 4px;
+  padding: 5px 6px;
+  background: #fefcf6;
+  border: 1px solid #e5dbc5;
+  box-shadow: 0 6px 14px rgba(34, 18, 14, 0.2);
+}
+
+.ios-phone__popover-word {
+  font-size: 7px;
+  font-weight: 600;
+  color: #1a1614;
+  margin: 0;
+}
+
+.ios-phone__popover-word span {
+  font-weight: 400;
+  color: #8c7d6b;
+}
+
+.ios-phone__popover-def {
+  font-size: 6px;
+  color: #625b55;
+  margin: 2px 0 0;
+}
+
+.ios-phone__nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  padding: 6px 10px;
+  border-top: 1px solid rgba(26, 22, 20, 0.08);
+}
+
+.ios-phone__nav svg {
+  width: 10px;
+  height: 10px;
+  color: #6e5c4c;
+}
+
+.ios-copy {
+  padding: 20px 12px;
+}
+
+.ios-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  color: #9d2825;
+  text-transform: uppercase;
+}
+
+.ios-copy h2 {
+  font-family: var(--font-literary-serif);
+  font-size: 22px;
+  font-weight: 500;
+  color: #1a1614;
+  margin: 6px 0 0;
+}
+
+.ios-copy p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #625b55;
+  margin: 8px 0 0;
+  max-width: 40ch;
+}
+
+.ios-meta {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #625b55;
+}
+
+.ios-proof {
+  display: flex;
+  align-items: stretch;
+  padding: 20px;
+  gap: 20px;
+}
+
+.ios-proof__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 20px;
+  border-left: 1px solid rgba(92, 68, 55, 0.16);
+}
+
+.ios-proof__item:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.ios-proof__item svg {
+  width: 15px;
+  height: 15px;
+  color: #625b55;
+}
+
+.ios-proof__item span {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #625b55;
+}
+
+/* ---------- Footer strip ---------- */
+
+.toshokan-footer {
+  grid-column: 1 / -1;
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(92, 68, 55, 0.16);
+}
+
+.toshokan-footer svg {
+  width: 12px;
+  height: 12px;
+  color: #9a9490;
+}
+
+.toshokan-footer span {
+  font-size: 11px;
+  color: #9a9490;
+}
