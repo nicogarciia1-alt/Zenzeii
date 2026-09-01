@@ -8,15 +8,9 @@ import {
   Users,
   Landmark,
   Library as LibraryIcon,
-  Smartphone,
-  Download,
   Lock,
   ChevronDown,
   Settings,
-  ChevronLeft,
-  Bookmark as BookmarkIcon,
-  Search,
-  Heart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,7 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const SIDEBAR_BG = '#1C0B0B';
-const MAIN_BG = '#EAE4D6';
+const MAIN_BG = '#FFFFFF';
 const HEADING = '#1A1614';
 const SUBTITLE = '#6B6560';
 const ACCENT_RED = '#8B2E2E';
@@ -40,7 +34,6 @@ const SMALL_PRINT = '#9A9490';
 const WATERMARK = '#D8D2C4';
 const NAV_BORDER = '#D4CEC4';
 const ROW_BORDER = '#D4CEC4';
-const IOS_BG = '#E0DAD0';
 
 const LEFT_FEATURES = [
   {
@@ -166,75 +159,6 @@ const BotanicalWatermark = () => (
   </div>
 );
 
-const PhoneMockup = () => (
-  <div
-    className="w-[104px] h-[168px] rounded-[16px] overflow-hidden border relative flex-shrink-0"
-    style={{ background: CARD_BG, borderColor: '#00000022' }}
-  >
-    <div className="flex items-center justify-between px-2 pt-1.5 text-[6px]" style={{ color: '#e5dfd5' }}>
-      <span>9:41</span>
-      <span>📶 🔋</span>
-    </div>
-    <div className="flex items-center justify-between px-2 mt-0.5">
-      <div className="flex items-center gap-0.5" style={{ color: '#e5dfd5' }}>
-        <ChevronLeft className="h-2 w-2" />
-        <span className="text-[7px]">Zenzeii</span>
-      </div>
-      <BookmarkIcon className="h-2 w-2" style={{ color: '#e5dfd5' }} />
-    </div>
-    <div className="mx-2 mt-1 flex items-center gap-1 rounded-sm px-1 py-1" style={{ background: 'rgba(255,255,255,0.06)' }}>
-      <div className="w-3 h-4 rounded-sm flex-shrink-0" style={{ background: ACCENT_RED }} />
-      <div>
-        <p className="text-[6px] leading-tight" style={{ color: CARD_GOLD }}>こころ</p>
-        <p className="text-[5px] leading-tight" style={{ color: '#9c8f7d' }}>Natsume Sōseki</p>
-      </div>
-    </div>
-    <div className="relative mt-1.5 px-2">
-      <p className="text-[7px] leading-relaxed" style={{ color: '#e5dfd5' }}>
-        先生と私とは時々会って、
-        <span className="rounded-sm px-0.5" style={{ background: CARD_GOLD, color: '#1c1a17' }}>信じる</span>
-        。
-      </p>
-      <div
-        className="absolute left-0.5 top-[26px] w-[86px] rounded-sm p-1 shadow-lg"
-        style={{ background: '#FEFCF6', border: '1px solid #E5DBC5' }}
-      >
-        <p className="text-[6px] font-medium" style={{ color: HEADING }}>
-          信じる <span className="font-normal" style={{ color: '#8c7d6b' }}>to believe</span>
-        </p>
-      </div>
-    </div>
-    <div className="absolute bottom-0 left-0 right-0 flex items-center justify-around px-2 py-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-      <Heart className="h-2 w-2" style={{ color: '#9c8f7d' }} />
-      <Search className="h-2 w-2" style={{ color: '#9c8f7d' }} />
-    </div>
-    {/* PASS MEMBERS ONLY stamp */}
-    <div
-      className="absolute flex items-center justify-center rounded-full"
-      style={{
-        width: 46,
-        height: 46,
-        top: 60,
-        left: 30,
-        border: `1.5px solid ${ACCENT_RED}`,
-        transform: 'rotate(-18deg)',
-        background: 'rgba(28,11,11,0.15)',
-      }}
-    >
-      <span
-        className="text-center leading-[7px]"
-        style={{ color: ACCENT_RED, fontSize: '5.5px', fontWeight: 700, letterSpacing: '0.05em' }}
-      >
-        PASS
-        <br />
-        MEMBERS
-        <br />
-        ONLY
-      </span>
-    </div>
-  </div>
-);
-
 const NAV_ITEMS = [
   { label: 'My Books', path: '/', icon: BookOpen },
   { label: 'Bookshelves', path: '/library', icon: LibraryIcon },
@@ -252,12 +176,8 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="w-full flex justify-center" style={{ background: '#0d0d0d' }}>
-      <div
-        className="relative flex-shrink-0"
-        style={{ width: 1440, height: 900, overflow: 'hidden', background: MAIN_BG }}
-      >
-        {/* Nav bar */}
+    <div className="relative w-full" style={{ height: 900, overflow: 'hidden', background: MAIN_BG }}>
+      {/* Nav bar */}
         <div
           className="flex items-center justify-between"
           style={{ height: 52, background: MAIN_BG, borderBottom: `1px solid ${NAV_BORDER}`, padding: '0 24px' }}
@@ -376,8 +296,8 @@ export default function PricingPage() {
                     boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
                   }}
                 >
-                  <div className="absolute -right-8 -bottom-10">
-                    <SakuraBranch color={CARD_GOLD} opacity={0.11} className="w-[240px] h-[360px]" />
+                  <div className="absolute -right-5 -bottom-5 pointer-events-none" aria-hidden="true">
+                    <SakuraBranch color={CARD_GOLD} opacity={0.11} className="w-[168px] h-[260px]" />
                   </div>
                   <div className="relative flex items-start justify-between" style={{ padding: '20px 22px 0 22px' }}>
                     <div>
@@ -437,48 +357,10 @@ export default function PricingPage() {
               </div>
             </div>
 
-            {/* iOS callout — pinned toward bottom of remaining space */}
-            <div
-              className="relative flex items-center"
-              style={{ marginTop: 'auto', background: IOS_BG, padding: '20px 48px 20px 72px', gap: 28 }}
-            >
-              <PhoneMockup />
-
-              <div style={{ width: '38%' }}>
-                <p style={{ fontSize: 10, color: ACCENT_RED, letterSpacing: '0.12em', fontWeight: 600 }}>
-                  EXCLUSIVE FOR TOSHOKAN PASS MEMBERS
-                </p>
-                <h2 className="font-serif" style={{ fontSize: 19, color: HEADING, marginTop: 4 }}>
-                  The Zenzeii reader on your phone.
-                </h2>
-                <p style={{ fontSize: 12, color: SUBTITLE, marginTop: 4, lineHeight: 1.4 }}>
-                  Before the App Store launch, members receive a personal download link for the full iOS reader.
-                </p>
-                <p style={{ fontSize: 11, color: SUBTITLE, marginTop: 6 }}>
-                  🍎 iOS only <span style={{ color: '#b0a48f' }}>·</span> Early access for members
-                </p>
-              </div>
-
-              <div className="flex flex-1 justify-end" style={{ gap: 36 }}>
-                <div className="flex flex-col items-start" style={{ gap: 6, maxWidth: 130 }}>
-                  <Smartphone className="h-4 w-4" style={{ color: SUBTITLE }} />
-                  <span style={{ fontSize: 11, color: SUBTITLE, lineHeight: 1.3 }}>The full reading experience on iOS.</span>
-                </div>
-                <div className="flex flex-col items-start" style={{ gap: 6, maxWidth: 130 }}>
-                  <Download className="h-4 w-4" style={{ color: SUBTITLE }} />
-                  <span style={{ fontSize: 11, color: SUBTITLE, lineHeight: 1.3 }}>A personal download link, sent to you.</span>
-                </div>
-                <div className="flex flex-col items-start" style={{ gap: 6, maxWidth: 130 }}>
-                  <Lock className="h-4 w-4" style={{ color: SUBTITLE }} />
-                  <span style={{ fontSize: 11, color: SUBTITLE, lineHeight: 1.3 }}>Available only to Pass members.</span>
-                </div>
-              </div>
-            </div>
-
             {/* Footer strip */}
             <div
               className="relative flex items-center justify-center flex-shrink-0"
-              style={{ height: 32, gap: 6, borderTop: `1px solid ${NAV_BORDER}` }}
+              style={{ marginTop: 'auto', height: 32, gap: 6, borderTop: `1px solid ${NAV_BORDER}` }}
             >
               <Lock className="h-3 w-3" style={{ color: SMALL_PRINT }} />
               <span style={{ fontSize: 11, color: SMALL_PRINT }}>
@@ -488,6 +370,5 @@ export default function PricingPage() {
           </div>
         </div>
       </div>
-    </div>
   );
 }
