@@ -1,16 +1,21 @@
 // ── RevenueCat wrapper ────────────────────────────────────────────────────────
 //
-// PENDING ACCOUNT: Replace the placeholder values before testing on device.
-//   1. Create a free RevenueCat account at app.revenuecat.com
-//   2. Add an iOS app → copy the public SDK key into RC_API_KEY
-//   3. Create entitlements named "premium" and "founder"
-//   4. Add products (match PRODUCT_IDS below) to each entitlement
-//   5. Create a "default" offering containing both packages
+// iOS: PENDING ACCOUNT — replace RC_API_KEY_IOS with the real key.
+// Android: PENDING ACCOUNT — replace RC_API_KEY_ANDROID with the real key.
+//   1. In app.revenuecat.com, add an Android app (needs the Play Console
+//      service account JSON linked first — see RevenueCat's Play Store setup guide)
+//   2. Copy the public SDK key into RC_API_KEY_ANDROID below
+//   3. Create the same product IDs in Play Console (Monetize > Products) —
+//      PREMIUM_MONTHLY as a subscription, FOUNDER_MEMBER as a one-time product
+//   4. Attach both to the existing "premium"/"founder" entitlements and the
+//      "default" offering in the RevenueCat dashboard (same entitlements as iOS)
 //
 // Local StoreKit testing (simulator):
 //   After `npx expo run:ios`, open ios/Zenzeii.xcworkspace in Xcode,
 //   then Product > Scheme > Edit Scheme > Run > Options > StoreKit Config
 //   and select ZenzeiiProducts.storekit from the project root.
+
+import { Platform } from 'react-native';
 
 // ── react-native-purchases import (graceful degradation in Expo Go) ───────────
 // This module requires a dev build. In Expo Go it will be null and all
@@ -22,14 +27,17 @@ try {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// PENDING ACCOUNT: Replace with the iOS key from app.revenuecat.com
-export const RC_API_KEY = 'test_eVwVAOQGpextGOlNXnTsPDUHted';
+const RC_API_KEY_IOS = 'test_eVwVAOQGpextGOlNXnTsPDUHted';
+// PENDING ACCOUNT: Replace with the Android public SDK key from app.revenuecat.com
+const RC_API_KEY_ANDROID = 'PENDING_REVENUECAT_ANDROID_KEY';
 
-// These MUST match exactly what is created in App Store Connect
-// and in the RevenueCat product catalog.
+export const RC_API_KEY = Platform.OS === 'android' ? RC_API_KEY_ANDROID : RC_API_KEY_IOS;
+
+// These MUST match exactly what is created in App Store Connect (iOS) and
+// Play Console (Android) — RevenueCat maps both to the same entitlements below.
 export const PRODUCT_IDS = {
-  PREMIUM_MONTHLY:  'com.zenzeii.app.premium_monthly',  // Auto-Renewable Subscription  €5.99/mo
-  FOUNDER_MEMBER:   'com.zenzeii.app.founder_member',   // Non-Consumable (one-time)    €19.99
+  PREMIUM_MONTHLY:  'com.zenzeii.app.premium_monthly',  // Subscription                 €5.99/mo
+  FOUNDER_MEMBER:   'com.zenzeii.app.founder_member',   // One-time / non-consumable    €19.99
 };
 
 // RevenueCat entitlement identifiers (configured in RC dashboard)
@@ -46,6 +54,10 @@ export function isPurchasesAvailable() {
 
 export function configureRevenueCat(userId) {
   if (!Purchases) return;
+  if (RC_API_KEY.startsWith('PENDING_')) {
+    console.warn('[purchases] RevenueCat not configured for this platform — see purchases.js header.');
+    return;
+  }
   Purchases.configure({
     apiKey: RC_API_KEY,
     appUserID: userId,

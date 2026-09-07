@@ -1,0 +1,20 @@
+owner: specialist
+updated: 2026-08-04
+
+Status: Document 1 (Conceptual Model) is FROZEN — approved by Chief Librarian (Professor Sato),
+now the constitution. Do not reopen it for polish; amend only via a new decision through the
+same review process. Document 2 (Database & API Specification) is drafted and pending review:
+typed collections per §1.1, universal relationships collection with enforced confidence-hierarchy
+writes (§2.1), generic catalog admin route family (§4.1), set-intersection search design (§5).
+
+Two items flagged in brief.md need a look before Document 2 is considered approved:
+1. The `books`-not-`book_catalog` call (Doc 2 §1.4) — new decision, grounded in code, not yet
+   signed off by Nico/Sato.
+2. The AI/Imported-can't-overwrite-Human-Curated write rule (Doc 2 §2.1) — confirm intent before
+   any enrichment job is built against it.
+
+Next: on approval, Document 3 (full controlled vocabulary).
+
+Outstanding, not blocking: control/decisions.md has no entry yet for this project, the
+storage-shape decision, or Document 1's freeze. That file is coo-owned — flagged for COO to log,
+not written by specialist.

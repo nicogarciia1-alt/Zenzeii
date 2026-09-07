@@ -26,3 +26,5 @@ stripe
 elevenlabs
 mutagen
 boto3
+ebooklib
+beautifulsoup4

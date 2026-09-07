@@ -16,6 +16,7 @@
       "bundleIdentifier": "com.zenzeii.app"
     },
     "android": {
+      "package": "com.zenzeii.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

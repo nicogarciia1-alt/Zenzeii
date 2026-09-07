@@ -1,0 +1,11 @@
+title_jp,title_en,title_romaji,author_name,author_name_jp,publication_year,page_count,availability,aozora_url,language,has_translation,genre_ids
+古都,The Old Capital,Koto,Kawabata Yasunari,川端康成,1962,256,buy,,ja,true,genre_novel|genre_classic
+金閣寺,The Temple of the Golden Pavilion,Kinkakuji,Mishima Yukio,三島由紀夫,1956,384,buy,,ja,true,genre_novel|genre_classic
+細雪,The Makioka Sisters,Sasameyuki,Tanizaki Junichiro,谷崎潤一郎,1948,900,buy,,ja,true,genre_novel|genre_classic
+源氏物語,The Tale of Genji,Genji Monogatari,Murasaki Shikibu,紫式部,1010,1200,buy,,ja,true,genre_novel|genre_classic
+徒然草,Essays in Idleness,Tsurezuregusa,Yoshida Kenko,吉田兼好,1330,240,buy,,ja,true,genre_essay|genre_classic
+高瀬舟,Takasebune,Takasebune,Mori Ogai,森鴎外,1916,30,free,https://www.aozora.gr.jp/cards/000129/files/45245_22007.html,ja,true,genre_short_story|genre_historical|genre_classic
+檸檬,Lemon,Remon,Kajii Motojiro,梶井基次郎,1925,20,free,https://www.aozora.gr.jp/cards/000074/files/424_19826.html,ja,true,genre_short_story|genre_classic
+夜は短し歩けよ乙女,The Night Is Short Walk on Girl,Yoru wa Mijikashi Aruke yo Otome,Morimi Tomihiko,森見登美彦,2006,320,buy,,ja,true,genre_novel|genre_contemporary|genre_romance
+鴨川ホルモー,Kamogawa Horumo,Kamogawa Horumo,Makime Manabu,万城目学,2006,304,buy,,ja,false,genre_novel|genre_contemporary
+陰翳礼讃,In Praise of Shadows,In'ei Raisan,Tanizaki Junichiro,谷崎潤一郎,1933,96,free,https://www.aozora.gr.jp/cards/001383/files/56642_59575.html,ja,true,genre_essay|genre_classic

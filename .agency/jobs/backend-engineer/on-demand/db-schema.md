@@ -1,6 +1,6 @@
 # db-schema.md — MongoDB Collections
 
-**last_verified**: 2026-06-16 by backend-engineer (audiobook mode — audio fields + new collections)
+**last_verified**: 2026-06-25 by backend-engineer (lazy translation — not_requested status + translate-next endpoint)
 
 ---
 
@@ -100,9 +100,13 @@ Global book catalog. Not per-user.
 | `katakana_text` | `japanese_katakana` | |
 | `romaji_text` | `japanese_romaji` | |
 | `japanese_original` | `japanese_kanji` | JP-source books only; takes priority over `kanji_text` |
-| `translation_status` | `translation_status` | `"pending"` \| `"completed"` |
+| `translation_status` | `translation_status` | `"pending"` \| `"completed"` \| `"not_requested"` |
 | `source_language` | `source_language` | `"en"` \| `"ja"` |
 | `words` | `words` | Token list |
+
+**Status values**: `"pending"` — queued for translation worker; `"completed"` — translated; `"not_requested"` — beyond the current 1,500-word eager chunk, will be promoted to `"pending"` by `POST /api/chapters/{chapter_id}/translate-next` as the user reads forward.
+
+**Lazy translation**: on import, only the first ~1,500 words of a book are set to `"pending"`. All remaining sentences are `"not_requested"`. The translation worker only processes `"pending"` sentences — `"not_requested"` sentences are explicitly excluded. The frontend calls `translate-next` when the user is ~200 words from the end of already-translated content.
 
 **Indexes**: `(chapter_id, order)`, `(book_id, translation_status)`, `(chapter_id, translation_status)`
 

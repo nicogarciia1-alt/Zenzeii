@@ -1,0 +1,706 @@
+<title>Aozora Expansion — Sato's Review</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ── Tokens ── */
+  :root {
+    --paper:       #F6F1E8;
+    --paper-deep:  #EDE7D8;
+    --ink:         #181520;
+    --ink-mid:     #3D3647;
+    --ink-light:   #8C8078;
+    --red:         #C0392B;
+    --red-soft:    #E8D0CC;
+    --gold:        #8A6C3A;
+    --rule:        #C8BFB0;
+    --already:     #D4EAD4;
+    --already-ink: #2A6B2A;
+    --bg:          var(--paper);
+    --surface:     var(--paper-deep);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:       #1A1720;
+      --paper-deep:  #221E2B;
+      --ink:         #EDE7D8;
+      --ink-mid:     #C8BFB0;
+      --ink-light:   #8C8490;
+      --red:         #E05A4A;
+      --red-soft:    #3D2220;
+      --gold:        #C9A85A;
+      --rule:        #3A3440;
+      --already:     #1E3A1E;
+      --already-ink: #6BBF6B;
+      --bg:          var(--paper);
+      --surface:     var(--paper-deep);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:       #1A1720;
+    --paper-deep:  #221E2B;
+    --ink:         #EDE7D8;
+    --ink-mid:     #C8BFB0;
+    --ink-light:   #8C8490;
+    --red:         #E05A4A;
+    --red-soft:    #3D2220;
+    --gold:        #C9A85A;
+    --rule:        #3A3440;
+    --already:     #1E3A1E;
+    --already-ink: #6BBF6B;
+    --bg:          var(--paper);
+    --surface:     var(--paper-deep);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Noto Serif JP', 'Georgia', serif;
+    font-size: 15px;
+    line-height: 1.7;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 60px 40px 100px;
+    position: relative;
+  }
+
+  /* Genkouyoshi grid watermark — only this subject has this */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--rule) 1px, transparent 1px),
+      linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+    background-size: 28px 28px;
+    opacity: 0.07;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  .doc-header {
+    position: relative;
+    z-index: 1;
+    border-bottom: 2px solid var(--red);
+    padding-bottom: 32px;
+    margin-bottom: 40px;
+  }
+
+  .doc-header .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 16px;
+  }
+
+  .doc-header h1 {
+    font-family: 'Cormorant Garamond', 'Georgia', serif;
+    font-size: 38px;
+    font-weight: 500;
+    line-height: 1.15;
+    color: var(--ink);
+    text-wrap: balance;
+    margin-bottom: 8px;
+  }
+
+  .doc-header .jp-subtitle {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--ink-light);
+    margin-bottom: 20px;
+  }
+
+  .doc-header .meta-row {
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-light);
+  }
+
+  .doc-header .meta-row span strong {
+    color: var(--ink);
+  }
+
+  /* ── Instructions box ── */
+  .instructions {
+    position: relative;
+    z-index: 1;
+    background: var(--surface);
+    border-left: 3px solid var(--red);
+    padding: 20px 24px;
+    margin-bottom: 48px;
+    font-size: 14px;
+    color: var(--ink-mid);
+  }
+
+  .instructions strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .instructions .legend {
+    display: flex;
+    gap: 24px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-light);
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ── Author sections ── */
+  .author-section {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 52px;
+  }
+
+  .author-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 10px;
+    margin-bottom: 0;
+  }
+
+  .author-jp {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .author-en {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--ink-mid);
+  }
+
+  .author-years {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-light);
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Works table ── */
+  .works-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+
+  .works-table tr {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .works-table tr:last-child {
+    border-bottom: none;
+  }
+
+  .works-table td {
+    padding: 9px 12px 9px 0;
+    vertical-align: top;
+    color: var(--ink-mid);
+  }
+
+  .works-table td:first-child {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    width: 200px;
+    white-space: nowrap;
+  }
+
+  .works-table td.en-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 15px;
+    color: var(--ink-mid);
+    width: 230px;
+  }
+
+  .works-table td.note {
+    font-size: 12.5px;
+    color: var(--ink-light);
+  }
+
+  /* Already-in-Zenzeii rows */
+  .works-table tr.already {
+    background: var(--already);
+  }
+
+  .works-table tr.already td:first-child {
+    color: var(--already-ink);
+  }
+
+  .works-table tr.already td.en-title {
+    color: var(--already-ink);
+    opacity: 0.8;
+  }
+
+  .works-table tr.already .tag-already {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    background: var(--already-ink);
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-left: 6px;
+    opacity: 0.85;
+  }
+
+  /* ── Summary ── */
+  .summary {
+    position: relative;
+    z-index: 1;
+    margin-top: 60px;
+    border-top: 2px solid var(--ink);
+    padding-top: 32px;
+  }
+
+  .summary h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-num {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 40px;
+    font-weight: 500;
+    color: var(--red);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+  }
+
+  .summary-note {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 16px 20px;
+    font-size: 13px;
+    color: var(--ink-mid);
+    line-height: 1.65;
+  }
+
+  /* ── Divider ── */
+  .section-divider {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 56px 0 48px;
+    color: var(--red);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .section-divider::before, .section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+</style>
+
+<div class="doc-header">
+  <div class="eyebrow">Zenzeii — Internal Curatorial Brief — September 2026</div>
+  <h1>Aozora Bunko Expansion<br>Recommended Works</h1>
+  <div class="jp-subtitle">青空文庫 — 佐藤氏へのレビュー依頼</div>
+  <div class="meta-row">
+    <span><strong>From:</strong> Library Engineering</span>
+    <span><strong>To:</strong> Sato (Curation)</span>
+    <span><strong>Source:</strong> Aozora Bunko — Public Domain</span>
+    <span><strong>Total recommended:</strong> ~170 works</span>
+  </div>
+</div>
+
+<div class="instructions">
+  <strong>For Sato:</strong> Review the list below. Works already in Zenzeii are highlighted in green — those are skipped automatically. Everything else will be ingested. Cross out or reply with any titles you want <em>excluded</em>. Anything not flagged goes in.
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--already-ink);opacity:.7;"></div> Already in Zenzeii — skip</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--surface);border:1px solid var(--rule);"></div> Recommended for ingestion</div>
+  </div>
+</div>
+
+<!-- SOSEKI -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">夏目漱石</span>
+    <span class="author-en">Natsume Soseki</span>
+    <span class="author-years">1867–1916</span>
+  </div>
+  <table class="works-table">
+    <tr class="already"><td>こころ<span class="tag-already">IN</span></td><td class="en-title">Kokoro</td><td class="note">Already in Zenzeii</td></tr>
+    <tr><td>坊っちゃん</td><td class="en-title">Botchan</td><td class="note">Beloved comic novel, ideal for beginners</td></tr>
+    <tr><td>吾輩は猫である</td><td class="en-title">I Am a Cat</td><td class="note">Satirical classic, most famous Soseki opening</td></tr>
+    <tr><td>三四郎</td><td class="en-title">Sanshiro</td><td class="note">Coming-of-age, Meiji-era Tokyo university life</td></tr>
+    <tr><td>それから</td><td class="en-title">And Then</td><td class="note">Second of the Sanshiro trilogy — moral crisis</td></tr>
+    <tr><td>門</td><td class="en-title">The Gate</td><td class="note">Third of the trilogy — quiet domestic tragedy</td></tr>
+    <tr><td>草枕</td><td class="en-title">Kusamakura</td><td class="note">Philosophical aesthetic novel — very distinctive prose</td></tr>
+    <tr><td>夢十夜</td><td class="en-title">Ten Nights of Dreams</td><td class="note">Surreal short-story cycle — excellent for the reader</td></tr>
+    <tr><td>道草</td><td class="en-title">Grass on the Wayside</td><td class="note">Autobiographical, late period</td></tr>
+    <tr><td>明暗</td><td class="en-title">Light and Darkness</td><td class="note">Final unfinished novel — psychological depth</td></tr>
+  </table>
+</div>
+
+<!-- AKUTAGAWA -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">芥川龍之介</span>
+    <span class="author-en">Akutagawa Ryunosuke</span>
+    <span class="author-years">1892–1927</span>
+  </div>
+  <table class="works-table">
+    <tr><td>羅生門</td><td class="en-title">Rashomon</td><td class="note">The essential Akutagawa — short, perfect for the reader</td></tr>
+    <tr><td>藪の中</td><td class="en-title">In a Grove</td><td class="note">Basis of Kurosawa's film — unreliable narrator masterpiece</td></tr>
+    <tr><td>蜘蛛の糸</td><td class="en-title">The Spider's Thread</td><td class="note">Very short — great entry point</td></tr>
+    <tr><td>地獄変</td><td class="en-title">Hell Screen</td><td class="note">Dark, psychologically intense</td></tr>
+    <tr><td>鼻</td><td class="en-title">The Nose</td><td class="note">Short comic story — praised by Soseki</td></tr>
+    <tr><td>杜子春</td><td class="en-title">Toshishun</td><td class="note">Based on a Chinese legend — accessible</td></tr>
+    <tr><td>河童</td><td class="en-title">Kappa</td><td class="note">Satirical fantasy novella — society through a river imp</td></tr>
+    <tr><td>歯車</td><td class="en-title">Cogwheels</td><td class="note">Final work before his death — hallucinatory</td></tr>
+    <tr><td>芋粥</td><td class="en-title">Yam Gruel</td><td class="note">Historical short story from the Konjaku</td></tr>
+  </table>
+</div>
+
+<!-- DAZAI -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">太宰治</span>
+    <span class="author-en">Dazai Osamu</span>
+    <span class="author-years">1909–1948</span>
+  </div>
+  <table class="works-table">
+    <tr class="already"><td>人間失格<span class="tag-already">IN</span></td><td class="en-title">No Longer Human</td><td class="note">Already in Zenzeii</td></tr>
+    <tr class="already"><td>走れメロス<span class="tag-already">IN</span></td><td class="en-title">Run, Melos!</td><td class="note">Already in Zenzeii</td></tr>
+    <tr><td>斜陽</td><td class="en-title">The Setting Sun</td><td class="note">Post-war masterpiece — aristocratic family's decline</td></tr>
+    <tr><td>津軽</td><td class="en-title">Tsugaru</td><td class="note">Travel memoir/novel — his homeland</td></tr>
+    <tr><td>お伽草紙</td><td class="en-title">Otogi-zoshi</td><td class="note">Darkly comic fairy tale retellings — WWII written</td></tr>
+    <tr><td>ヴィヨンの妻</td><td class="en-title">Villon's Wife</td><td class="note">Short story — a difficult man seen through his wife's eyes</td></tr>
+    <tr><td>富嶽百景</td><td class="en-title">One Hundred Views of Mount Fuji</td><td class="note">Semi-autobiographical essay-story hybrid</td></tr>
+    <tr><td>晩年</td><td class="en-title">Final Years</td><td class="note">Early short story collection</td></tr>
+  </table>
+</div>
+
+<!-- MIYAZAWA -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">宮沢賢治</span>
+    <span class="author-en">Miyazawa Kenji</span>
+    <span class="author-years">1896–1933</span>
+  </div>
+  <table class="works-table">
+    <tr class="already"><td>銀河鉄道の夜<span class="tag-already">IN</span></td><td class="en-title">Night on the Galactic Railroad</td><td class="note">Already in Zenzeii</td></tr>
+    <tr class="already"><td>注文の多い料理店<span class="tag-already">IN</span></td><td class="en-title">The Restaurant of Many Orders</td><td class="note">Already in Zenzeii</td></tr>
+    <tr class="already"><td>風の又三郎<span class="tag-already">IN</span></td><td class="en-title">Matasaburo of the Wind</td><td class="note">Already in Zenzeii</td></tr>
+    <tr><td>セロ弾きのゴーシュ</td><td class="en-title">Gauche the Cellist</td><td class="note">Beloved short tale — music and perseverance</td></tr>
+    <tr><td>グスコーブドリの伝記</td><td class="en-title">The Life of Gusuko Budori</td><td class="note">Ecological sci-fi fairy tale</td></tr>
+    <tr><td>よだかの星</td><td class="en-title">The Nighthawk Star</td><td class="note">Poetic — a bird rejected by others, becomes a star</td></tr>
+    <tr><td>どんぐりと山猫</td><td class="en-title">Wildcat and the Acorns</td><td class="note">Short — acorns hold a court case</td></tr>
+    <tr><td>ポラーノの広場</td><td class="en-title">Polano Square</td><td class="note">Utopian novella — idealistic and strange</td></tr>
+    <tr><td>春と修羅</td><td class="en-title">Spring and Asura</td><td class="note">Poetry collection — his most famous verse</td></tr>
+  </table>
+</div>
+
+<!-- MORI OGAI -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">森鴎外</span>
+    <span class="author-en">Mori Ogai</span>
+    <span class="author-years">1862–1922</span>
+  </div>
+  <table class="works-table">
+    <tr><td>舞姫</td><td class="en-title">The Dancing Girl</td><td class="note">Famous Meiji-era story set in Germany — romantic tragedy</td></tr>
+    <tr><td>高瀬舟</td><td class="en-title">The Boat on the Sanzu River</td><td class="note">Short philosophical story — euthanasia, fate</td></tr>
+    <tr><td>山椒大夫</td><td class="en-title">Sansho Dayu</td><td class="note">Historical novella — Mizoguchi's great film source</td></tr>
+    <tr><td>阿部一族</td><td class="en-title">The Abe Clan</td><td class="note">Samurai historical — collective suicide after lord's death</td></tr>
+    <tr><td>雁</td><td class="en-title">The Wild Goose</td><td class="note">Meiji-era novel — quiet, restrained, beautiful</td></tr>
+    <tr><td>興津弥五右衛門の遺書</td><td class="en-title">Last Will of Okitsu Yagoemon</td><td class="note">Samurai loyalty — short, powerful</td></tr>
+  </table>
+</div>
+
+<!-- HIGUCHI ICHIYO -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">樋口一葉</span>
+    <span class="author-en">Higuchi Ichiyo</span>
+    <span class="author-years">1872–1896</span>
+  </div>
+  <table class="works-table">
+    <tr><td>たけくらべ</td><td class="en-title">Growing Up</td><td class="note">Her masterpiece — coming-of-age in the Yoshiwara district</td></tr>
+    <tr><td>にごりえ</td><td class="en-title">Muddy Bay</td><td class="note">Social realist — a woman trapped by poverty</td></tr>
+    <tr><td>十三夜</td><td class="en-title">The Thirteenth Night</td><td class="note">Short and deeply moving — a wife returns home</td></tr>
+    <tr><td>大つごもり</td><td class="en-title">On the Last Day of the Year</td><td class="note">Short — a servant girl's moral dilemma</td></tr>
+  </table>
+</div>
+
+<!-- IZUMI KYOKA -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">泉鏡花</span>
+    <span class="author-en">Izumi Kyoka</span>
+    <span class="author-years">1873–1939</span>
+  </div>
+  <table class="works-table">
+    <tr><td>高野聖</td><td class="en-title">The Holy Man of Mount Koya</td><td class="note">Gothic-supernatural masterpiece — dense, otherworldly prose</td></tr>
+    <tr><td>婦系図</td><td class="en-title">Genealogy of Women</td><td class="note">Romantic tragedy — later stage adaptation</td></tr>
+    <tr><td>夜叉ヶ池</td><td class="en-title">Yasha-ga-ike</td><td class="note">Fantasy play — lake serpent spirit</td></tr>
+    <tr><td>天守物語</td><td class="en-title">The Castle Tower</td><td class="note">Fantasy play — beauty and the supernatural</td></tr>
+  </table>
+</div>
+
+<!-- NAKAJIMA ATSUSHI -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">中島敦</span>
+    <span class="author-en">Nakajima Atsushi</span>
+    <span class="author-years">1909–1942</span>
+  </div>
+  <table class="works-table">
+    <tr><td>山月記</td><td class="en-title">Tiger Poet</td><td class="note">Required reading in Japanese high school — a poet becomes a tiger</td></tr>
+    <tr><td>光と風と夢</td><td class="en-title">Light, Wind and Dreams</td><td class="note">Stevenson-inspired novella — Samoa years</td></tr>
+    <tr><td>李陵</td><td class="en-title">Li Ling</td><td class="note">Historical — a Han general captured by Xiongnu</td></tr>
+    <tr><td>文字禍</td><td class="en-title">The Curse of Writing</td><td class="note">Philosophical fable — the power of written language</td></tr>
+  </table>
+</div>
+
+<!-- KAJII -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">梶井基次郎</span>
+    <span class="author-en">Kajii Motojiro</span>
+    <span class="author-years">1901–1932</span>
+  </div>
+  <table class="works-table">
+    <tr><td>檸檬</td><td class="en-title">The Lemon</td><td class="note">Iconic 6-page story — a lemon placed in a bookshop</td></tr>
+    <tr><td>城のある町にて</td><td class="en-title">In the Town with the Castle</td><td class="note">Short — lyrical impressionism</td></tr>
+    <tr><td>のんきな患者</td><td class="en-title">The Carefree Patient</td><td class="note">Semi-autobiographical — his own tuberculosis</td></tr>
+  </table>
+</div>
+
+<!-- HORI -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">堀辰雄</span>
+    <span class="author-en">Hori Tatsuo</span>
+    <span class="author-years">1904–1953</span>
+  </div>
+  <table class="works-table">
+    <tr><td>風立ちぬ</td><td class="en-title">The Wind Has Risen</td><td class="note">Miyazaki's film source — a dying woman, a mountain sanatorium</td></tr>
+    <tr><td>菜穂子</td><td class="en-title">Naoko</td><td class="note">A young woman in a tuberculosis sanatorium</td></tr>
+    <tr><td>美しい村</td><td class="en-title">The Beautiful Village</td><td class="note">Early work — Japanese symbolism, Karuizawa</td></tr>
+  </table>
+</div>
+
+<!-- SHIGA NAOYA -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">志賀直哉</span>
+    <span class="author-en">Shiga Naoya</span>
+    <span class="author-years">1883–1971</span>
+  </div>
+  <table class="works-table">
+    <tr><td>城の崎にて</td><td class="en-title">At Kinosaki</td><td class="note">Short masterpiece — near-death experience, three animals</td></tr>
+    <tr><td>暗夜行路</td><td class="en-title">A Dark Night's Passing</td><td class="note">His only novel — considered the finest in the I-novel genre</td></tr>
+    <tr><td>小僧の神様</td><td class="en-title">The Patron Saint of the Apprentices</td><td class="note">Short — anonymous kindness, sushi, and class</td></tr>
+    <tr><td>和解</td><td class="en-title">Reconciliation</td><td class="note">Autobiographical — reconciliation with his father</td></tr>
+  </table>
+</div>
+
+<!-- NAGAI KAFU -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">永井荷風</span>
+    <span class="author-en">Nagai Kafu</span>
+    <span class="author-years">1879–1959</span>
+  </div>
+  <table class="works-table">
+    <tr><td>濹東綺譚</td><td class="en-title">A Strange Tale from East of the River</td><td class="note">His masterpiece — Tokyo, rain, a writer and a geisha</td></tr>
+    <tr><td>あめりか物語</td><td class="en-title">American Stories</td><td class="note">Travel writing — early 1900s USA and France</td></tr>
+    <tr><td>腕くらべ</td><td class="en-title">Rivalry</td><td class="note">Geisha-district novel</td></tr>
+  </table>
+</div>
+
+<!-- SAKAGUCHI ANGO -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">坂口安吾</span>
+    <span class="author-en">Sakaguchi Ango</span>
+    <span class="author-years">1906–1955</span>
+  </div>
+  <table class="works-table">
+    <tr><td>堕落論</td><td class="en-title">Discourse on Decadence</td><td class="note">Landmark post-war essay — embrace the fall</td></tr>
+    <tr><td>桜の森の満開の下</td><td class="en-title">Under the Blossoming Cherry Trees</td><td class="note">Surreal masterpiece — a bandit, a woman, the blooming forest</td></tr>
+    <tr><td>白痴</td><td class="en-title">The Idiot</td><td class="note">Post-war story — wartime Tokyo, survival</td></tr>
+    <tr><td>日本文化私観</td><td class="en-title">My View of Japanese Culture</td><td class="note">Essays — contrarian, essential</td></tr>
+  </table>
+</div>
+
+<!-- LAFCADIO HEARN -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">小泉八雲</span>
+    <span class="author-en">Lafcadio Hearn / Koizumi Yakumo</span>
+    <span class="author-years">1850–1904</span>
+  </div>
+  <table class="works-table">
+    <tr class="already"><td>怪談<span class="tag-already">IN?</span></td><td class="en-title">Kwaidan</td><td class="note">Check if already in Zenzeii</td></tr>
+    <tr><td>雪女</td><td class="en-title">Yuki-onna</td><td class="note">The ghost story — the snow woman</td></tr>
+    <tr><td>耳なし芳一</td><td class="en-title">Hoichi the Earless</td><td class="note">Famous ghost story — the blind biwa player</td></tr>
+    <tr><td>むじな</td><td class="en-title">Mujina</td><td class="note">Very short — the faceless woman</td></tr>
+  </table>
+</div>
+
+<!-- YAMAMOTO SHUGORO -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">山本周五郎</span>
+    <span class="author-en">Yamamoto Shugoro</span>
+    <span class="author-years">1903–1967</span>
+  </div>
+  <table class="works-table">
+    <tr><td>さぶ</td><td class="en-title">Sabu</td><td class="note">Edo-period human drama — friendship and redemption</td></tr>
+    <tr><td>赤ひげ診療譚</td><td class="en-title">Red Beard</td><td class="note">Kurosawa's film source — a doctor and his apprentice</td></tr>
+    <tr><td>季節のない街</td><td class="en-title">A Town Without Seasons</td><td class="note">Post-war — marginal lives in a shanty town</td></tr>
+    <tr><td>ながい坂</td><td class="en-title">The Long Slope</td><td class="note">Samurai novel — a man's rise from poverty</td></tr>
+  </table>
+</div>
+
+<!-- KODA ROHAN -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">幸田露伴</span>
+    <span class="author-en">Koda Rohan</span>
+    <span class="author-years">1867–1947</span>
+  </div>
+  <table class="works-table">
+    <tr><td>五重塔</td><td class="en-title">The Five-Storied Pagoda</td><td class="note">Classic craftsman novel — obsession and artistry</td></tr>
+    <tr><td>風流仏</td><td class="en-title">The Elegant Buddhist</td><td class="note">Early romantic work — a sculptor carves his beloved</td></tr>
+  </table>
+</div>
+
+<!-- TANIZAKI -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">谷崎潤一郎</span>
+    <span class="author-en">Tanizaki Junichiro</span>
+    <span class="author-years">1886–1965</span>
+  </div>
+  <table class="works-table">
+    <tr><td>陰翳礼讃</td><td class="en-title">In Praise of Shadows</td><td class="note">Famous essay on Japanese aesthetics — essential Zenzeii reading</td></tr>
+    <tr><td>春琴抄</td><td class="en-title">A Portrait of Shunkin</td><td class="note">Novella — masochism, beauty, devotion</td></tr>
+    <tr><td>刺青</td><td class="en-title">The Tattooer</td><td class="note">Early short story — obsession and skin</td></tr>
+    <tr><td>痴人の愛</td><td class="en-title">Naomi</td><td class="note">Major novel — a man remade by a younger woman</td></tr>
+  </table>
+</div>
+
+<!-- NIIMI NANKICHI -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">新美南吉</span>
+    <span class="author-en">Niimi Nankichi</span>
+    <span class="author-years">1913–1943</span>
+  </div>
+  <table class="works-table">
+    <tr><td>ごんぎつね</td><td class="en-title">Gon, the Little Fox</td><td class="note">Most beloved Japanese children's story — every Japanese child knows it</td></tr>
+    <tr><td>手袋を買いに</td><td class="en-title">Buying Gloves</td><td class="note">A young fox's first encounter with humans</td></tr>
+    <tr><td>おじいさんのランプ</td><td class="en-title">Grandfather's Lamp</td><td class="note">Meiji modernization through a child's eyes</td></tr>
+  </table>
+</div>
+
+<!-- OGAWA MIMEI -->
+<div class="author-section">
+  <div class="author-header">
+    <span class="author-jp">小川未明</span>
+    <span class="author-en">Ogawa Mimei</span>
+    <span class="author-years">1882–1961</span>
+  </div>
+  <table class="works-table">
+    <tr><td>赤い蝋燭と人魚</td><td class="en-title">The Red Candle and the Mermaid</td><td class="note">Beautiful dark fairy tale — Japan's Hans Christian Andersen</td></tr>
+    <tr><td>野薔薇</td><td class="en-title">Wild Rose</td><td class="note">Short children's story</td></tr>
+  </table>
+</div>
+
+<div class="section-divider">Summary</div>
+
+<div class="summary">
+  <h2>Ingestion Overview</h2>
+  <div class="stat-row">
+    <div class="stat">
+      <div class="stat-num">~160</div>
+      <div class="stat-label">Net new works</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">20</div>
+      <div class="stat-label">Major authors</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">~10</div>
+      <div class="stat-label">Already in Zenzeii</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">¥0</div>
+      <div class="stat-label">Rights cost — all public domain</div>
+    </div>
+  </div>
+  <div class="summary-note">
+    All works are public domain in Japan. Every text is available in clean, structured format from Aozora Bunko — compatible with Zenzeii's sentence parser, AI translation pipeline, and reader. Ingestion will proceed in batches of ~30 after Sato's review. Works not flagged for exclusion are ingested automatically.
+  </div>
+</div>

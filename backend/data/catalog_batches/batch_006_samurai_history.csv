@@ -1,0 +1,11 @@
+title_jp,title_en,title_romaji,author_name,author_name_jp,publication_year,page_count,availability,aozora_url,language,has_translation,genre_ids
+平家物語,The Tale of the Heike,Heike Monogatari,Anonymous,作者不詳,1330,800,buy,,ja,true,genre_novel|genre_classic|genre_historical
+宮本武蔵,Musashi,Miyamoto Musashi,Yoshikawa Eiji,吉川英二,1939,1800,free,https://www.aozora.gr.jp/cards/001562/files/52396_49781.html,ja,true,genre_novel|genre_historical
+五輪書,The Book of Five Rings,Gorin-sho,Miyamoto Musashi,宮本武蔵,1645,220,buy,,ja,true,genre_essay|genre_classic|genre_historical
+風林火山,Furin Kazan,Furin Kazan,Inoue Yasushi,井上靖,1953,352,buy,,ja,false,genre_novel|genre_historical
+新・平家物語,The New Tale of the Heike,Shin Heike Monogatari,Yoshikawa Eiji,吉川英二,1957,4000,buy,,ja,false,genre_novel|genre_historical
+蝉しぐれ,Semishigure,Semishigure,Fujisawa Shuhei,藤沢周平,1988,350,buy,,ja,true,genre_novel|genre_historical
+燃えよ剣,Moeyo Ken,Moeyo Ken,Shiba Ryotaro,司馬遼太郎,1964,700,buy,,ja,false,genre_novel|genre_historical
+壬生義士伝,When the Last Sword Is Drawn,Mibu Gishiden,Asada Jiro,浅田次郎,1998,600,buy,,ja,true,genre_novel|genre_historical
+散り椿,Chiri Tsubaki,Chiri Tsubaki,Hamuro Rin,葉室麟,2010,320,buy,,ja,false,genre_novel|genre_historical
+葉隠,Hagakure,Hagakure,Yamamoto Tsunetomo,山本常朝,1716,450,buy,,ja,true,genre_essay|genre_classic|genre_historical

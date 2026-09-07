@@ -487,13 +487,14 @@ export const HomePage = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Text File (.txt)</Label>
+                      <Label>Book File</Label>
                       <Input
                         type="file"
-                        accept=".txt"
+                        accept=".txt,.epub"
                         onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                         data-testid="upload-file"
                       />
+                      <p className="text-xs text-muted-foreground">Supported formats: .txt, .epub</p>
                     </div>
                     <Button
                       className="w-full"

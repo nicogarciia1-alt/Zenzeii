@@ -5,6 +5,7 @@ import DiscoverByFeeling from '@/components/landing/DiscoverByFeeling';
 import ExploreStories from '@/components/landing/ExploreStories';
 import FeaturesSection from '@/components/landing/FeaturesSection';
 import StatsBar from '@/components/landing/StatsBar';
+import ClosingSection from '@/components/landing/ClosingSection';
 
 const LandingPage = () => {
   return (
@@ -15,6 +16,7 @@ const LandingPage = () => {
       <ExploreStories />
       <FeaturesSection />
       <StatsBar />
+      <ClosingSection />
     </div>
   );
 };

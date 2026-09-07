@@ -58,7 +58,7 @@ async def get_translation_jobs(db):
     for book in all_books:
         pending = await db.sentences.count_documents({
             "book_id": book["id"],
-            "translation_status": {"$ne": "completed"}
+            "translation_status": "pending"
         })
         if pending > 0:
             jobs.append({
@@ -77,7 +77,7 @@ async def get_translation_jobs(db):
     for chapter in requested_chapters:
         pending_count = await db.sentences.count_documents({
             "chapter_id": chapter["id"],
-            "translation_status": {"$ne": "completed"}
+            "translation_status": "pending"
         })
         
         if pending_count > 0:
@@ -134,7 +134,7 @@ async def process_job(db, job, semaphore):
                 sentences = await db.sentences.find(
                     {
                         "book_id": job["book_id"],
-                        "translation_status": {"$ne": "completed"}
+                        "translation_status": "pending"
                     },
                     {"_id": 0, "id": 1, "english": 1, "source_language": 1, "japanese_original": 1, "kanji_text": 1}
                 ).sort("order", 1).limit(SENTENCES_PER_BOOK_BATCH).to_list(SENTENCES_PER_BOOK_BATCH)
@@ -159,7 +159,7 @@ async def process_job(db, job, semaphore):
                 sentences = await db.sentences.find(
                     {
                         "chapter_id": job["chapter_id"],
-                        "translation_status": {"$ne": "completed"}
+                        "translation_status": "pending"
                     },
                     {"_id": 0, "id": 1, "english": 1, "source_language": 1, "japanese_original": 1, "kanji_text": 1}
                 ).sort("order", 1).limit(SENTENCES_PER_BOOK_BATCH).to_list(SENTENCES_PER_BOOK_BATCH)
