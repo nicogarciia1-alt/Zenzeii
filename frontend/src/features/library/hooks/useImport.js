@@ -41,6 +41,9 @@
  * @param {function} [onComplete] - Called with { alreadyOwned } when import completes successfully
  * @param {function} [onError] - Called with a human-readable message when import fails
  * @param {'idle'|'completed'} [initialStatus] - Seed state — 'completed' for books already on the shelf (book.is_on_shelf)
+ * @param {function} [onLibraryLimitReached] - Called instead of onError when the free-tier
+ *   2-book library cap blocks the import (no generic error toast in this case) — TODO: wire
+ *   to the gate modal once its design lands
  *
  * @returns {{
  *   importStatus: 'idle'|'importing'|'completed'|'failed',
@@ -50,7 +53,7 @@
  * }}
  */
 import { useCallback, useState } from 'react';
-import { importBook } from '@/lib/api';
+import { importBook, isLibraryLimitError } from '@/lib/api';
 import { usePollBookStatus } from './usePollBookStatus';
 
 /**
@@ -72,7 +75,7 @@ function buildImportPayload(bookId) {
   throw new Error(`Unsupported import source for book id "${bookId}"`);
 }
 
-export function useImport(bookId, onComplete, onError, initialStatus = 'idle') {
+export function useImport(bookId, onComplete, onError, initialStatus = 'idle', onLibraryLimitReached) {
   const [importStatus, setImportStatus] = useState(initialStatus);
 
   const { startPolling, stopPolling } = usePollBookStatus(
@@ -106,9 +109,14 @@ export function useImport(bookId, onComplete, onError, initialStatus = 'idle') {
       startPolling(bookId);
     } catch (err) {
       setImportStatus('failed');
+      if (isLibraryLimitError(err)) {
+        // Free-tier library cap — gate modal, not a generic error toast.
+        onLibraryLimitReached?.();
+        return;
+      }
       onError?.(err.response?.data?.detail || err.message || 'Failed to start import.');
     }
-  }, [bookId, importStatus, onComplete, onError, startPolling]);
+  }, [bookId, importStatus, onComplete, onError, onLibraryLimitReached, startPolling]);
 
   const reset = useCallback(() => {
     stopPolling();

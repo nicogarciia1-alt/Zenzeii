@@ -23,6 +23,14 @@ export const searchAozora = (query) => axios.get(`${API}/books/search/aozora`, {
 export const importBook = (data) => axios.post(`${API}/books/import`, data);
 export const cancelImport = (bookId) => axios.post(`${API}/books/cancel`, { book_id: bookId });
 export const prioritizeImport = (bookId) => axios.post(`${API}/books/prioritize`, { book_id: bookId });
+// True when err is the 403 the backend returns once a free user's
+// personal library is at its 2-book cap (see check_library_limit in
+// backend/server.py). Callers use this to route the failure to the gate
+// modal instead of a generic error toast.
+export const isLibraryLimitError = (err) =>
+  err?.response?.status === 403 &&
+  err?.response?.data?.detail?.error === 'library_limit_reached';
+
 export const uploadBook = (file, title, author, sourceCatalogId = null) => {
   const formData = new FormData();
   formData.append('file', file);

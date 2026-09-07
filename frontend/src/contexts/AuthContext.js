@@ -67,6 +67,10 @@ export const AuthProvider = ({ children }) => {
     await fetchUser();
   };
 
+  // Mirrors backend's premium check (see subscription_tier gates in
+  // backend/server.py, e.g. check_ai_limit/check_library_limit).
+  const isPremium = user?.subscription_tier === 'premium' || user?.subscription_tier === 'founding_member';
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -76,7 +80,8 @@ export const AuthProvider = ({ children }) => {
       register,
       logout,
       refreshUser,
-      isAuthenticated: !!user
+      isAuthenticated: !!user,
+      isPremium
     }}>
       {children}
     </AuthContext.Provider>

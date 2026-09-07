@@ -31,7 +31,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
-import { uploadBook } from '@/lib/api';
+import { uploadBook, isLibraryLimitError } from '@/lib/api';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { AcquisitionOptions } from './AcquisitionOptions';
 import { EpubUploadZone } from './EpubUploadZone';
@@ -106,6 +106,11 @@ export function AcquisitionModal({ isOpen, onClose, book, onImported }) {
       setUploadOrigin(screen);
       setScreen(SCREENS.PROCESSING);
     } catch (err) {
+      if (isLibraryLimitError(err)) {
+        // Free-tier library cap — gate modal, not a generic error toast.
+        // TODO: trigger gate modal (design coming separately)
+        return;
+      }
       setUploadError(err.response?.data?.detail || err.message || 'Upload failed. Please try again.');
     }
   };

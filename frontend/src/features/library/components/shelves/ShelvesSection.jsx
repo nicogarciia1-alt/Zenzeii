@@ -18,8 +18,14 @@
  * placeholder shelf. This does NOT wire the section itself to live
  * shelf data — still deliberately mock, per COO
  * instruction, until all 6 shelves are seeded.
+ *
+ * Gate 2 (Sept 2026): Discover Japan shelves are Pass-only — free users
+ * get the card (title/description/cover preview) but clicking it shows
+ * the gate instead of navigating to the full collection. See useAuth's
+ * isPremium.
  */
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { SectionHeader } from './SectionHeader';
 import { ShelfScrollContainer } from './ShelfScrollContainer';
 import { FeelingCard } from './FeelingCard';
@@ -29,6 +35,15 @@ import { MOCK_CATALOG_BOOKS } from '../../data/mockCatalog';
 
 export function ShelvesSection() {
   const navigate = useNavigate();
+  const { isPremium } = useAuth();
+
+  const handleShelfClick = (slug) => {
+    if (!isPremium) {
+      // TODO: trigger gate modal (design coming separately)
+      return;
+    }
+    navigate(`/bookshelves/${slug}`);
+  };
 
   return (
     <div className="py-8 space-y-spacing-12">
@@ -52,7 +67,7 @@ export function ShelvesSection() {
               bookCount={shelf.book_count}
               imageUrl={shelf.image_url}
               emoji={shelf.emoji}
-              onClick={() => navigate(`/bookshelves/${shelf.slug}`)}
+              onClick={() => handleShelfClick(shelf.slug)}
             />
           ))}
         </ShelfScrollContainer>

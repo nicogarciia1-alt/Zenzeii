@@ -27,14 +27,15 @@ import BookCard from '@/components/books/BookCard';
 import { 
   getBooks, 
   getProgress, 
-  getAvailableBooks, 
-  importBook, 
+  getAvailableBooks,
+  importBook,
   searchGutenberg,
   searchAozora,
   uploadBook,
   getBookStatus,
   cancelImport,
-  prioritizeImport
+  prioritizeImport,
+  isLibraryLimitError
 } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -157,7 +158,10 @@ export const HomePage = () => {
       const availableRes = await getAvailableBooks();
       setAvailableBooks(availableRes.data);
     } catch (error) {
-      if (error.response?.status === 429) {
+      if (isLibraryLimitError(error)) {
+        // Free-tier library cap — gate modal, not a generic error toast.
+        // TODO: trigger gate modal (design coming separately)
+      } else if (error.response?.status === 429) {
         toast.error('Import limit reached (3 books/hour). Please try again later.');
       } else {
         toast.error('Failed to start import');
@@ -210,7 +214,12 @@ export const HomePage = () => {
       }
       setShowImportDialog(false);
     } catch (error) {
-      toast.error('Failed to start import');
+      if (isLibraryLimitError(error)) {
+        // Free-tier library cap — gate modal, not a generic error toast.
+        // TODO: trigger gate modal (design coming separately)
+      } else {
+        toast.error('Failed to start import');
+      }
       setImportingBooks(prev => { const n = new Set(prev); n.delete(tempId); return n; });
     }
   };
@@ -231,7 +240,13 @@ export const HomePage = () => {
       setUploadAuthor('');
       setShowImportDialog(false);
     } catch (error) {
-      toast.error('Upload failed');
+      if (isLibraryLimitError(error)) {
+        // Free-tier library cap — gate modal, not a generic error toast.
+        // TODO: trigger gate modal (design coming separately)
+      } else {
+        const detail = error.response?.data?.detail;
+        toast.error(detail || 'Upload failed');
+      }
     } finally {
       setUploading(false);
     }

@@ -1186,6 +1186,17 @@ async def record_import(user_id: str, book_id: str):
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
 
+async def check_library_limit(user: dict) -> None:
+    """Free users are capped at 2 books in their personal library."""
+    if user.get("subscription_tier") in ("premium", "founding_member"):
+        return
+    book_count = await db.user_shelves.count_documents({"user_id": user["id"]})
+    if book_count >= 2:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "library_limit_reached", "limit": 2}
+        )
+
 async def _add_to_shelf(user_id: str, book_id: str):
     """Add a book to the user's shelf. Silently ignores if already present."""
     try:
@@ -1245,6 +1256,7 @@ async def import_book(
             return {"message": "Book already in your library", "book_id": book_id,
                     "status": existing.get("import_status", "completed") if existing else "completed"}
 
+        await check_library_limit(current_user)
         await _add_to_shelf(current_user["id"], book_id)
 
         existing = await db.books.find_one({"id": book_id}, {"_id": 0, "import_status": 1})
@@ -1300,6 +1312,7 @@ async def import_book(
             return {"message": "Book already in your library", "book_id": book_id,
                     "status": existing.get("import_status", "completed") if existing else "completed"}
 
+        await check_library_limit(current_user)
         await _add_to_shelf(current_user["id"], book_id)
 
         existing = await db.books.find_one({"id": book_id}, {"_id": 0, "import_status": 1})
@@ -1707,6 +1720,8 @@ async def upload_book(
     current_user: dict = Depends(get_current_user)
 ):
     """Upload a book file for instant import"""
+    await check_library_limit(current_user)
+
     allowed_extensions = ('.txt', '.epub')
     if not file.filename.lower().endswith(allowed_extensions):
         raise HTTPException(
