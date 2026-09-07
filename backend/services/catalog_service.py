@@ -341,9 +341,6 @@ def build_catalog_filter(params: CatalogQueryParams) -> Dict[str, Any]:
             year_range["$lte"] = params.year_to
         query["publication_year"] = year_range
 
-    if params.min_rating is not None:
-        query["rating_avg"] = {"$gte": params.min_rating}
-
     # --- Layer 2 discovery filters ---
     if params.theme:
         query["theme_ids"] = {"$in": params.theme}

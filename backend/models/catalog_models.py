@@ -692,7 +692,6 @@ class CatalogQueryParams(BaseModel):
     availability: List[Availability] = Field(default_factory=list)
     year_from: Optional[int] = None
     year_to: Optional[int] = None
-    min_rating: Optional[float] = None
 
     # --- Layer 2 discovery filters ---
     theme: List[str] = Field(default_factory=list)
