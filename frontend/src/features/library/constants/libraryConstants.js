@@ -107,3 +107,10 @@ export const FILTER_BAR_CHIPS = [
 export const DIFFICULTY_OPTIONS = Object.entries(DIFFICULTY_LABELS).map(([value, label]) => ({ value, label }));
 export const JLPT_OPTIONS = Object.entries(JLPT_LABELS).map(([value, label]) => ({ value, label }));
 export const LENGTH_OPTIONS = Object.entries(LENGTH_LABELS).map(([value, label]) => ({ value, label }));
+export const AVAILABILITY_OPTIONS = Object.entries(AVAILABILITY_LABELS).map(([value, label]) => ({ value, label }));
+export const LANGUAGE_OPTIONS = Object.entries(LANGUAGE_LABELS).map(([value, label]) => ({ value, label }));
+export const RATING_OPTIONS = [
+  { value: '3', label: '3+ stars' },
+  { value: '4', label: '4+ stars' },
+  { value: '5', label: '5 stars' },
+];

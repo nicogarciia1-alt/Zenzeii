@@ -17,17 +17,26 @@
  * inline below the row rather than via FilterDropdown: FilterDropdown's
  * position:fixed exists solely to escape FilterBar's horizontal
  * overflow-x-auto clipping, a problem this vertical, normally-scrolling
- * sidebar doesn't have. Secondary rows (Format, Publication Year,
- * Ratings, Availability, Language) stay visual shells only — clicking
- * them does nothing yet, per COO instruction (fast-follow commit).
+ * sidebar doesn't have. Secondary rows: Availability, Language and
+ * Ratings are wired the same way as the primary rows (single-select
+ * dropdown); Publication Year renders inline From/To number inputs
+ * instead. Format has no backend field behind it and stays a visual
+ * shell only — do not wire it.
  *
  * Both "Clear all" (top row) and "Reset filters" (status card) are wired
  * to the same onResetFilters callback (useCatalog.clearAllFilters) — one
  * function, two entry points to it, matching the brief's visual spec.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, BarChart2, Clock, Leaf, AlignLeft, Calendar, Star, RefreshCw, MessageSquare, ChevronDown, Check } from 'lucide-react';
-import { DIFFICULTY_OPTIONS, JLPT_OPTIONS, LENGTH_OPTIONS } from '../../constants/libraryConstants';
+import {
+  DIFFICULTY_OPTIONS,
+  JLPT_OPTIONS,
+  LENGTH_OPTIONS,
+  AVAILABILITY_OPTIONS,
+  LANGUAGE_OPTIONS,
+  RATING_OPTIONS,
+} from '../../constants/libraryConstants';
 import { MOCK_GENRES, MOCK_THEMES } from '../../data/mockTaxonomy';
 
 /** Primary filter rows — the only ones with real options/backend support behind them. `key` matches the useCatalog filter id. */
@@ -39,7 +48,11 @@ const PRIMARY_ROWS = [
   { key: 'theme', icon: Leaf, jp: 'テーマ', en: 'Theme' },
 ];
 
-/** Secondary filter rows — visual shell only, no backend support wired. See connectivity report in the brief response. */
+/**
+ * Secondary filter rows. `format` has no backend field and stays a
+ * visual shell; the rest are wired below, each handled per its own
+ * render shape (dropdown vs. inline year inputs) — see FilterSidebar.
+ */
 const SECONDARY_ROWS = [
   { key: 'format', icon: AlignLeft, jp: '形式', en: 'Format' },
   { key: 'publication_year', icon: Calendar, jp: '出版年', en: 'Publication Year' },
@@ -47,6 +60,13 @@ const SECONDARY_ROWS = [
   { key: 'availability', icon: RefreshCw, jp: '入手可能状況', en: 'Availability' },
   { key: 'language', icon: MessageSquare, jp: '言語', en: 'Language' },
 ];
+
+/** Maps a wired secondary row's key to its useCatalog filter id — `ratings` writes to `min_rating`, everything else matches its row key. */
+const SECONDARY_FILTER_KEY = {
+  availability: 'availability',
+  language: 'language',
+  ratings: 'min_rating',
+};
 
 /** Maps a taxonomy entity (Genre/Theme shape) to a FilterOption — same mapping FilterBar uses. */
 const toFilterOption = (entity) => ({ value: entity.id, label: entity.name });
@@ -124,10 +144,59 @@ function FilterOptionsList({ options, selectedValue, onSelect }) {
 }
 
 /**
+ * Inline From/To year inputs for the expanded Publication Year row, in
+ * place of FilterOptionsList's dropdown — a range has no fixed option
+ * list. Local input state so typing doesn't fire a request per
+ * keystroke; commits on blur or Enter. Resyncs from `yearFrom`/`yearTo`
+ * so an external clear (Clear all / Reset filters) blanks the inputs too.
+ */
+function PublicationYearInputs({ yearFrom, yearTo, onCommit }) {
+  const [fromInput, setFromInput] = useState(yearFrom != null ? String(yearFrom) : '');
+  const [toInput, setToInput] = useState(yearTo != null ? String(yearTo) : '');
+
+  useEffect(() => {
+    setFromInput(yearFrom != null ? String(yearFrom) : '');
+  }, [yearFrom]);
+
+  useEffect(() => {
+    setToInput(yearTo != null ? String(yearTo) : '');
+  }, [yearTo]);
+
+  const commitFrom = () => onCommit('year_from', fromInput === '' ? null : Number(fromInput));
+  const commitTo = () => onCommit('year_to', toInput === '' ? null : Number(toInput));
+
+  return (
+    <div className="flex items-center gap-2 border-b border-library-border py-2 pl-7 pr-3">
+      <input
+        type="number"
+        inputMode="numeric"
+        placeholder="From"
+        value={fromInput}
+        onChange={(event) => setFromInput(event.target.value)}
+        onBlur={commitFrom}
+        onKeyDown={(event) => event.key === 'Enter' && commitFrom()}
+        className="w-full min-w-0 rounded-library-sm border border-library-border bg-transparent px-2 py-1 font-garamond text-sm text-library-text-primary focus:border-library-red focus:outline-none"
+      />
+      <span className="shrink-0 text-xs text-library-text-secondary">–</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        placeholder="To"
+        value={toInput}
+        onChange={(event) => setToInput(event.target.value)}
+        onBlur={commitTo}
+        onKeyDown={(event) => event.key === 'Enter' && commitTo()}
+        className="w-full min-w-0 rounded-library-sm border border-library-border bg-transparent px-2 py-1 font-garamond text-sm text-library-text-primary focus:border-library-red focus:outline-none"
+      />
+    </div>
+  );
+}
+
+/**
  * @param {Object} props
  * @param {number} [props.totalBooks] - Live filtered book count for the status card. Defaults to 0 when not yet loaded.
  * @param {function} [props.onResetFilters] - Wired to useCatalog.clearAllFilters. Drives both the top "Clear all" row and the status card's "Reset filters" link.
- * @param {Object} [props.filters] - Current filter state from useCatalog (only the 5 primary keys are read).
+ * @param {Object} [props.filters] - Current filter state from useCatalog (the 5 primary keys plus availability, language, min_rating, year_from, and year_to).
  * @param {function} [props.onFilterChange] - Wired to useCatalog.setFilter, called with (filterId, value) on option select.
  * @param {Object} [props.taxonomy] - Live taxonomy data from useTaxonomy: { genres, themes, loading, ... }. Falls back to mock taxonomy when omitted or still loading, same as FilterBar.
  */
@@ -150,6 +219,11 @@ export function FilterSidebar({ totalBooks = 0, onResetFilters, filters, onFilte
     length: LENGTH_OPTIONS,
     theme: themeOptions,
   };
+  const secondaryOptionsByRow = {
+    availability: AVAILABILITY_OPTIONS,
+    language: LANGUAGE_OPTIONS,
+    ratings: RATING_OPTIONS,
+  };
 
   const handleToggle = (rowKey) => {
     if (!isWired) return;
@@ -158,6 +232,12 @@ export function FilterSidebar({ totalBooks = 0, onResetFilters, filters, onFilte
 
   const handleSelect = (rowKey, value) => {
     onFilterChange(rowKey, value);
+    setExpandedRow(null);
+  };
+
+  /** Ratings options are string values ('3'/'4'/'5') but min_rating is stored/sent as a float. */
+  const handleSelectRating = (value) => {
+    onFilterChange('min_rating', value === null ? null : parseFloat(value));
     setExpandedRow(null);
   };
   return (
@@ -220,11 +300,60 @@ export function FilterSidebar({ totalBooks = 0, onResetFilters, filters, onFilte
         <span className="ml-1 text-[11px] text-library-red">More filters</span>
       </div>
 
-      {/* Secondary filter rows — visual shell only, not backend-wired */}
+      {/* Secondary filter rows — Format is a visual shell, the rest are wired */}
       <div>
-        {SECONDARY_ROWS.map((row) => (
-          <FilterRow key={row.key} icon={row.icon} jp={row.jp} en={row.en} />
-        ))}
+        {SECONDARY_ROWS.map((row) => {
+          if (row.key === 'format') {
+            return <FilterRow key={row.key} icon={row.icon} jp={row.jp} en={row.en} />;
+          }
+
+          const isExpanded = expandedRow === row.key;
+
+          if (row.key === 'publication_year') {
+            const yearFrom = filters?.year_from ?? null;
+            const yearTo = filters?.year_to ?? null;
+            return (
+              <div key={row.key}>
+                <FilterRow
+                  icon={row.icon}
+                  jp={row.jp}
+                  en={row.en}
+                  isActive={yearFrom != null || yearTo != null}
+                  isExpanded={isExpanded}
+                  onToggle={isWired ? () => handleToggle(row.key) : undefined}
+                />
+                {isExpanded && (
+                  <PublicationYearInputs yearFrom={yearFrom} yearTo={yearTo} onCommit={onFilterChange} />
+                )}
+              </div>
+            );
+          }
+
+          const filterKey = SECONDARY_FILTER_KEY[row.key];
+          const rawValue = filters?.[filterKey] ?? null;
+          const selectedValue = row.key === 'ratings' ? (rawValue != null ? String(rawValue) : null) : rawValue;
+          return (
+            <div key={row.key}>
+              <FilterRow
+                icon={row.icon}
+                jp={row.jp}
+                en={row.en}
+                isActive={rawValue != null}
+                isExpanded={isExpanded}
+                onToggle={isWired ? () => handleToggle(row.key) : undefined}
+              />
+              {isExpanded && (
+                <FilterOptionsList
+                  options={secondaryOptionsByRow[row.key]}
+                  selectedValue={selectedValue}
+                  onSelect={(newValue) =>
+                    row.key === 'ratings' ? handleSelectRating(newValue) : handleSelect(filterKey, newValue)
+                  }
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Bottom status card */}
