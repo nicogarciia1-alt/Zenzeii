@@ -121,15 +121,6 @@ export const Navbar = () => {
                   <User className="h-4 w-4" />
                   Edit Profile
                 </DropdownMenuItem>
-                {user?.subscription_tier === 'free' && (
-                  <DropdownMenuItem
-                    onSelect={() => navigate('/pricing')}
-                    className="text-[#B5294E] focus:text-[#B5294E]"
-                  >
-                    <Star className="h-4 w-4" />
-                    Upgrade to Premium
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem onSelect={() => setReportOpen(true)}>
                   <Flag className="h-4 w-4" />
                   Report Problem
@@ -142,6 +133,15 @@ export const Navbar = () => {
                   <LogOut className="h-4 w-4" />
                   Log Out
                 </DropdownMenuItem>
+                {user?.subscription_tier === 'free' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => navigate('/pricing')}>
+                      <Star className="h-4 w-4" />
+                      Get Toshokan Pass
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
