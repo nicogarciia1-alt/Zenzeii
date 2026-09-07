@@ -51,7 +51,7 @@ async def get_translation_jobs(db):
 
     # Priority 1 & 2: Any book with untranslated sentences (preparing or completed)
     all_books = await db.books.find(
-        {"import_status": {"$in": ["preparing", "completed"]}},
+        {"import_status": "preparing"},
         {"_id": 0, "id": 1, "title": 1, "import_status": 1}
     ).to_list(20)
 
