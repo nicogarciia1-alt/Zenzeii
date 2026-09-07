@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ToshokanGateProvider } from "@/features/toshokan/context/ToshokanGateContext";
 
 // Pages
 import LandingPage from "@/pages/LandingPage";
@@ -75,8 +76,10 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
-          <AppRoutes />
-          <Toaster position="bottom-right" />
+          <ToshokanGateProvider>
+            <AppRoutes />
+            <Toaster position="bottom-right" />
+          </ToshokanGateProvider>
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>

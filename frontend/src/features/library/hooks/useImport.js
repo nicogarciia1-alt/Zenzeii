@@ -42,8 +42,8 @@
  * @param {function} [onError] - Called with a human-readable message when import fails
  * @param {'idle'|'completed'} [initialStatus] - Seed state — 'completed' for books already on the shelf (book.is_on_shelf)
  * @param {function} [onLibraryLimitReached] - Called instead of onError when the free-tier
- *   2-book library cap blocks the import (no generic error toast in this case) — TODO: wire
- *   to the gate modal once its design lands
+ *   2-book library cap blocks the import (no generic error toast in this case) — ImportButton
+ *   wires this to openGate(TOSHOKAN_GATE.LIBRARY_LIMIT)
  *
  * @returns {{
  *   importStatus: 'idle'|'importing'|'completed'|'failed',

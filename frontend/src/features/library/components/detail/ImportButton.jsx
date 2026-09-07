@@ -36,6 +36,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2, Check, BookPlus, BookOpen } from 'lucide-react';
 import { useImport } from '../../hooks/useImport';
+import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
+import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
 
 /** Phase 10's grid-variant button presentation — moved here verbatim from BookCard.jsx. */
 function getGridButtonProps(importStatus) {
@@ -114,6 +116,7 @@ function getDetailButtonProps(importStatus) {
  */
 export function ImportButton({ book, variant = 'detail', onImported }) {
   const navigate = useNavigate();
+  const { openGate } = useToshokanGate();
 
   const { importStatus: hookStatus, triggerImport } = useImport(
     book.id,
@@ -122,7 +125,8 @@ export function ImportButton({ book, variant = 'detail', onImported }) {
       onImported?.();
     },
     (message) => toast.error(message || 'Import failed'),
-    book.is_on_shelf ? 'completed' : 'idle'
+    book.is_on_shelf ? 'completed' : 'idle',
+    () => openGate(TOSHOKAN_GATE.LIBRARY_LIMIT)
   );
   // book.is_on_shelf can flip true from a sibling ImportButton instance
   // completing its own separate useImport hook (see fileoverview) — that

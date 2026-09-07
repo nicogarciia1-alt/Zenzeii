@@ -32,6 +32,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { uploadBook, isLibraryLimitError } from '@/lib/api';
+import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
+import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { AcquisitionOptions } from './AcquisitionOptions';
 import { EpubUploadZone } from './EpubUploadZone';
@@ -55,6 +57,7 @@ const SCREENS = {
  */
 export function AcquisitionModal({ isOpen, onClose, book, onImported }) {
   const navigate = useNavigate();
+  const { openGate } = useToshokanGate();
   const panelRef = useRef(null);
 
   const [screen, setScreen] = useState(SCREENS.OPTIONS);
@@ -107,8 +110,7 @@ export function AcquisitionModal({ isOpen, onClose, book, onImported }) {
       setScreen(SCREENS.PROCESSING);
     } catch (err) {
       if (isLibraryLimitError(err)) {
-        // Free-tier library cap — gate modal, not a generic error toast.
-        // TODO: trigger gate modal (design coming separately)
+        openGate(TOSHOKAN_GATE.LIBRARY_LIMIT);
         return;
       }
       setUploadError(err.response?.data?.detail || err.message || 'Upload failed. Please try again.');

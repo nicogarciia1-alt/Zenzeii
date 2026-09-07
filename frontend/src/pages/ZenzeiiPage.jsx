@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import Navbar from '@/components/layout/Navbar';
 import { useZenzeiiChat } from '@/hooks/useZenzeiiChat';
 import { getAiUsage } from '@/lib/api';
+import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
+import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
 
 const garamond = '"EB Garamond", Georgia, serif';
 
@@ -9,6 +11,7 @@ export default function ZenzeiiPage() {
   const [aiUsage, setAiUsage] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const { openGate } = useToshokanGate();
 
   const handleAiUsed = () => {
     setAiUsage((prev) => prev && prev.ai_messages_remaining !== null ? {
@@ -20,6 +23,7 @@ export default function ZenzeiiPage() {
 
   const handleAiLimitReached = () => {
     setAiUsage((prev) => prev ? { ...prev, ai_messages_remaining: 0 } : prev);
+    openGate(TOSHOKAN_GATE.ASK_ZENZEII_LIMIT);
   };
 
   const { messages, input, setInput, thinking, handleSend, handleKeyDown, limitReached } = useZenzeiiChat({

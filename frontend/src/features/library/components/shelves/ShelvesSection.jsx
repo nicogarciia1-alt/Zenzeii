@@ -26,6 +26,8 @@
  */
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
+import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
 import { SectionHeader } from './SectionHeader';
 import { ShelfScrollContainer } from './ShelfScrollContainer';
 import { FeelingCard } from './FeelingCard';
@@ -36,10 +38,11 @@ import { MOCK_CATALOG_BOOKS } from '../../data/mockCatalog';
 export function ShelvesSection() {
   const navigate = useNavigate();
   const { isPremium } = useAuth();
+  const { openGate } = useToshokanGate();
 
   const handleShelfClick = (slug) => {
     if (!isPremium) {
-      // TODO: trigger gate modal (design coming separately)
+      openGate(TOSHOKAN_GATE.CURATED_COLLECTION, { slug });
       return;
     }
     navigate(`/bookshelves/${slug}`);

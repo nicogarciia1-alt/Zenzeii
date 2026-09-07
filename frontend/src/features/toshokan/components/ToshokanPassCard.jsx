@@ -1,9 +1,21 @@
 import React from 'react';
 import { SakuraBranch } from './decorations';
+// Colocated so .pass-card renders correctly wherever this component is
+// used, including from ToshokanGateModal — which mounts from pages that
+// never import ToshokanPassPage (and therefore never load this CSS
+// otherwise). Safe to import alongside ToshokanPassPage.jsx's own import
+// of the same file — CSS module imports are deduped.
+import '../toshokan.css';
 
-export function ToshokanPassCard() {
+/**
+ * @param {Object} [props]
+ * @param {'default'|'compact'} [props.size] - 'compact' is a smaller,
+ *   proportionally-scaled rendering (same markup/identity, just resized)
+ *   used inside ToshokanGateModal — see .pass-card--compact in toshokan.css.
+ */
+export function ToshokanPassCard({ size = 'default' }) {
   return (
-    <div className="pass-card">
+    <div className={`pass-card${size === 'compact' ? ' pass-card--compact' : ''}`}>
       <div className="pass-card__branch">
         <SakuraBranch color="#C8A830" opacity={0.11} className="w-full h-full" />
       </div>

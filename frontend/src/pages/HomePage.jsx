@@ -38,8 +38,11 @@ import {
   isLibraryLimitError
 } from '@/lib/api';
 import { toast } from 'sonner';
+import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
+import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
 
 export const HomePage = () => {
+  const { openGate } = useToshokanGate();
   const [books, setBooks] = useState([]);
   const [progress, setProgress] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -159,8 +162,7 @@ export const HomePage = () => {
       setAvailableBooks(availableRes.data);
     } catch (error) {
       if (isLibraryLimitError(error)) {
-        // Free-tier library cap — gate modal, not a generic error toast.
-        // TODO: trigger gate modal (design coming separately)
+        openGate(TOSHOKAN_GATE.LIBRARY_LIMIT);
       } else if (error.response?.status === 429) {
         toast.error('Import limit reached (3 books/hour). Please try again later.');
       } else {
@@ -215,8 +217,7 @@ export const HomePage = () => {
       setShowImportDialog(false);
     } catch (error) {
       if (isLibraryLimitError(error)) {
-        // Free-tier library cap — gate modal, not a generic error toast.
-        // TODO: trigger gate modal (design coming separately)
+        openGate(TOSHOKAN_GATE.LIBRARY_LIMIT);
       } else {
         toast.error('Failed to start import');
       }
@@ -241,8 +242,7 @@ export const HomePage = () => {
       setShowImportDialog(false);
     } catch (error) {
       if (isLibraryLimitError(error)) {
-        // Free-tier library cap — gate modal, not a generic error toast.
-        // TODO: trigger gate modal (design coming separately)
+        openGate(TOSHOKAN_GATE.LIBRARY_LIMIT);
       } else {
         const detail = error.response?.data?.detail;
         toast.error(detail || 'Upload failed');

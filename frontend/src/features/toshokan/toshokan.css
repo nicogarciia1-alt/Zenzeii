@@ -200,6 +200,30 @@
     0 4px 12px rgba(34, 18, 14, 0.12);
 }
 
+/* Compact variant — same markup/identity, proportionally scaled down for
+   use inside ToshokanGateModal (~290-320px desktop, ~240-270px mobile).
+   Explicit smaller values rather than transform/zoom, so it stays crisp
+   and reflows normally in-flow. */
+.pass-card--compact {
+  width: min(100%, 300px);
+  border-radius: 12px;
+}
+.pass-card--compact .pass-card__mark { font-size: 17px; }
+.pass-card--compact .pass-card__mark-label { font-size: 6px; margin-top: 5px; }
+.pass-card--compact .pass-card__brand { font-size: 19px; }
+.pass-card--compact .pass-card__brand-label { font-size: 5px; margin-top: 2px; }
+.pass-card--compact .pass-card__label { font-size: 6px; }
+.pass-card--compact .pass-card__value { font-size: 10px; margin-top: 1px; }
+.pass-card--compact .pass-card__label--since { margin-top: 7px; }
+.pass-card--compact .pass-card__seal { width: 20px; height: 20px; }
+.pass-card--compact .pass-card__seal span { font-size: 5px; }
+
+@media (max-width: 640px) {
+  .pass-card--compact {
+    width: min(100%, 260px);
+  }
+}
+
 .pass-card__branch {
   position: absolute;
   right: -8%;

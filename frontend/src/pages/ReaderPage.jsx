@@ -44,6 +44,8 @@ import ReaderCustomizationPanel, {
 import ZenzeiiChat from '@/components/reader/ZenzeiiChat';
 import { buildVocabIndex } from '@/lib/vocabHighlight';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
+import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
 import {
   getBook,
   getChapters,
@@ -140,6 +142,7 @@ export const ReaderPage = () => {
   const { bookId, chapterId } = useParams();
   const navigate = useNavigate();
   const { theme, toggleTheme, readerSettings, updateReaderSettings } = useTheme();
+  const { openGate } = useToshokanGate();
   const sentinelRef = useRef(null);
   const touchStartX = useRef(null);
   const translateChunkInFlight = useRef(false);
@@ -230,7 +233,8 @@ export const ReaderPage = () => {
 
   const handleAiLimitReached = useCallback(() => {
     setAiUsage(prev => prev ? { ...prev, ai_messages_remaining: 0 } : prev);
-  }, []);
+    openGate(TOSHOKAN_GATE.ASK_ZENZEII_LIMIT);
+  }, [openGate]);
 
   useEffect(() => {
     fetchBookData();
