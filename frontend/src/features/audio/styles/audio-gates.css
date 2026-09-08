@@ -1,0 +1,306 @@
+/* Zenzeii audio purchase experience — taster / purchase modals + the
+   low-balance player pill. Visually matches the Toshokan gate modal
+   family (same shell tokens) but kept as its own stylesheet/class
+   namespace since audio minute packs are a separate product from the
+   Toshokan Pass membership — see audioGateTypes.js. */
+
+.audio-gate-backdrop {
+  --font-literary-serif: 'Noto Serif JP', 'Merriweather', serif;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(18, 12, 10, 0.68);
+  backdrop-filter: blur(2px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .audio-gate-backdrop[data-state='open'] {
+    animation: audio-gate-fade 200ms ease-out;
+  }
+  .audio-gate-modal[data-state='open'] {
+    animation: audio-gate-rise 200ms ease-out;
+  }
+}
+
+@keyframes audio-gate-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes audio-gate-rise {
+  from { opacity: 0; transform: translate(-50%, -50%) translateY(6px); }
+  to { opacity: 1; transform: translate(-50%, -50%) translateY(0); }
+}
+
+.audio-gate-modal {
+  /* Radix portals Content as an independent sibling under <body>, so it
+     needs its own fixed centering + a z-index above the backdrop's 1000. */
+  --font-literary-serif: 'Noto Serif JP', 'Merriweather', serif;
+
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
+  width: min(100%, 560px);
+  max-width: calc(100vw - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  background: #f7f1e7;
+  border: 1px solid rgba(72, 50, 40, 0.14);
+  border-radius: 14px;
+  box-shadow:
+    0 28px 80px rgba(20, 12, 10, 0.30),
+    0 4px 18px rgba(20, 12, 10, 0.12);
+  padding: 34px 40px 30px;
+  outline: none;
+}
+
+.audio-gate-modal--purchase {
+  width: min(100%, 620px);
+}
+
+.audio-gate-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: #514740;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.audio-gate-close:hover {
+  background: rgba(72, 50, 40, 0.08);
+}
+.audio-gate-close:focus-visible {
+  outline: 2px solid #6b1f1f;
+  outline-offset: 2px;
+}
+
+.audio-gate-headline {
+  font-family: var(--font-literary-serif);
+  font-size: clamp(34px, 3vw, 46px);
+  line-height: 1.05;
+  font-weight: 500;
+  text-align: center;
+  color: #1d1815;
+  margin: 4px 0 14px;
+}
+
+.audio-gate-body {
+  max-width: 430px;
+  margin: 0 auto;
+  font-size: 16px;
+  line-height: 1.6;
+  text-align: center;
+  color: #514740;
+}
+
+/* ---------- Taster ---------- */
+
+.audio-taster-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 30px auto;
+}
+
+.audio-taster-caption {
+  text-align: center;
+  font-size: 13px;
+  font-style: italic;
+  color: #8d837c;
+  margin: 0 0 30px;
+}
+
+.audio-taster-cta {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 4px;
+  background: #6b1f1f;
+  color: #fffaf2;
+  font-family: var(--font-literary-serif);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.audio-taster-cta:hover {
+  background: #5e1919;
+}
+.audio-taster-cta:focus-visible {
+  outline: 2px solid #5e1919;
+  outline-offset: 2px;
+}
+
+/* ---------- Purchase ---------- */
+
+.audio-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 30px 0 24px;
+}
+
+.audio-pack-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(84, 63, 50, 0.16);
+  border-radius: 8px;
+  padding: 22px 12px 14px;
+  text-align: center;
+}
+
+.audio-pack-card--recommended {
+  border-color: rgba(200, 168, 48, 0.72);
+  box-shadow: 0 0 0 1px rgba(200, 168, 48, 0.14);
+}
+
+.audio-pack-card__badge {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #c8a830;
+  color: #2c2018;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.audio-pack-card__label {
+  font-size: 13px;
+  color: #8d837c;
+  margin-bottom: 4px;
+}
+
+.audio-pack-card__minutes {
+  font-family: var(--font-literary-serif);
+  font-size: 28px;
+  color: #1d1815;
+}
+
+.audio-pack-card__divider {
+  width: 28px;
+  height: 1px;
+  background: rgba(72, 50, 40, 0.2);
+  margin: 10px 0;
+}
+
+.audio-pack-card__price {
+  font-family: var(--font-literary-serif);
+  font-size: 26px;
+  color: #6b1f1f;
+  margin-bottom: 16px;
+}
+
+.audio-pack-card__buy {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 4px;
+  background: #6b1f1f;
+  color: #fffaf2;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 150ms ease;
+}
+.audio-pack-card__buy:hover:not(:disabled) {
+  background: #5e1919;
+}
+.audio-pack-card__buy:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.audio-purchase-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: #8d837c;
+}
+
+.audio-purchase-error {
+  margin: 0 0 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #6b1f1f;
+}
+
+@media (max-width: 640px) {
+  .audio-gate-modal {
+    width: calc(100vw - 24px);
+    padding: 28px 22px 24px;
+    border-radius: 12px;
+  }
+  .audio-pack-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Low balance pill (player bar) ---------- */
+
+.audio-low-balance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #f3ddd8;
+  border: 1px solid rgba(107, 31, 31, 0.16);
+  color: #7c2626;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.audio-low-balance-pill__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.audio-low-balance-pill__divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(107, 31, 31, 0.22);
+}
+
+.audio-low-balance-pill__topup {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: #7c2626;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}

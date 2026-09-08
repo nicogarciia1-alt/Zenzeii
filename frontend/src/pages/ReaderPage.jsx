@@ -46,7 +46,9 @@ import { buildVocabIndex } from '@/lib/vocabHighlight';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
 import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
-import { ToshokanAudioModal, AudioMinutesPill } from '@/features/toshokan/components/gates/ToshokanAudioModal';
+import { AudioGateModal } from '@/features/audio/components/gates/AudioGateModal';
+import { AudioLowBalancePill } from '@/features/audio/components/player/AudioLowBalancePill';
+import { AUDIO_GATE, getAudioAccessState, isLowBalance } from '@/features/audio/constants/audioGateTypes';
 import {
   getBook,
   getChapters,
@@ -70,7 +72,6 @@ import axios from 'axios';
 const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
 
 const AUDIO_ENABLED = true;
-const AUDIO_LOW_BALANCE_THRESHOLD = 3;
 
 const DEFAULT_SENTENCES_PER_PAGE = 50;
 
@@ -171,7 +172,7 @@ export const ReaderPage = () => {
   const [audioBalanceData, setAudioBalanceData] = useState(null);
   const [cachedChapterIds, setCachedChapterIds] = useState(new Set());
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
-  const [showAudioPrompt, setShowAudioPrompt] = useState(null); // null | 'taster' | 'no_minutes'
+  const [showAudioPrompt, setShowAudioPrompt] = useState(null); // null | AUDIO_GATE.TASTER | AUDIO_GATE.PURCHASE
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(null);
   const [highlightedSentenceId, setHighlightedSentenceId] = useState(null);
   const audioRef = useRef(null);
@@ -473,10 +474,22 @@ export const ReaderPage = () => {
     translateChunkInFlight.current = false;
   }, [chapterId]);
 
+  // Stripe checkout is an external redirect (no in-app return route yet),
+  // so refresh the backend-authoritative balance whenever the reader tab
+  // regains focus — covers a user returning after completing a purchase.
+  useEffect(() => {
+    const refreshBalanceOnFocus = () => {
+      if (document.visibilityState !== 'visible' || audioBalanceData === null) return;
+      getAudioBalance().then(r => setAudioBalanceData(r.data)).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', refreshBalanceOnFocus);
+    return () => document.removeEventListener('visibilitychange', refreshBalanceOnFocus);
+  }, [audioBalanceData]);
+
   const loadChapterAudio = async () => {
     if (!chapterId) return;
     if (audioBalanceData !== null && audioBalanceData.total_minutes_available <= 0) {
-      setShowAudioPrompt('no_minutes');
+      setShowAudioPrompt(AUDIO_GATE.PURCHASE);
       return;
     }
     setAudioLoading(true);
@@ -504,7 +517,7 @@ export const ReaderPage = () => {
       }
     } catch (err) {
       if (err.response?.status === 402) {
-        setShowAudioPrompt('no_minutes');
+        setShowAudioPrompt(AUDIO_GATE.PURCHASE);
       } else {
         toast.error('Could not load audio for this chapter. Please try again.');
       }
@@ -513,11 +526,17 @@ export const ReaderPage = () => {
     }
   };
 
-  // Gate the first-ever play for a free-tier user behind an explicit
-  // "you have 1 free minute" consent step, instead of silently spending it.
+  // Resolve eligibility from the real balance fields (never invented
+  // client-side): purchased minutes play immediately, an untouched free
+  // taster gets an explicit consent step, otherwise show the purchase gate.
   const handleListenClick = () => {
-    if (audioBalanceData?.subscription_tier === 'free' && (audioBalanceData?.audio_free_minutes_used ?? 0) === 0) {
-      setShowAudioPrompt('taster');
+    const access = getAudioAccessState(audioBalanceData);
+    if (access === AUDIO_GATE.TASTER) {
+      setShowAudioPrompt(AUDIO_GATE.TASTER);
+      return;
+    }
+    if (access === AUDIO_GATE.PURCHASE) {
+      setShowAudioPrompt(AUDIO_GATE.PURCHASE);
       return;
     }
     loadChapterAudio();
@@ -1319,11 +1338,11 @@ export const ReaderPage = () => {
                 }
                 const mins = minsNum.toFixed(1);
 
-                if (minsNum < AUDIO_LOW_BALANCE_THRESHOLD) {
+                if (isLowBalance(minsNum)) {
                   return (
-                    <AudioMinutesPill
-                      minutes={minsNum}
-                      onTopUp={() => setShowAudioPrompt('no_minutes')}
+                    <AudioLowBalancePill
+                      minutesRemaining={minsNum}
+                      onTopUp={() => setShowAudioPrompt(AUDIO_GATE.PURCHASE)}
                     />
                   );
                 }
@@ -1361,9 +1380,9 @@ export const ReaderPage = () => {
         </div>
       )}
 
-      <ToshokanAudioModal
+      <AudioGateModal
         open={!!showAudioPrompt}
-        state={showAudioPrompt}
+        gateType={showAudioPrompt}
         onClose={() => setShowAudioPrompt(null)}
         onPlayNow={loadChapterAudio}
       />
