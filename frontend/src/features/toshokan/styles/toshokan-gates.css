@@ -5,8 +5,6 @@
    not only from within the Toshokan Pass page itself. */
 
 .toshokan-gate-backdrop {
-  --font-literary-serif: 'Noto Serif JP', 'Merriweather', serif;
-
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -32,13 +30,25 @@
 }
 
 @keyframes toshokan-gate-rise {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translate(-50%, -50%) translateY(6px); }
+  to { opacity: 1; transform: translate(-50%, -50%) translateY(0); }
 }
 
 .toshokan-gate-modal {
-  position: relative;
+  /* Radix's DialogPortal portals Overlay and Content as independent
+     siblings directly under <body> — Content is never actually nested
+     inside .toshokan-gate-backdrop's grid, so it needs its own fixed
+     centering and a z-index above the backdrop's 1000, or it renders
+     wherever it falls in normal document flow (invisible/off-screen). */
+  --font-literary-serif: 'Noto Serif JP', 'Merriweather', serif;
+
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
   width: min(100%, 560px);
+  max-width: calc(100vw - 48px);
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
   background: #f7f1e7;
