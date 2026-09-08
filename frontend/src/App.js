@@ -16,7 +16,6 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import PricingPage from "@/pages/PricingPage";
-import AudioPacksPage from "@/pages/AudioPacksPage";
 import LibraryPage from "@/pages/LibraryPage";
 import BookDetailPage from "@/pages/BookDetailPage";
 import ShelfDetailPage from "@/pages/ShelfDetailPage";
@@ -65,7 +64,6 @@ function AppRoutes() {
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route path="/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
       <Route path="/upgrade" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
-      <Route path="/audio-packs" element={<ProtectedRoute><AudioPacksPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

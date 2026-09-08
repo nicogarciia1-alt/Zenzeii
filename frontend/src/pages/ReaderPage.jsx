@@ -46,6 +46,7 @@ import { buildVocabIndex } from '@/lib/vocabHighlight';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
 import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
+import { ToshokanAudioModal, AudioMinutesPill } from '@/features/toshokan/components/gates/ToshokanAudioModal';
 import {
   getBook,
   getChapters,
@@ -69,6 +70,7 @@ import axios from 'axios';
 const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
 
 const AUDIO_ENABLED = true;
+const AUDIO_LOW_BALANCE_THRESHOLD = 3;
 
 const DEFAULT_SENTENCES_PER_PAGE = 50;
 
@@ -77,8 +79,9 @@ const TokenizedSentence = ({ text, sentenceId, onWordClick, tokenCache, getToken
   const [tokens, setTokens] = React.useState(null);
 
   React.useEffect(() => {
-    if (tokenCache[sentenceId]) {
-      setTokens(tokenCache[sentenceId]);
+    const cacheKey = `${sentenceId}:${text}`;
+    if (tokenCache[cacheKey]) {
+      setTokens(tokenCache[cacheKey]);
     } else {
       getTokens(sentenceId, text).then(setTokens);
     }
@@ -446,11 +449,12 @@ export const ReaderPage = () => {
   };
 
   const getTokens = async (sentenceId, text) => {
-    if (tokenCache[sentenceId]) return tokenCache[sentenceId];
+    const cacheKey = `${sentenceId}:${text}`;
+    if (tokenCache[cacheKey]) return tokenCache[cacheKey];
     try {
       const res = await axios.post(`${API}/tokenize`, { text });
       const tokens = res.data.tokens || [];
-      setTokenCache(prev => ({ ...prev, [sentenceId]: tokens }));
+      setTokenCache(prev => ({ ...prev, [cacheKey]: tokens }));
       return tokens;
     } catch {
       return [{ surface: text, reading: '', pos: '' }];
@@ -472,7 +476,7 @@ export const ReaderPage = () => {
   const loadChapterAudio = async () => {
     if (!chapterId) return;
     if (audioBalanceData !== null && audioBalanceData.total_minutes_available <= 0) {
-      setShowAudioPrompt(audioBalanceData.is_free_taster_exhausted && audioBalanceData.subscription_tier === 'free' ? 'taster' : 'no_minutes');
+      setShowAudioPrompt('no_minutes');
       return;
     }
     setAudioLoading(true);
@@ -500,13 +504,23 @@ export const ReaderPage = () => {
       }
     } catch (err) {
       if (err.response?.status === 402) {
-        setShowAudioPrompt(audioBalanceData?.is_free_taster_exhausted && audioBalanceData?.subscription_tier === 'free' ? 'taster' : 'no_minutes');
+        setShowAudioPrompt('no_minutes');
       } else {
         toast.error('Could not load audio for this chapter. Please try again.');
       }
     } finally {
       setAudioLoading(false);
     }
+  };
+
+  // Gate the first-ever play for a free-tier user behind an explicit
+  // "you have 1 free minute" consent step, instead of silently spending it.
+  const handleListenClick = () => {
+    if (audioBalanceData?.subscription_tier === 'free' && (audioBalanceData?.audio_free_minutes_used ?? 0) === 0) {
+      setShowAudioPrompt('taster');
+      return;
+    }
+    loadChapterAudio();
   };
 
   const handleAudioPlayPause = () => {
@@ -1166,9 +1180,9 @@ export const ReaderPage = () => {
             left: 0,
             right: 0,
             zIndex: 90,
-            backgroundColor: showAudioPrompt ? (theme === 'dark' ? '#2C2018' : '#EDE6D6') : 'hsl(var(--background))',
-            borderTop: showAudioPrompt ? '2px solid #C9BC9E' : '1px solid hsl(var(--border))',
-            padding: showAudioPrompt ? '16px 20px' : '10px 20px',
+            backgroundColor: 'hsl(var(--background))',
+            borderTop: '1px solid hsl(var(--border))',
+            padding: '10px 20px',
           }}
         >
           <audio
@@ -1180,50 +1194,11 @@ export const ReaderPage = () => {
             onPause={() => setIsPlaying(false)}
           />
 
-          {showAudioPrompt ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
-                <span style={{ fontFamily: '"Cormorant Garamond", Georgia, serif', fontSize: '32px', opacity: 0.25, lineHeight: 1, color: theme === 'dark' ? '#F5F0E8' : '#1C1410', userSelect: 'none', flexShrink: 0, marginTop: '2px' }}>
-                  声
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: '"Cormorant Garamond", Georgia, serif', fontSize: '18px', fontStyle: 'italic', color: theme === 'dark' ? '#F5F0E8' : '#1C1410', lineHeight: 1.3 }}>
-                    {showAudioPrompt === 'taster' ? "You've heard what's possible." : 'Your reading awaits its voice.'}
-                  </div>
-                  <div style={{ fontFamily: '"Crimson Text", Georgia, serif', fontSize: '14px', color: '#6B5744', marginTop: '4px', lineHeight: 1.4 }}>
-                    {showAudioPrompt === 'taster'
-                      ? 'Your free minute has been used. Continue your reading with a narration pack.'
-                      : 'Add narration to continue listening.'}
-                  </div>
-                </div>
-                <button
-                  onClick={() => { audioRef.current?.pause(); setIsPlaying(false); setAudioMode(false); setShowAudioPrompt(null); }}
-                  style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #C9BC9E', backgroundColor: 'transparent', color: '#6B5744', fontSize: '0.8rem', cursor: 'pointer', flexShrink: 0 }}
-                >
-                  ✕
-                </button>
-              </div>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <Link
-                  to={`/audio-packs${bookId ? `?from=${bookId}` : ''}`}
-                  style={{ fontFamily: '"EB Garamond", Georgia, serif', fontSize: '14px', padding: '7px 18px', backgroundColor: theme === 'dark' ? '#F5F0E8' : '#1C1410', color: theme === 'dark' ? '#1C1410' : '#F5F0E8', borderRadius: '4px', textDecoration: 'none', whiteSpace: 'nowrap', display: 'inline-block' }}
-                >
-                  Explore narration packs
-                </Link>
-                <button
-                  onClick={() => setShowAudioPrompt(null)}
-                  style={{ fontFamily: '"EB Garamond", Georgia, serif', fontSize: '14px', padding: '7px 18px', backgroundColor: 'transparent', color: '#6B5744', border: '1px solid #C9BC9E', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                >
-                  Not now
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               {/* Load button — shown before any audio is fetched */}
               {!audioUrl && !audioLoading && (
                 <button
-                  onClick={loadChapterAudio}
+                  onClick={handleListenClick}
                   style={{
                     fontFamily: '"EB Garamond", Georgia, serif',
                     fontSize: '0.85rem',
@@ -1328,19 +1303,29 @@ export const ReaderPage = () => {
                         audio_pack_minutes_balance, total_minutes_available, audio_monthly_reset_date } = audioBalanceData;
                 const s = { fontFamily: '"EB Garamond", Georgia, serif', fontSize: '0.8rem', color: '#6B5744', whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '4px' };
 
-                let mins;
+                let minsNum;
                 let resetLabel = null;
                 if (subscription_tier === 'free') {
-                  mins = (audio_free_minutes_remaining ?? total_minutes_available).toFixed(1);
+                  minsNum = audio_free_minutes_remaining ?? total_minutes_available;
                 } else if (subscription_tier === 'premium' && audio_monthly_minutes_balance > 0) {
-                  mins = audio_monthly_minutes_balance.toFixed(1);
+                  minsNum = audio_monthly_minutes_balance;
                   if (audio_monthly_reset_date) {
                     const d = new Date(audio_monthly_reset_date + 'T00:00:00');
                     d.setMonth(d.getMonth() + 1);
                     resetLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                   }
                 } else {
-                  mins = (audio_pack_minutes_balance ?? total_minutes_available).toFixed(1);
+                  minsNum = audio_pack_minutes_balance ?? total_minutes_available;
+                }
+                const mins = minsNum.toFixed(1);
+
+                if (minsNum < AUDIO_LOW_BALANCE_THRESHOLD) {
+                  return (
+                    <AudioMinutesPill
+                      minutes={minsNum}
+                      onTopUp={() => setShowAudioPrompt('no_minutes')}
+                    />
+                  );
                 }
 
                 return (
@@ -1372,10 +1357,16 @@ export const ReaderPage = () => {
               >
                 ✕
               </button>
-            </div>
-          )}
+          </div>
         </div>
       )}
+
+      <ToshokanAudioModal
+        open={!!showAudioPrompt}
+        state={showAudioPrompt}
+        onClose={() => setShowAudioPrompt(null)}
+        onPlayNow={loadChapterAudio}
+      />
 
       <ZenzeiiChat
         bookTitle={book?.title || ''}
