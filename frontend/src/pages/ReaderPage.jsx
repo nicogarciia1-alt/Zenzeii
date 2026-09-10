@@ -48,6 +48,7 @@ import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext
 import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
 import { AudioGateModal } from '@/features/audio/components/gates/AudioGateModal';
 import { AudioToolbarButton } from '@/features/audio/components/reader/AudioToolbarButton';
+import { ReaderAudioBar } from '@/features/audio/components/reader/ReaderAudioBar';
 import { AudioLowBalancePill } from '@/features/audio/components/player/AudioLowBalancePill';
 import { AUDIO_GATE, getAudioAccessState, isLowBalance } from '@/features/audio/constants/audioGateTypes';
 import {
@@ -173,10 +174,13 @@ export const ReaderPage = () => {
   const [audioBalanceData, setAudioBalanceData] = useState(null);
   const [cachedChapterIds, setCachedChapterIds] = useState(new Set());
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioError, setAudioError] = useState(null);
+  const [audioBarHeight, setAudioBarHeight] = useState(0);
   const [showAudioPrompt, setShowAudioPrompt] = useState(null); // null | AUDIO_GATE.TASTER | AUDIO_GATE.PURCHASE
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(null);
   const [highlightedSentenceId, setHighlightedSentenceId] = useState(null);
   const audioRef = useRef(null);
+  const audioBarObserverRef = useRef(null);
 
   // Dictionary popup state
   const [selectedWord, setSelectedWord] = useState(null);
@@ -471,9 +475,34 @@ export const ReaderPage = () => {
     setAudioUrl(null);
     setAudioCurrentTime(0);
     setIsPlaying(false);
+    setAudioError(null);
     setShowAudioPrompt(null);
     translateChunkInFlight.current = false;
   }, [chapterId]);
+
+  // Reserve bottom space under the chapter text equal to the audio bar's
+  // real rendered height, so the last paragraph is never hidden behind it —
+  // measured rather than hardcoded since the bar's height differs between
+  // idle/generating/playback and the two mobile breakpoints. A callback ref
+  // (rather than an effect keyed on audioMode) so the observer attaches the
+  // instant the bar's DOM node actually mounts, not on ReaderPage's own
+  // render pass — the bar mounts one tick later via its own open/close effect.
+  const setAudioBarNode = useCallback((node) => {
+    if (audioBarObserverRef.current) {
+      audioBarObserverRef.current.disconnect();
+      audioBarObserverRef.current = null;
+    }
+    if (node && typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (entry) setAudioBarHeight(entry.contentRect.height);
+      });
+      observer.observe(node);
+      audioBarObserverRef.current = observer;
+    } else {
+      setAudioBarHeight(0);
+    }
+  }, []);
 
   // Stripe checkout is an external redirect (no in-app return route yet),
   // so refresh the backend-authoritative balance whenever the reader tab
@@ -493,6 +522,7 @@ export const ReaderPage = () => {
       setShowAudioPrompt(AUDIO_GATE.PURCHASE);
       return;
     }
+    setAudioError(null);
     setAudioLoading(true);
     try {
       const res = await getChapterAudio(chapterId);
@@ -520,7 +550,7 @@ export const ReaderPage = () => {
       if (err.response?.status === 402) {
         setShowAudioPrompt(AUDIO_GATE.PURCHASE);
       } else {
-        toast.error('Could not load audio for this chapter. Please try again.');
+        setAudioError('generation_failed');
       }
     } finally {
       setAudioLoading(false);
@@ -566,6 +596,32 @@ export const ReaderPage = () => {
       el.play();
     }
   };
+
+  const handleAudioSeek = (newTime) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+    }
+  };
+
+  const handlePlaybackRateChange = (rate) => {
+    setAudioSpeed(rate);
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+  };
+
+  const handleAudioRetry = () => {
+    setAudioError(null);
+    loadChapterAudio();
+  };
+
+  // One visual state at a time — never "Listen + spinner" or
+  // "Generating + playback controls" simultaneously (Screen 2 brief §28).
+  const audioBarState = audioError
+    ? 'error'
+    : audioLoading
+      ? 'generating'
+      : audioUrl
+        ? 'playback'
+        : 'idle';
 
   const handleChapterChange = (chapId) => {
     setSentences([]);
@@ -967,7 +1023,10 @@ export const ReaderPage = () => {
       </div>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main
+        className="container mx-auto px-4 py-8"
+        style={audioMode ? { paddingBottom: `${audioBarHeight + 24}px` } : undefined}
+      >
         <div className="max-w-3xl mx-auto">
           {/* Chapter Title */}
           <div className="text-center mb-12">
@@ -1156,8 +1215,21 @@ export const ReaderPage = () => {
         </>
       )}
 
-      {/* Zenzeii chat trigger */}
-      <div style={{ position: 'fixed', bottom: '24px', left: '24px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+      {/* Zenzeii chat trigger — lifted clear of the audio bar while it's open,
+          reusing the same measured bar height as the reader's bottom-padding
+          compensation rather than a hardcoded offset. */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: audioMode ? `calc(${audioBarHeight}px + 18px)` : '24px',
+          left: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          gap: '4px',
+          transition: 'bottom 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+      >
         {aiUsage?.subscription_tier === 'free' &&
           typeof aiUsage?.ai_messages_remaining === 'number' &&
           aiUsage.ai_messages_remaining > 0 &&
@@ -1183,195 +1255,68 @@ export const ReaderPage = () => {
         </button>
       </div>
 
-      {AUDIO_ENABLED && audioMode && (
-        <div
-          id="reader-audio-bar"
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 90,
-            backgroundColor: 'hsl(var(--background))',
-            borderTop: '1px solid hsl(var(--border))',
-            padding: '10px 20px',
-          }}
-        >
-          <audio
-            ref={audioRef}
-            src={audioUrl || undefined}
+      {AUDIO_ENABLED && (() => {
+        // Balance display — same entitlement/formatting rules as before,
+        // just relocated: healthy balance renders quiet text, low balance
+        // renders the existing (unredesigned) AudioLowBalancePill. Never both.
+        let audioBalanceNode = null;
+        if (audioBalanceData !== null && audioBalanceData.total_minutes_available > 0) {
+          const { subscription_tier, audio_free_minutes_remaining, audio_monthly_minutes_balance,
+                  audio_pack_minutes_balance, total_minutes_available, audio_monthly_reset_date } = audioBalanceData;
+
+          let minsNum;
+          let resetLabel = null;
+          if (subscription_tier === 'free') {
+            minsNum = audio_free_minutes_remaining ?? total_minutes_available;
+          } else if (subscription_tier === 'premium' && audio_monthly_minutes_balance > 0) {
+            minsNum = audio_monthly_minutes_balance;
+            if (audio_monthly_reset_date) {
+              const d = new Date(audio_monthly_reset_date + 'T00:00:00');
+              d.setMonth(d.getMonth() + 1);
+              resetLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+          } else {
+            minsNum = audio_pack_minutes_balance ?? total_minutes_available;
+          }
+
+          audioBalanceNode = isLowBalance(minsNum) ? (
+            <AudioLowBalancePill
+              minutesRemaining={minsNum}
+              onTopUp={() => setShowAudioPrompt(AUDIO_GATE.PURCHASE)}
+            />
+          ) : (
+            <span className="reader-audio-balance">
+              {Math.round(minsNum)}<span className="reader-audio-balance__suffix"> min remaining</span>
+              {resetLabel ? <span style={{ opacity: 0.7 }}> · resets {resetLabel}</span> : null}
+            </span>
+          );
+        }
+
+        return (
+          <ReaderAudioBar
+            ref={setAudioBarNode}
+            isOpen={audioMode}
+            barState={audioBarState}
+            audioUrl={audioUrl}
+            audioElRef={audioRef}
             onTimeUpdate={() => setAudioCurrentTime(audioRef.current?.currentTime || 0)}
             onEnded={() => setIsPlaying(false)}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
+            isPlaying={isPlaying}
+            currentTime={audioCurrentTime}
+            duration={audioRef.current?.duration || 0}
+            playbackRate={audioSpeed}
+            balance={audioBalanceNode}
+            onListen={handleListenClick}
+            onPlayPause={handleAudioPlayPause}
+            onSeek={handleAudioSeek}
+            onPlaybackRateChange={handlePlaybackRateChange}
+            onRetry={handleAudioRetry}
+            onClose={handleAudioToggle}
           />
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {/* Load button — shown before any audio is fetched */}
-              {!audioUrl && !audioLoading && (
-                <button
-                  onClick={handleListenClick}
-                  style={{
-                    fontFamily: '"EB Garamond", Georgia, serif',
-                    fontSize: '0.85rem',
-                    padding: '6px 14px',
-                    borderRadius: '4px',
-                    border: '1px solid hsl(var(--border))',
-                    backgroundColor: 'hsl(var(--primary))',
-                    color: 'hsl(var(--primary-foreground))',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                  }}
-                >
-                  🎧 Listen
-                </button>
-              )}
-
-              {/* Generating spinner */}
-              {audioLoading && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'hsl(var(--muted-foreground))', fontSize: '0.85rem', flexShrink: 0 }}>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generating…
-                </div>
-              )}
-
-              {/* Play / Pause */}
-              {audioUrl && (
-                <button
-                  onClick={handleAudioPlayPause}
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    border: '1px solid hsl(var(--border))',
-                    backgroundColor: 'transparent',
-                    color: 'hsl(var(--foreground))',
-                    fontSize: '1rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  {isPlaying ? '⏸' : '▶'}
-                </button>
-              )}
-
-              {/* Progress bar */}
-              {audioUrl && (
-                <div
-                  style={{ flex: 1, height: '4px', backgroundColor: 'hsl(var(--muted))', borderRadius: '2px', cursor: 'pointer' }}
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const ratio = (e.clientX - rect.left) / rect.width;
-                    if (audioRef.current?.duration) {
-                      audioRef.current.currentTime = ratio * audioRef.current.duration;
-                    }
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${audioRef.current?.duration ? (audioCurrentTime / audioRef.current.duration) * 100 : 0}%`,
-                      height: '100%',
-                      backgroundColor: 'hsl(var(--primary))',
-                      borderRadius: '2px',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Speed toggle */}
-              {audioUrl && (
-                <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                  {[0.75, 1, 1.5].map(s => (
-                    <button
-                      key={s}
-                      onClick={() => {
-                        setAudioSpeed(s);
-                        if (audioRef.current) audioRef.current.playbackRate = s;
-                      }}
-                      style={{
-                        padding: '2px 7px',
-                        borderRadius: '4px',
-                        border: '1px solid hsl(var(--border))',
-                        backgroundColor: audioSpeed === s ? 'hsl(var(--primary))' : 'transparent',
-                        color: audioSpeed === s ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))',
-                        fontSize: '0.72rem',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {s}×
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Balance — 声 X.X min [· resets Mon DD] */}
-              {audioBalanceData !== null && audioBalanceData.total_minutes_available > 0 && (() => {
-                const { subscription_tier, audio_free_minutes_remaining, audio_monthly_minutes_balance,
-                        audio_pack_minutes_balance, total_minutes_available, audio_monthly_reset_date } = audioBalanceData;
-                const s = { fontFamily: '"EB Garamond", Georgia, serif', fontSize: '0.8rem', color: '#6B5744', whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '4px' };
-
-                let minsNum;
-                let resetLabel = null;
-                if (subscription_tier === 'free') {
-                  minsNum = audio_free_minutes_remaining ?? total_minutes_available;
-                } else if (subscription_tier === 'premium' && audio_monthly_minutes_balance > 0) {
-                  minsNum = audio_monthly_minutes_balance;
-                  if (audio_monthly_reset_date) {
-                    const d = new Date(audio_monthly_reset_date + 'T00:00:00');
-                    d.setMonth(d.getMonth() + 1);
-                    resetLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                  }
-                } else {
-                  minsNum = audio_pack_minutes_balance ?? total_minutes_available;
-                }
-                const mins = minsNum.toFixed(1);
-
-                if (isLowBalance(minsNum)) {
-                  return (
-                    <AudioLowBalancePill
-                      minutesRemaining={minsNum}
-                      onTopUp={() => setShowAudioPrompt(AUDIO_GATE.PURCHASE)}
-                    />
-                  );
-                }
-
-                return (
-                  <span style={s}>
-                    <span style={{ opacity: 0.5, fontSize: '14px', fontFamily: '"EB Garamond", Georgia, serif' }}>声</span>
-                    <span>{mins} min{resetLabel ? <span style={{ opacity: 0.6 }}> · resets {resetLabel}</span> : null}</span>
-                  </span>
-                );
-              })()}
-
-              {/* Close */}
-              <button
-                onClick={() => {
-                  audioRef.current?.pause();
-                  setIsPlaying(false);
-                  setAudioMode(false);
-                }}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  border: '1px solid hsl(var(--border))',
-                  backgroundColor: 'transparent',
-                  color: 'hsl(var(--muted-foreground))',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  marginLeft: 'auto',
-                }}
-              >
-                ✕
-              </button>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       <AudioGateModal
         open={!!showAudioPrompt}
