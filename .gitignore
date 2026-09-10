@@ -34,6 +34,8 @@ dist
 
 *token.json*
 *credentials.json*
+/login.json
+/checkout.json
 
 # Logs and debug files
 npm-debug.log*
