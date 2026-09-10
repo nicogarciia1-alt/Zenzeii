@@ -47,6 +47,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
 import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
 import { AudioGateModal } from '@/features/audio/components/gates/AudioGateModal';
+import { AudioToolbarButton } from '@/features/audio/components/reader/AudioToolbarButton';
 import { AudioLowBalancePill } from '@/features/audio/components/player/AudioLowBalancePill';
 import { AUDIO_GATE, getAudioAccessState, isLowBalance } from '@/features/audio/constants/audioGateTypes';
 import {
@@ -542,6 +543,20 @@ export const ReaderPage = () => {
     loadChapterAudio();
   };
 
+  const handleAudioToggle = () => {
+    const next = !audioMode;
+    setAudioMode(next);
+    if (next && audioBalanceData === null) {
+      getAudioBalance()
+        .then(r => setAudioBalanceData(r.data))
+        .catch(() => {});
+    }
+    if (!next) {
+      audioRef.current?.pause();
+      setIsPlaying(false);
+    }
+  };
+
   const handleAudioPlayPause = () => {
     const el = audioRef.current;
     if (!el) return;
@@ -798,6 +813,12 @@ export const ReaderPage = () => {
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
+            {AUDIO_ENABLED && (
+              <div style={{ marginRight: '16px' }}>
+                <AudioToolbarButton isOpen={audioMode} onToggle={handleAudioToggle} />
+              </div>
+            )}
+
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" data-testid="reader-toc-btn">
@@ -905,35 +926,6 @@ export const ReaderPage = () => {
           >
             縦
           </button>
-          {AUDIO_ENABLED && (
-          <button
-            onClick={() => {
-              const next = !audioMode;
-              setAudioMode(next);
-              if (next && audioBalanceData === null) {
-                getAudioBalance()
-                  .then(r => setAudioBalanceData(r.data))
-                  .catch(() => {});
-              }
-              if (!next) {
-                audioRef.current?.pause();
-                setIsPlaying(false);
-              }
-            }}
-            style={{
-              fontFamily: '"EB Garamond", Georgia, serif',
-              fontSize: '0.85rem',
-              padding: '4px 10px',
-              borderRadius: '4px',
-              border: '1px solid hsl(var(--border))',
-              backgroundColor: audioMode ? 'hsl(var(--primary))' : 'transparent',
-              color: audioMode ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))',
-              cursor: 'pointer',
-            }}
-          >
-            音
-          </button>
-          )}
           <div className="flex items-center justify-between gap-4">
             <SecondaryScriptToggle
               value={secondaryLayer}
@@ -1193,6 +1185,7 @@ export const ReaderPage = () => {
 
       {AUDIO_ENABLED && audioMode && (
         <div
+          id="reader-audio-bar"
           style={{
             position: 'fixed',
             bottom: 0,

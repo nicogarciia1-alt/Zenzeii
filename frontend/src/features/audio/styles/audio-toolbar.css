@@ -1,0 +1,104 @@
+/* Reader toolbar audio trigger — Screen 1 of the audio redesign.
+   Scoped to .audio-toolbar-* only; do not widen these selectors. */
+
+.audio-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: #F3EBDD;
+  border: 1px solid rgba(107, 31, 31, 0.08);
+  box-shadow:
+    0 3px 10px rgba(42, 28, 20, 0.07),
+    0 1px 2px rgba(42, 28, 20, 0.04);
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.audio-toolbar-icon {
+  width: 21px;
+  height: 21px;
+  color: #181411;
+  pointer-events: none;
+}
+
+.audio-toolbar-button:hover {
+  background: #EDE1CF;
+  border-color: rgba(107, 31, 31, 0.14);
+  transform: translateY(-1px);
+  box-shadow:
+    0 5px 14px rgba(42, 28, 20, 0.10),
+    0 1px 3px rgba(42, 28, 20, 0.05);
+}
+
+.audio-toolbar-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(200, 168, 48, 0.22),
+    0 3px 10px rgba(42, 28, 20, 0.07);
+}
+
+.audio-toolbar-button[data-active='true'] {
+  background: #8F1717;
+  border-color: #8F1717;
+  box-shadow:
+    0 5px 14px rgba(107, 31, 31, 0.20),
+    0 1px 3px rgba(42, 28, 20, 0.06);
+}
+
+.audio-toolbar-button[data-active='true'] .audio-toolbar-icon {
+  color: #FFF8EF;
+}
+
+.audio-toolbar-button[data-active='true']:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(200, 168, 48, 0.24),
+    0 5px 14px rgba(107, 31, 31, 0.20);
+}
+
+.audio-toolbar-tooltip {
+  background: #211916;
+  color: #FFF9F0;
+  font-family: "EB Garamond", Georgia, serif;
+  font-size: 12px;
+  line-height: 1;
+  padding: 8px 10px;
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(20, 12, 10, 0.20);
+  margin-top: 7px;
+}
+
+@media (max-width: 640px) {
+  .audio-toolbar-button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .audio-toolbar-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audio-toolbar-button {
+    transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .audio-toolbar-button:hover {
+    transform: none;
+  }
+}
