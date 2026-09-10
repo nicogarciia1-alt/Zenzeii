@@ -2529,6 +2529,21 @@ async def text_to_speech(request: TTSRequest, current_user: dict = Depends(get_c
 # PAYMENTS ENDPOINTS
 # ========================
 
+_checkout_rate_limit: Dict[str, float] = {}
+_CHECKOUT_MIN_INTERVAL_SECONDS = 60
+
+def _check_checkout_rate_limit(user_id: str):
+    import time
+    now = time.time()
+    last = _checkout_rate_limit.get(user_id)
+    if last is not None and now - last < _CHECKOUT_MIN_INTERVAL_SECONDS:
+        raise HTTPException(
+            status_code=429,
+            detail="Please wait a moment before starting another checkout."
+        )
+    _checkout_rate_limit[user_id] = now
+
+
 @api_router.post("/payments/create-checkout-session")
 async def create_checkout_session(
     request: CreateCheckoutSessionRequest,
@@ -2543,6 +2558,21 @@ async def create_checkout_session(
     if not stripe.api_key:
         logger.error("STRIPE_SECRET_KEY not configured")
         raise HTTPException(status_code=503, detail="Payment system not available.")
+
+    _check_checkout_rate_limit(current_user["id"])
+
+    if request.tier == "founding_member":
+        pending_id = current_user.get("pending_checkout_session_id")
+        pending_expires = current_user.get("pending_checkout_expires_at")
+        if pending_id and pending_expires:
+            expires_at = datetime.fromisoformat(pending_expires)
+            if datetime.now(timezone.utc) < expires_at:
+                try:
+                    existing = await asyncio.to_thread(stripe.checkout.Session.retrieve, pending_id)
+                    if existing.status == "open":
+                        return {"checkout_url": existing.url}
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve pending checkout session {pending_id}: {type(e).__name__}")
 
     reserved_founding_spot = False
     if request.tier == "founding_member":
@@ -2568,6 +2598,14 @@ async def create_checkout_session(
             client_reference_id=current_user["id"],
             metadata={"tier": request.tier, "user_id": current_user["id"]},
         )
+        if request.tier == "founding_member":
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$set": {
+                    "pending_checkout_session_id": session.id,
+                    "pending_checkout_expires_at": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
+                }}
+            )
         return {"checkout_url": session.url}
     except Exception as e:
         logger.error(f"Stripe checkout session failed for user {current_user['id']}: {type(e).__name__}")
@@ -2931,7 +2969,11 @@ async def _handle_checkout_completed(session: dict):
     # stripe_subscription_id only present for subscription mode (premium); absent for payment mode (founding_member)
     if session.get("subscription"):
         update["stripe_subscription_id"] = session["subscription"]
-    result = await db.users.update_one({"id": user_id}, {"$set": update})
+    unset = {"pending_checkout_session_id": "", "pending_checkout_expires_at": ""} if tier == "founding_member" else {}
+    update_doc = {"$set": update}
+    if unset:
+        update_doc["$unset"] = unset
+    result = await db.users.update_one({"id": user_id}, update_doc)
     if result.matched_count == 0:
         logger.warning(f"checkout.session.completed: user {user_id} not found in DB")
 
@@ -2969,6 +3011,15 @@ async def _handle_checkout_expired(session: dict):
         {"_id": "founding_member", "$expr": {"$lt": ["$spots_remaining", "$total_spots"]}},
         {"$inc": {"spots_remaining": 1}}
     )
+    user_id = (
+        session.get("metadata", {}).get("user_id")
+        or session.get("client_reference_id")
+    )
+    if user_id:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$unset": {"pending_checkout_session_id": "", "pending_checkout_expires_at": ""}}
+        )
     logger.info("checkout.session.expired: founding_member spot returned to pool")
 
 
