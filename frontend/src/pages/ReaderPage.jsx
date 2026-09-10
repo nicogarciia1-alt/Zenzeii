@@ -613,6 +613,16 @@ export const ReaderPage = () => {
     loadChapterAudio();
   };
 
+  // Taster modal's "Play now" never cleared showAudioPrompt itself, so the
+  // modal stayed open indefinitely over a bar that had already moved on to
+  // Generating/Playback behind it. Close it in the same tick generation
+  // starts (both setState calls batch together) so there's no frame where
+  // the bar is visible mid-modal and no frame where it's still idle.
+  const handleTasterPlayNow = () => {
+    setShowAudioPrompt(null);
+    loadChapterAudio();
+  };
+
   // One visual state at a time — never "Listen + spinner" or
   // "Generating + playback controls" simultaneously (Screen 2 brief §28).
   const audioBarState = audioError
@@ -1322,7 +1332,7 @@ export const ReaderPage = () => {
         open={!!showAudioPrompt}
         gateType={showAudioPrompt}
         onClose={() => setShowAudioPrompt(null)}
-        onPlayNow={loadChapterAudio}
+        onPlayNow={handleTasterPlayNow}
       />
 
       <ZenzeiiChat
