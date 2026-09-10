@@ -177,10 +177,22 @@ export const ReaderPage = () => {
   const [audioError, setAudioError] = useState(null);
   const [audioBarHeight, setAudioBarHeight] = useState(0);
   const [showAudioPrompt, setShowAudioPrompt] = useState(null); // null | AUDIO_GATE.TASTER | AUDIO_GATE.PURCHASE
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(null);
   const [highlightedSentenceId, setHighlightedSentenceId] = useState(null);
   const audioRef = useRef(null);
   const audioBarObserverRef = useRef(null);
+
+  // Dev-only visual-QA harness (Visual Recovery brief §I) — forces one
+  // console/modal state for screenshotting without a real low/zero balance
+  // account. Reads ?audioDebugState=idle|generating|playback|low-balance|taster|purchase
+  // from the URL. The whole branch is dead-code-eliminated from production
+  // bundles (process.env.NODE_ENV is inlined at build time), makes no
+  // network/Stripe calls, and never writes to audioBalanceData — real
+  // entitlement state is untouched, this only overrides what's rendered.
+  const debugAudioState = process.env.NODE_ENV !== 'production'
+    ? new URLSearchParams(window.location.search).get('audioDebugState')
+    : null;
 
   // Dictionary popup state
   const [selectedWord, setSelectedWord] = useState(null);
@@ -477,6 +489,7 @@ export const ReaderPage = () => {
     setIsPlaying(false);
     setAudioError(null);
     setShowAudioPrompt(null);
+    setIsAudioMuted(false);
     translateChunkInFlight.current = false;
   }, [chapterId]);
 
@@ -603,6 +616,26 @@ export const ReaderPage = () => {
     }
   };
 
+  const handleSkipBack = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.currentTime = Math.max(0, el.currentTime - 15);
+  };
+
+  const handleSkipForward = () => {
+    const el = audioRef.current;
+    if (!el || !el.duration) return;
+    el.currentTime = Math.min(el.duration, el.currentTime + 15);
+  };
+
+  const handleToggleMute = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    const next = !isAudioMuted;
+    el.muted = next;
+    setIsAudioMuted(next);
+  };
+
   const handlePlaybackRateChange = (rate) => {
     setAudioSpeed(rate);
     if (audioRef.current) audioRef.current.playbackRate = rate;
@@ -625,13 +658,20 @@ export const ReaderPage = () => {
 
   // One visual state at a time — never "Listen + spinner" or
   // "Generating + playback controls" simultaneously (Screen 2 brief §28).
-  const audioBarState = audioError
-    ? 'error'
-    : audioLoading
-      ? 'generating'
-      : audioUrl
-        ? 'playback'
-        : 'idle';
+  const debugBarStateOverride = debugAudioState === 'low-balance' ? 'playback' : debugAudioState;
+  const audioBarState = ['idle', 'generating', 'playback'].includes(debugBarStateOverride)
+    ? debugBarStateOverride
+    : audioError
+      ? 'error'
+      : audioLoading
+        ? 'generating'
+        : audioUrl
+          ? 'playback'
+          : 'idle';
+  const isAudioBarOpen = debugBarStateOverride ? true : audioMode;
+  const debugPlaybackDisplay = audioBarState === 'playback' && debugBarStateOverride
+    ? { currentTime: 42, duration: 750, isPlaying: false }
+    : null;
 
   const handleChapterChange = (chapId) => {
     setSentences([]);
@@ -1035,7 +1075,7 @@ export const ReaderPage = () => {
       {/* Main Content */}
       <main
         className="container mx-auto px-4 py-8"
-        style={audioMode ? { paddingBottom: `${audioBarHeight + 24}px` } : undefined}
+        style={isAudioBarOpen ? { paddingBottom: `${audioBarHeight + 44}px` } : undefined}
       >
         <div className="max-w-3xl mx-auto">
           {/* Chapter Title */}
@@ -1231,7 +1271,7 @@ export const ReaderPage = () => {
       <div
         style={{
           position: 'fixed',
-          bottom: audioMode ? `calc(${audioBarHeight}px + 18px)` : '24px',
+          bottom: isAudioBarOpen ? `calc(${audioBarHeight}px + 38px)` : '24px',
           left: '24px',
           display: 'flex',
           flexDirection: 'column',
@@ -1302,26 +1342,43 @@ export const ReaderPage = () => {
           );
         }
 
+        // Debug-only override (see debugAudioState above) — presentational
+        // swap for a screenshot, never written back into audioBalanceData.
+        if (debugAudioState === 'low-balance') {
+          audioBalanceNode = (
+            <AudioLowBalancePill
+              minutesRemaining={2}
+              onTopUp={() => setShowAudioPrompt(AUDIO_GATE.PURCHASE)}
+            />
+          );
+        }
+
         return (
           <ReaderAudioBar
             ref={setAudioBarNode}
-            isOpen={audioMode}
+            isOpen={isAudioBarOpen}
             barState={audioBarState}
+            book={book}
+            chapterLabel={currentChapter ? `Chapter ${currentChapter.chapter_number}` : ''}
             audioUrl={audioUrl}
             audioElRef={audioRef}
             onTimeUpdate={() => setAudioCurrentTime(audioRef.current?.currentTime || 0)}
             onEnded={() => setIsPlaying(false)}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
-            isPlaying={isPlaying}
-            currentTime={audioCurrentTime}
-            duration={audioRef.current?.duration || 0}
+            isPlaying={debugPlaybackDisplay ? debugPlaybackDisplay.isPlaying : isPlaying}
+            currentTime={debugPlaybackDisplay ? debugPlaybackDisplay.currentTime : audioCurrentTime}
+            duration={debugPlaybackDisplay ? debugPlaybackDisplay.duration : (audioRef.current?.duration || 0)}
             playbackRate={audioSpeed}
+            isMuted={isAudioMuted}
             balance={audioBalanceNode}
             onListen={handleListenClick}
             onPlayPause={handleAudioPlayPause}
             onSeek={handleAudioSeek}
+            onSkipBack={handleSkipBack}
+            onSkipForward={handleSkipForward}
             onPlaybackRateChange={handlePlaybackRateChange}
+            onToggleMute={handleToggleMute}
             onRetry={handleAudioRetry}
             onClose={handleAudioToggle}
           />
@@ -1329,8 +1386,12 @@ export const ReaderPage = () => {
       })()}
 
       <AudioGateModal
-        open={!!showAudioPrompt}
-        gateType={showAudioPrompt}
+        open={debugAudioState === 'taster' || debugAudioState === 'purchase' ? true : !!showAudioPrompt}
+        gateType={
+          debugAudioState === 'taster' ? AUDIO_GATE.TASTER
+          : debugAudioState === 'purchase' ? AUDIO_GATE.PURCHASE
+          : showAudioPrompt
+        }
         onClose={() => setShowAudioPrompt(null)}
         onPlayNow={handleTasterPlayNow}
       />

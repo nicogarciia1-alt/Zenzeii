@@ -21,6 +21,8 @@ export const ReaderAudioBar = forwardRef(function ReaderAudioBar(
   {
     isOpen,
     barState, // 'idle' | 'generating' | 'error' | 'playback'
+    book,
+    chapterLabel,
     audioUrl,
     audioElRef,
     onTimeUpdate,
@@ -31,11 +33,15 @@ export const ReaderAudioBar = forwardRef(function ReaderAudioBar(
     currentTime,
     duration,
     playbackRate,
+    isMuted,
     balance,
     onListen,
     onPlayPause,
     onSeek,
+    onSkipBack,
+    onSkipForward,
     onPlaybackRateChange,
+    onToggleMute,
     onRetry,
     onClose,
   },
@@ -74,18 +80,30 @@ export const ReaderAudioBar = forwardRef(function ReaderAudioBar(
       />
 
       <div className="reader-audio-state-content" key={barState}>
-        {barState === 'idle' && <AudioIdleState onListen={onListen} onClose={onClose} />}
-        {barState === 'generating' && <AudioGeneratingState onClose={onClose} />}
-        {barState === 'error' && <AudioErrorState onRetry={onRetry} onClose={onClose} />}
+        {barState === 'idle' && (
+          <AudioIdleState book={book} chapterLabel={chapterLabel} onListen={onListen} />
+        )}
+        {barState === 'generating' && (
+          <AudioGeneratingState book={book} chapterLabel={chapterLabel} />
+        )}
+        {barState === 'error' && (
+          <AudioErrorState book={book} chapterLabel={chapterLabel} onRetry={onRetry} onClose={onClose} />
+        )}
         {barState === 'playback' && (
           <AudioPlaybackState
+            book={book}
+            chapterLabel={chapterLabel}
             isPlaying={isPlaying}
             currentTime={currentTime}
             duration={duration}
             playbackRate={playbackRate}
+            isMuted={isMuted}
             onPlayPause={onPlayPause}
             onSeek={onSeek}
+            onSkipBack={onSkipBack}
+            onSkipForward={onSkipForward}
             onPlaybackRateChange={onPlaybackRateChange}
+            onToggleMute={onToggleMute}
             balance={balance}
             onClose={onClose}
           />
