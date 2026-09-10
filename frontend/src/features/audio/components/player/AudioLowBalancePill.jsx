@@ -10,7 +10,12 @@ export function AudioLowBalancePill({ minutesRemaining, onTopUp }) {
         {formatMinutesRemaining(minutesRemaining)}
       </span>
       <span className="audio-low-balance-pill__divider" />
-      <button type="button" className="audio-low-balance-pill__topup" onClick={onTopUp}>
+      <button
+        type="button"
+        className="audio-low-balance-pill__topup"
+        onClick={onTopUp}
+        aria-label={`${formatMinutesRemaining(minutesRemaining)}. Top up audio balance.`}
+      >
         Top up
       </button>
     </span>
