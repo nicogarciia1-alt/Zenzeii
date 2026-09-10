@@ -11,6 +11,7 @@ export function AudioMinutePackCard({ label, minutes, price, recommended, loadin
       <button
         type="button"
         className="audio-pack-card__buy"
+        aria-label={`Buy ${label} — ${minutes} minutes for ${price}`}
         disabled={disabled}
         onClick={onBuy}
       >
