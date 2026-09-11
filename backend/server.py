@@ -289,7 +289,7 @@ TRANSLATION_ENABLED = bool(os.environ.get('EMERGENT_LLM_KEY'))
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=8)
     username: str
 
 class UserLogin(BaseModel):
@@ -472,7 +472,7 @@ class ImportBookRequest(BaseModel):
     priority: Optional[int] = 0  # Higher = more priority
 
 class SendToKindleRequest(BaseModel):
-    recipient_email: str
+    recipient_email: EmailStr
 
 class GutenbergSearchResult(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1955,6 +1955,8 @@ async def send_to_kindle(
     request: SendToKindleRequest,
     current_user: dict = Depends(get_current_user)
 ):
+    _check_auth_rate_limit(f"kindle:{current_user['id']}", 5, 3600, "Too many Kindle sends. Try again later.")
+
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
     if not RESEND_API_KEY:
         raise HTTPException(status_code=503, detail="Email service not configured")
@@ -1962,6 +1964,10 @@ async def send_to_kindle(
     book = await db.books.find_one({"id": book_id})
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
+
+    on_shelf = await db.user_shelves.find_one({"user_id": current_user["id"], "book_id": book_id})
+    if not on_shelf:
+        raise HTTPException(status_code=403, detail="Access denied.")
 
     chapters = await db.chapters.find({"book_id": book_id}).sort("chapter_number", 1).to_list(None)
 
@@ -2028,7 +2034,8 @@ async def send_to_kindle(
             "attachments": [{"filename": filename, "content": list(pdf_bytes)}],
         })
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        logger.error(f"Failed to send Kindle email for book {book_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send to Kindle. Please try again.")
 
     return {"success": True, "message": "Book sent to your Kindle"}
 
