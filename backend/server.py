@@ -259,13 +259,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+_auth_rate_limit: Dict[str, List[float]] = {}
+
+def _check_auth_rate_limit(key: str, max_requests: int, window_seconds: int, message: str):
+    import time
+    now = time.time()
+    window_start = now - window_seconds
+    timestamps = [t for t in _auth_rate_limit.get(key, []) if t > window_start]
+    if len(timestamps) >= max_requests:
+        raise HTTPException(status_code=429, detail=message)
+    timestamps.append(now)
+    _auth_rate_limit[key] = timestamps
+
 # Global exception handler to prevent crashes
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "error": str(exc)[:200]}
+        content={"detail": "Internal server error"}
     )
 
 # Translation availability flag
@@ -613,7 +625,9 @@ async def _send_verification_email(user_id: str, email: str):
 
 
 @api_router.post("/auth/register", response_model=TokenResponse)
-async def register(user_data: UserCreate):
+async def register(user_data: UserCreate, request: Request):
+    ip = request.headers.get("X-Forwarded-For", request.client.host).split(",")[0].strip()
+    _check_auth_rate_limit(f"register:{ip}", 10, 3600, "Too many registration attempts from this IP. Try again later.")
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
         if not existing.get("email_verified", False):
@@ -662,6 +676,7 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
+    _check_auth_rate_limit(f"login:{credentials.email}", 5, 300, "Too many login attempts. Try again in a few minutes.")
     user = await db.users.find_one({"email": credentials.email})
     if not user or not verify_password(credentials.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -690,6 +705,7 @@ class ResetPasswordRequest(BaseModel):
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
+    _check_auth_rate_limit(f"forgot:{request.email}", 3, 900, "Too many reset requests. Try again later.")
     user = await db.users.find_one({"email": request.email})
     if not user:
         return {"message": "If this email exists, a reset link has been sent."}
@@ -2376,7 +2392,7 @@ class AIChatRequest(BaseModel):
     chat_history: List[dict] = []
 
 class TokenizeRequest(BaseModel):
-    text: str
+    text: str = Field(..., max_length=50000)
 
 @api_router.post("/ai/chat")
 async def ai_chat(
@@ -2461,7 +2477,7 @@ async def get_ai_usage(current_user: dict = Depends(get_current_user)):
 
 
 @api_router.post("/tokenize")
-async def tokenize_text(request: TokenizeRequest):
+async def tokenize_text(request: TokenizeRequest, current_user: dict = Depends(get_current_user)):
     if tagger_instance is None:
         raise HTTPException(status_code=503, detail="Tokenizer not available")
 
