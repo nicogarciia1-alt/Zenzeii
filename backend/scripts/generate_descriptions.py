@@ -120,6 +120,7 @@ async def fetch_books(db, book_id: Optional[str]) -> list:
     projection = {
         "id": 1, "title_en": 1, "title_jp": 1, "author_name": 1,
         "publication_year": 1, "genre_ids": 1, "page_count": 1,
+        "description_long": 1,
     }
 
     if book_id:
@@ -137,7 +138,7 @@ async def fetch_books(db, book_id: Optional[str]) -> list:
     return [doc async for doc in cursor]
 
 
-async def run(dry_run: bool, book_id: Optional[str]) -> None:
+async def run(dry_run: bool, book_id: Optional[str], force: bool) -> None:
     openai_api_key = os.environ.get("OPENAI_API_KEY", "")
     if not openai_api_key:
         logger.error("OPENAI_API_KEY is not set")
@@ -150,6 +151,15 @@ async def run(dry_run: bool, book_id: Optional[str]) -> None:
     logger.info(f"Connecting to MongoDB database: {db_name}")
 
     books = await fetch_books(db, book_id)
+    if book_id and not force and books:
+        existing = (books[0].get("description_long") or "").strip()
+        if existing:
+            logger.warning(
+                f"{book_id}: description_long already exists — skipping "
+                f"(pass --force to regenerate)"
+            )
+            client_mongo.close()
+            return
     if dry_run:
         books = books[:5]
 
@@ -215,10 +225,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate AI descriptions for book_catalog entries via OpenAI.")
     parser.add_argument("--dry-run", action="store_true", help="Process only the first 5 books and print to console")
     parser.add_argument("--book-id", type=str, default=None, help="Generate a description for a single book id")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate description even if one already exists (only relevant with --book-id)"
+    )
     args = parser.parse_args()
 
     load_dotenv(BACKEND_DIR / ".env")
-    asyncio.run(run(dry_run=args.dry_run, book_id=args.book_id))
+    asyncio.run(run(dry_run=args.dry_run, book_id=args.book_id, force=args.force))
 
 
 if __name__ == "__main__":
