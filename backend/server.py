@@ -56,6 +56,8 @@ from services import catalog_service
 IMPORT_LIMIT_PER_HOUR = 3
 IMPORT_LIMIT_WINDOW_HOURS = 1
 
+TRANSLATE_TIMEOUT_SECONDS = 10.0
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -1175,15 +1177,25 @@ async def translate_next_chunk(
 
 
 @api_router.get("/translate/text")
-async def translate_text(q: str = Query(..., description="English text to translate")):
+async def translate_text(
+    q: str = Query(..., description="English text to translate"),
+    current_user: dict = Depends(get_current_user)
+):
     """
     Translate English text to Japanese.
     Returns Japanese (kanji), hiragana, and romaji.
     """
+    _check_auth_rate_limit(f"translate:{current_user['id']}", 10, 60, "Too many translation requests. Try again shortly.")
     from services.translation import translate_to_japanese
     if not q or not q.strip():
         raise HTTPException(status_code=400, detail="Query text cannot be empty")
-    result = translate_to_japanese(q.strip())
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(translate_to_japanese, q.strip()),
+            timeout=TRANSLATE_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Translation timed out. Please try again.")
     return result
 
 
@@ -2752,15 +2764,96 @@ async def purchase_audio_pack(
     return {"checkout_url": session.url}
 
 
+async def _check_and_deduct_audio_balance(user_id: str, duration_minutes: float, context: str) -> dict:
+    """
+    Verify the user can afford `duration_minutes` of audio and atomically deduct it,
+    spending free -> monthly -> pack. Always re-fetches the user fresh from the DB so
+    balance checks never trust a possibly-stale current_user dict. Raises 402 if the
+    balance is insufficient, or if it changes during a concurrent-request race.
+    Shared by both the cache-hit and freshly-generated audio paths so there is exactly
+    one place that knows the tier names, balance field names, and spending order.
+    """
+    user_fresh = await db.users.find_one({"id": user_id})
+    if not user_fresh:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if user_fresh.get("subscription_tier") == "premium":
+        user_fresh = await check_and_reset_monthly_audio(user_fresh, db)
+
+    tier = user_fresh.get("subscription_tier", "free")
+    free_used_f = user_fresh.get("audio_free_minutes_used", 0.0)
+    free_remaining_f = max(0.0, round(1.0 - free_used_f, 4)) if tier == "free" else 0.0
+    monthly_remaining_f = max(0.0, user_fresh.get("audio_monthly_minutes_balance", 0.0)) if tier == "premium" else 0.0
+    pack_remaining_f = max(0.0, user_fresh.get("audio_minutes_balance", 0.0))
+    total_available_f = round(free_remaining_f + monthly_remaining_f + pack_remaining_f, 4)
+
+    if total_available_f < duration_minutes:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient audio minutes. This chapter is {duration_minutes:.1f} min; {total_available_f:.1f} min available."
+        )
+
+    remaining = duration_minutes
+    from_free = round(min(free_remaining_f, remaining), 4)
+    remaining = round(remaining - from_free, 4)
+    from_monthly = round(min(monthly_remaining_f, remaining), 4)
+    remaining = round(remaining - from_monthly, 4)
+    from_pack = round(min(pack_remaining_f, remaining), 4)
+
+    deduct_filter: dict = {"id": user_id}
+    deduct_inc: dict = {}
+
+    if from_free > 0:
+        deduct_filter["audio_free_minutes_used"] = {"$lte": round(1.0 - from_free, 4)}
+        deduct_inc["audio_free_minutes_used"] = from_free
+
+    if from_monthly > 0:
+        deduct_filter["audio_monthly_minutes_balance"] = {"$gte": from_monthly}
+        deduct_inc["audio_monthly_minutes_balance"] = -from_monthly
+
+    if from_pack > 0:
+        deduct_filter["audio_minutes_balance"] = {"$gte": from_pack}
+        deduct_inc["audio_minutes_balance"] = -from_pack
+
+    deduction_result = await db.users.find_one_and_update(
+        deduct_filter,
+        {"$inc": deduct_inc},
+        return_document=ReturnDocument.AFTER
+    )
+    if deduction_result is None:
+        logger.error(
+            f"Atomic audio deduction failed: user={user_id}, context={context}, "
+            f"from_free={from_free}, from_monthly={from_monthly}, from_pack={from_pack} — "
+            "balance changed during check (concurrent request race)"
+        )
+        raise HTTPException(status_code=402, detail="Balance changed. Please try again.")
+
+    logger.info(
+        f"Audio balance deducted: context={context}, duration={duration_minutes:.4f}min, "
+        f"from_free={from_free:.4f}, from_monthly={from_monthly:.4f}, from_pack={from_pack:.4f}, "
+        f"user={user_id}"
+    )
+
+    return {
+        "audio_free_minutes_used": deduction_result.get("audio_free_minutes_used", 0.0),
+        "audio_monthly_minutes_balance": deduction_result.get("audio_monthly_minutes_balance", 0.0),
+        "audio_pack_minutes_balance": deduction_result.get("audio_minutes_balance", 0.0),
+    }
+
+
 @api_router.get("/audio/chapter/{chapter_id}")
 async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_current_user)):
-    # 1. Cache check — cached chapters cost nothing and skip all balance logic
+    # 1. Cache check — audio is served from cache, but balance is still checked and
+    #    deducted below; only the ElevenLabs generation cost is skipped, not the user's cost.
     cached = await db.audio_cache.find_one({"_id": chapter_id})
-    if cached:
+    if cached and cached.get("duration_minutes") is not None:
+        balance_after = await _check_and_deduct_audio_balance(
+            current_user["id"], cached["duration_minutes"], context=f"cache_hit:{chapter_id}"
+        )
         return {
             "url": cached["r2_url"],
             "duration_minutes": cached["duration_minutes"],
             "cached": True,
+            "balance_after": balance_after,
         }
 
     # 2. Infrastructure check before touching any balance
@@ -2839,34 +2932,9 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
         logger.error(f"mutagen duration measurement failed for chapter {chapter_id}: {e}")
         raise HTTPException(status_code=500, detail="Audio duration measurement failed. Please try again.")
 
-    # 9. Re-fetch user for fresh balance (generation took 10-30s; balances may have changed)
-    user_fresh = await db.users.find_one({"id": current_user["id"]})
-    if not user_fresh:
-        raise HTTPException(status_code=404, detail="User not found.")
-    if user_fresh.get("subscription_tier") == "premium":
-        user_fresh = await check_and_reset_monthly_audio(user_fresh, db)
-
-    tier = user_fresh.get("subscription_tier", "free")
-    free_used_f = user_fresh.get("audio_free_minutes_used", 0.0)
-    free_remaining_f = max(0.0, round(1.0 - free_used_f, 4)) if tier == "free" else 0.0
-    monthly_remaining_f = max(0.0, user_fresh.get("audio_monthly_minutes_balance", 0.0)) if tier == "premium" else 0.0
-    pack_remaining_f = max(0.0, user_fresh.get("audio_minutes_balance", 0.0))
-    total_available_f = round(free_remaining_f + monthly_remaining_f + pack_remaining_f, 4)
-
-    # 10. Final exact-duration check — do not upload or cache if user can't afford it
-    if total_available_f < duration_minutes:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Insufficient audio minutes. This chapter is {duration_minutes:.1f} min; {total_available_f:.1f} min available."
-        )
-
-    # 11. Calculate per-bucket deduction (spending order: free → monthly → pack)
-    remaining = duration_minutes
-    from_free = round(min(free_remaining_f, remaining), 4)
-    remaining = round(remaining - from_free, 4)
-    from_monthly = round(min(monthly_remaining_f, remaining), 4)
-    remaining = round(remaining - from_monthly, 4)
-    from_pack = round(min(pack_remaining_f, remaining), 4)
+    # 9-11. Balance check and per-bucket deduction amounts happen inside the shared helper below,
+    #       right before the atomic deduction — but R2 upload (step 12) must succeed first, so we
+    #       only need the exact duration_minutes here; the helper re-fetches the user itself.
 
     # 12. Upload to R2 (before deduction — if deduction fails, user gets audio at Zenzeii's cost;
     #     this is the correct tradeoff: user never loses paid minutes due to our infra errors)
@@ -2907,47 +2975,10 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
         "character_count": len(chapter_text),
     })
 
-    # 14. Atomic deduction — filter includes balance conditions for every bucket being spent,
-    #     so a concurrent request that races us cannot cause double-spending
-    deduct_filter: dict = {"id": current_user["id"]}
-    deduct_inc: dict = {}
-
-    if from_free > 0:
-        deduct_filter["audio_free_minutes_used"] = {"$lte": round(1.0 - from_free, 4)}
-        deduct_inc["audio_free_minutes_used"] = from_free
-
-    if from_monthly > 0:
-        deduct_filter["audio_monthly_minutes_balance"] = {"$gte": from_monthly}
-        deduct_inc["audio_monthly_minutes_balance"] = -from_monthly
-
-    if from_pack > 0:
-        deduct_filter["audio_minutes_balance"] = {"$gte": from_pack}
-        deduct_inc["audio_minutes_balance"] = -from_pack
-
-    deduction_result = await db.users.find_one_and_update(
-        deduct_filter,
-        {"$inc": deduct_inc},
-        return_document=ReturnDocument.AFTER
+    # 14. Balance check + atomic deduction, via the same helper the cache-hit path uses
+    balance_after = await _check_and_deduct_audio_balance(
+        current_user["id"], duration_minutes, context=f"generate:{chapter_id}"
     )
-    if deduction_result is None:
-        logger.error(
-            f"Atomic deduction failed: user={current_user['id']}, chapter={chapter_id}, "
-            f"from_free={from_free}, from_monthly={from_monthly}, from_pack={from_pack} — "
-            "balance changed during generation (concurrent request race)"
-        )
-        raise HTTPException(status_code=402, detail="Balance changed during audio generation. Please try again.")
-
-    logger.info(
-        f"Audio generated: chapter={chapter_id}, duration={duration_minutes:.4f}min, "
-        f"from_free={from_free:.4f}, from_monthly={from_monthly:.4f}, from_pack={from_pack:.4f}, "
-        f"user={current_user['id']}"
-    )
-
-    balance_after = {
-        "audio_free_minutes_used": deduction_result.get("audio_free_minutes_used", 0.0),
-        "audio_monthly_minutes_balance": deduction_result.get("audio_monthly_minutes_balance", 0.0),
-        "audio_pack_minutes_balance": deduction_result.get("audio_minutes_balance", 0.0),
-    }
 
     return {
         "url": r2_url,
