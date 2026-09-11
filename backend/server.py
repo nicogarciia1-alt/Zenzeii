@@ -61,6 +61,11 @@ load_dotenv(ROOT_DIR / '.env')
 
 # JWT Config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
+if not JWT_SECRET or JWT_SECRET == 'your-secret-key-change-in-production':
+    raise RuntimeError(
+        "JWT_SECRET environment variable is not set or is using the insecure default. "
+        "Set a strong random secret in your environment before starting the server."
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -1003,7 +1008,7 @@ async def get_books(current_user: dict = Depends(get_current_user)):
         return []
 
 @api_router.get("/books/{book_id}")
-async def get_book(book_id: str):
+async def get_book(book_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single book by ID with safe transform"""
     book = await db.books.find_one({"id": book_id}, {"_id": 0})
     if not book:
@@ -1011,12 +1016,12 @@ async def get_book(book_id: str):
     return safe_book_response(book)
 
 @api_router.get("/books/{book_id}/chapters", response_model=List[ChapterResponse])
-async def get_chapters(book_id: str):
+async def get_chapters(book_id: str, current_user: dict = Depends(get_current_user)):
     chapters = await db.chapters.find({"book_id": book_id}, {"_id": 0}).sort("chapter_number", 1).to_list(200)
     return chapters
 
 @api_router.get("/chapters/{chapter_id}", response_model=ChapterResponse)
-async def get_chapter(chapter_id: str):
+async def get_chapter(chapter_id: str, current_user: dict = Depends(get_current_user)):
     chapter = await db.chapters.find_one({"id": chapter_id}, {"_id": 0})
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
@@ -1026,7 +1031,8 @@ async def get_chapter(chapter_id: str):
 async def get_sentences(
     chapter_id: str,
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200)
+    limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Get sentences with pagination - INSTANT response from cache/database.
@@ -1955,6 +1961,13 @@ async def send_to_kindle(
     request: SendToKindleRequest,
     current_user: dict = Depends(get_current_user)
 ):
+    kindle_domains = ("@kindle.com", "@free.kindle.com")
+    if not any(str(request.recipient_email).lower().endswith(d) for d in kindle_domains):
+        raise HTTPException(
+            status_code=422,
+            detail="Recipient email must be a Kindle address (@kindle.com or @free.kindle.com)"
+        )
+
     _check_auth_rate_limit(f"kindle:{current_user['id']}", 5, 3600, "Too many Kindle sends. Try again later.")
 
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")

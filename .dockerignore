@@ -1,0 +1,15 @@
+**/.env
+**/.env.*
+**/.env.local
+**/.env.*.local
+login.json
+checkout.json
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.git/
+.github/
+node_modules/
+frontend/node_modules/
+*.log
