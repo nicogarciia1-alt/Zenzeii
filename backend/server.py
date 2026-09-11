@@ -22,6 +22,7 @@ import secrets
 import json
 import stripe
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 # Import services
 from services.book_import import (
@@ -1009,9 +1010,28 @@ async def get_books(current_user: dict = Depends(get_current_user)):
         logger.error(f"Error fetching books: {e}")
         return []
 
+async def _require_book_in_library(user_id: str, book_id: str):
+    """Raise 404 (not 403) if the book isn't on the user's shelf, so we don't leak
+    which book_ids exist to a user who doesn't have access to them."""
+    on_shelf = await db.user_shelves.find_one({"user_id": user_id, "book_id": book_id})
+    if not on_shelf:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+
+async def _require_chapter_book_in_library(user_id: str, chapter_id: str) -> dict:
+    """Resolve chapter -> book_id, then apply the same library-ownership check.
+    Returns the chapter document (without _id) so callers don't need a second lookup."""
+    chapter = await db.chapters.find_one({"id": chapter_id}, {"_id": 0})
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    await _require_book_in_library(user_id, chapter["book_id"])
+    return chapter
+
+
 @api_router.get("/books/{book_id}")
 async def get_book(book_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single book by ID with safe transform"""
+    await _require_book_in_library(current_user["id"], book_id)
     book = await db.books.find_one({"id": book_id}, {"_id": 0})
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -1019,14 +1039,13 @@ async def get_book(book_id: str, current_user: dict = Depends(get_current_user))
 
 @api_router.get("/books/{book_id}/chapters", response_model=List[ChapterResponse])
 async def get_chapters(book_id: str, current_user: dict = Depends(get_current_user)):
+    await _require_book_in_library(current_user["id"], book_id)
     chapters = await db.chapters.find({"book_id": book_id}, {"_id": 0}).sort("chapter_number", 1).to_list(200)
     return chapters
 
 @api_router.get("/chapters/{chapter_id}", response_model=ChapterResponse)
 async def get_chapter(chapter_id: str, current_user: dict = Depends(get_current_user)):
-    chapter = await db.chapters.find_one({"id": chapter_id}, {"_id": 0})
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+    chapter = await _require_chapter_book_in_library(current_user["id"], chapter_id)
     return chapter
 
 @api_router.get("/chapters/{chapter_id}/sentences", response_model=List[SentenceResponse])
@@ -1040,25 +1059,29 @@ async def get_sentences(
     Get sentences with pagination - INSTANT response from cache/database.
     Flags chapter for background worker to translate if needed.
     """
+    await _require_chapter_book_in_library(current_user["id"], chapter_id)
+
     sentences = await db.sentences.find(
         {"chapter_id": chapter_id},
         {"_id": 0}
     ).sort("order", 1).skip(skip).limit(limit).to_list(limit)
-    
+
     # Transform for frontend
     result = [transform_sentence_for_frontend(s) for s in sentences]
-    
+
     # Flag this chapter for translation by the background worker (non-blocking)
     # The worker will pick this up and translate pending sentences
     await db.chapters.update_one(
         {"id": chapter_id},
         {"$set": {"translation_requested": True, "last_accessed": datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     return result
 
 @api_router.get("/chapters/{chapter_id}/sentences/count")
-async def get_sentences_count(chapter_id: str):
+async def get_sentences_count(chapter_id: str, current_user: dict = Depends(get_current_user)):
+    await _require_chapter_book_in_library(current_user["id"], chapter_id)
+
     count = await db.sentences.count_documents({"chapter_id": chapter_id})
     translated = await db.sentences.count_documents({
         "chapter_id": chapter_id,
@@ -1075,11 +1098,12 @@ async def get_sentences_count(chapter_id: str):
 # ========================
 
 @api_router.post("/translate/trigger")
-async def trigger_translation(request: TranslateRequest):
+async def trigger_translation(request: TranslateRequest, current_user: dict = Depends(get_current_user)):
     """
     Flag a chapter for translation by the background worker.
     Called by frontend when user starts reading.
     """
+    _check_auth_rate_limit(f"translate_trigger:{current_user['id']}", 10, 60, "Too many translation requests. Try again shortly.")
     # Verify chapter exists
     chapter = await db.chapters.find_one({"id": request.chapter_id})
     if not chapter:
@@ -1094,11 +1118,12 @@ async def trigger_translation(request: TranslateRequest):
     return {"message": "Translation triggered", "chapter_id": request.chapter_id}
 
 @api_router.post("/translate/sentences")
-async def translate_specific_sentences(sentence_ids: List[str]):
+async def translate_specific_sentences(sentence_ids: List[str], current_user: dict = Depends(get_current_user)):
     """
     Request translation for specific sentences.
     Flags chapters for background worker.
     """
+    _check_auth_rate_limit(f"translate_sentences:{current_user['id']}", 10, 60, "Too many translation requests. Try again shortly.")
     if len(sentence_ids) > 50:
         raise HTTPException(status_code=400, detail="Max 50 sentences per request")
     
@@ -2546,33 +2571,6 @@ async def tokenize_text(request: TokenizeRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=500, detail="Tokenization failed")
 
 
-class TTSRequest(BaseModel):
-    text: str
-    voice: str = "nova"
-
-@api_router.post("/tts")
-async def text_to_speech(request: TTSRequest, current_user: dict = Depends(get_current_user)):
-    openai_key = os.environ.get("OPENAI_API_KEY", "")
-    if not openai_key:
-        raise HTTPException(status_code=503, detail="TTS not available")
-    try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=openai_key)
-        valid_voices = ["nova", "shimmer", "echo", "onyx", "fable", "alloy"]
-        voice = request.voice if request.voice in valid_voices else "nova"
-        response = await client.audio.speech.create(
-            model="tts-1",
-            voice=voice,
-            input=request.text[:500]
-        )
-        audio_bytes = response.content
-        from fastapi.responses import Response
-        return Response(content=audio_bytes, media_type="audio/mpeg")
-    except Exception as e:
-        logger.error(f"TTS error: {e}")
-        raise HTTPException(status_code=500, detail="TTS failed")
-
-
 # ========================
 # PAYMENTS ENDPOINTS
 # ========================
@@ -2961,7 +2959,21 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
         logger.error(f"R2 upload failed for chapter {chapter_id}: {type(e).__name__}: {e}")
         raise HTTPException(status_code=502, detail="Audio storage failed. Please try again.")
 
-    # 13. Insert cache document
+    # 13. Balance check + atomic deduction, via the same helper the cache-hit path uses.
+    #     Must happen BEFORE the cache insert: if the user can't afford it, we do not want
+    #     this chapter to become servable-from-cache-for-free to them or anyone else.
+    try:
+        balance_after = await _check_and_deduct_audio_balance(
+            current_user["id"], duration_minutes, context=f"generate:{chapter_id}"
+        )
+    except HTTPException:
+        logger.error(
+            f"Audio generated but balance deduction failed for chapter {chapter_id}, "
+            f"user={current_user['id']} — R2 object {r2_key} is now an orphan (not cached)."
+        )
+        raise
+
+    # 14. Insert cache document — only reached once deduction has succeeded
     chapter_doc = await db.chapters.find_one({"id": chapter_id}, {"book_id": 1})
     await db.audio_cache.insert_one({
         "_id": chapter_id,
@@ -2974,11 +2986,6 @@ async def get_chapter_audio(chapter_id: str, current_user: dict = Depends(get_cu
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "character_count": len(chapter_text),
     })
-
-    # 14. Balance check + atomic deduction, via the same helper the cache-hit path uses
-    balance_after = await _check_and_deduct_audio_balance(
-        current_user["id"], duration_minutes, context=f"generate:{chapter_id}"
-    )
 
     return {
         "url": r2_url,
@@ -3093,12 +3100,25 @@ async def _handle_checkout_expired(session: dict):
 async def _handle_subscription_updated(subscription: dict):
     sub_id = subscription.get("id")
     cancel_at_period_end = subscription.get("cancel_at_period_end", False)
-    # cancel_at_period_end=True: user canceled, but access continues until period ends
-    # cancel_at_period_end=False: cancellation reversed (re-activated) or normal renewal
-    new_status = "canceled" if cancel_at_period_end else "active"
+    stripe_status = subscription.get("status")
+
+    # Access is driven by Stripe's actual payment/subscription status, not cancel_at_period_end
+    # alone — a failed or unpaid renewal must revoke access even though cancel_at_period_end
+    # is still False in that case.
+    if stripe_status in ("active", "trialing"):
+        new_status = "active"
+    elif stripe_status in ("past_due", "unpaid", "incomplete_expired", "canceled"):
+        new_status = "canceled"
+    else:
+        logger.warning(f"customer.subscription.updated: unrecognized Stripe status {stripe_status!r} for subscription {sub_id} — defaulting to canceled")
+        new_status = "canceled"
+
     result = await db.users.update_one(
         {"stripe_subscription_id": sub_id},
-        {"$set": {"subscription_status": new_status}}
+        {"$set": {
+            "subscription_status": new_status,
+            "cancel_at_period_end": cancel_at_period_end,
+        }}
     )
     if result.matched_count == 0:
         logger.warning(f"customer.subscription.updated: no user found for subscription {sub_id}")
@@ -3134,13 +3154,20 @@ async def stripe_webhook(request: Request):
     # Re-parse the verified payload as plain Python dicts so all handlers can use
     # standard .get() calls regardless of Stripe SDK version.
     event = json.loads(payload)
+    event_type = event["type"]
 
-    # Idempotency — Stripe retries on non-2xx; skip if this event_id was already processed
-    existing = await db.stripe_events.find_one({"_id": event["id"]})
-    if existing:
+    # Idempotency — insert the dedupe record FIRST, atomically, before any business logic.
+    # MongoDB enforces _id uniqueness, so two concurrent deliveries of the same event can
+    # never both pass this point (closes the race the old check-then-insert-later had).
+    try:
+        await db.stripe_events.insert_one({
+            "_id": event["id"],
+            "type": event_type,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except DuplicateKeyError:
         return {"status": "already_processed"}
 
-    event_type = event["type"]
     try:
         if event_type == "checkout.session.completed":
             await _handle_checkout_completed(event["data"]["object"])
@@ -3154,15 +3181,11 @@ async def stripe_webhook(request: Request):
             logger.info(f"Stripe webhook: unhandled event type {event_type!r} — acknowledged")
     except Exception as e:
         logger.error(f"Stripe webhook handler error for event {event['id']} ({event_type}): {type(e).__name__}: {e}")
-        # Do NOT insert dedupe record — let Stripe retry this delivery
+        # Remove the dedupe record so Stripe's retry of this delivery is not silently
+        # swallowed by the DuplicateKeyError branch above — a failed delivery must be retryable.
+        await db.stripe_events.delete_one({"_id": event["id"]})
         raise HTTPException(status_code=500, detail="Webhook processing failed")
 
-    # Insert dedupe record AFTER successful processing (not before) so retries work on handler failures
-    await db.stripe_events.insert_one({
-        "_id": event["id"],
-        "type": event_type,
-        "processed_at": datetime.now(timezone.utc).isoformat(),
-    })
     return {"status": "ok"}
 
 
