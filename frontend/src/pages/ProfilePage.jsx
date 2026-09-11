@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getStats, getProgress, getVocabulary, getBooks } from '@/lib/api';
 import axios from 'axios';
 import { toast } from 'sonner';
-const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export const ProfilePage = () => {
   const { user } = useAuth();

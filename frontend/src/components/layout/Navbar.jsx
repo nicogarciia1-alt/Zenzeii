@@ -12,7 +12,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
-const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export const Navbar = () => {
   const location = useLocation();

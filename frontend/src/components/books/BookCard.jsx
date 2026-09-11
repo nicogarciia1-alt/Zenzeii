@@ -31,7 +31,7 @@ import {
 import { deleteBook } from '@/lib/api';
 import { toast } from 'sonner';
 import axios from 'axios';
-const API = import.meta.env.VITE_API_URL || 'https://zenzeii-production.up.railway.app/api';
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 import GeneratedBookCover from './GeneratedBookCover';
 
 
