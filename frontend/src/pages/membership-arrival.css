@@ -1,0 +1,219 @@
+/* Membership arrival — feature-scoped layout. Tokens below are scoped to
+   .membership-arrival (not :root), following the same convention as
+   toshokan.css, so they don't leak into the rest of the app. */
+
+.membership-arrival {
+  --font-literary-serif: 'Noto Serif JP', 'Merriweather', serif;
+
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #100f0d;
+  color: #f3ebdd;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 96px 24px 64px;
+  text-align: center;
+}
+
+.membership-arrival__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 50% 46%,
+    rgba(107, 31, 31, 0.1) 0%,
+    rgba(200, 168, 48, 0.025) 38%,
+    transparent 68%
+  );
+}
+
+.membership-arrival__brand {
+  position: absolute;
+  top: 52px;
+  left: 64px;
+  margin: 0;
+  font-family: var(--font-literary-serif);
+  font-size: 14px;
+  letter-spacing: 0.42em;
+  color: rgba(243, 235, 221, 0.78);
+}
+
+.membership-arrival__welcome-jp {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-family: var(--font-literary-serif);
+  font-size: 35px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: #f3ebdd;
+}
+
+.membership-arrival__welcome-en {
+  position: relative;
+  z-index: 1;
+  margin: 12px 0 0;
+  font-size: 15.5px;
+  letter-spacing: 0.02em;
+  color: rgba(243, 235, 221, 0.66);
+}
+
+.membership-arrival__hairline {
+  position: relative;
+  z-index: 1;
+  width: 190px;
+  border-top: 1px solid rgba(200, 168, 48, 0.28);
+  margin: 30px 0 0;
+}
+
+.membership-arrival__card {
+  position: relative;
+  z-index: 1;
+  margin-top: 44px;
+}
+
+.membership-arrival__cta {
+  position: relative;
+  z-index: 1;
+  margin-top: 40px;
+  width: 306px;
+  height: 56px;
+  background: #6b1f1f;
+  color: #fff8ef;
+  border: 1px solid rgba(255, 248, 239, 0.08);
+  border-radius: 5px;
+  font-family: var(--font-literary-serif);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.membership-arrival__cta:hover {
+  background: #7a2424;
+  transform: translateY(-1px);
+}
+
+.membership-arrival__cta:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(200, 168, 48, 0.24);
+}
+
+/* ---------- Verifying / recovery states — same cinematic environment ---------- */
+
+.membership-arrival__verifying,
+.membership-arrival__recovery {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.membership-arrival__spinner {
+  margin-top: 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(200, 168, 48, 0.22);
+  border-top-color: rgba(200, 168, 48, 0.62);
+  animation: membership-arrival-spin 900ms linear infinite;
+}
+
+.membership-arrival__recovery .membership-arrival__cta {
+  margin-top: 32px;
+}
+
+@keyframes membership-arrival-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Motion — ceremonial, restrained ---------- */
+
+@keyframes membership-arrival-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes membership-arrival-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes membership-arrival-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.membership-arrival__welcome-jp.membership-arrival--enter,
+.membership-arrival__welcome-en.membership-arrival--enter,
+.membership-arrival__hairline.membership-arrival--enter {
+  animation: membership-arrival-fade-up 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.membership-arrival__hairline.membership-arrival--enter {
+  animation-delay: 140ms;
+}
+
+.membership-arrival__card.membership-arrival--enter {
+  animation: membership-arrival-card-in 580ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 180ms;
+}
+
+.membership-arrival__cta.membership-arrival--enter {
+  animation: membership-arrival-fade 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 420ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .membership-arrival--enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .membership-arrival__spinner {
+    animation: none !important;
+    opacity: 0.55;
+  }
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 720px) {
+  .membership-arrival {
+    padding: 56px 16px 48px;
+  }
+  .membership-arrival__brand {
+    top: 24px;
+    left: 24px;
+    font-size: 12px;
+  }
+  .membership-arrival__welcome-jp {
+    font-size: 27px;
+  }
+  .membership-arrival__cta {
+    width: calc(100vw - 48px);
+    max-width: 306px;
+  }
+}

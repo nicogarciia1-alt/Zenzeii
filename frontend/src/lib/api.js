@@ -82,6 +82,15 @@ export const textToSpeech = (text, voice = 'nova') =>
 export const createCheckoutSession = (tier) =>
   axios.post(`${API}/payments/create-checkout-session`, { tier });
 
+// Membership arrival API
+// Read-only status check — safe to call repeatedly (prefetch/retry/reload never consumes it).
+export const getMembershipArrival = (sessionId) =>
+  axios.get(`${API}/membership/arrival`, sessionId ? { params: { session_id: sessionId } } : undefined);
+
+// Explicit mutation — call only after the arrival screen has actually rendered for the member.
+export const acknowledgeMembershipArrival = () =>
+  axios.post(`${API}/membership/arrival/acknowledge`);
+
 // Audio API
 export const getAudioBalance = () =>
   axios.get(`${API}/audio/balance`);

@@ -2590,6 +2590,109 @@ def _check_checkout_rate_limit(user_id: str):
     _checkout_rate_limit[user_id] = now
 
 
+def _is_active_pass_member(user: dict) -> bool:
+    return (
+        user.get("subscription_status") == "active"
+        and user.get("subscription_tier") in ("premium", "founding_member")
+    )
+
+
+async def _generate_member_number() -> str:
+    """Atomically issue the next Toshokan Pass member number.
+    Format matches the one already established in ToshokanPassCard.jsx (ZP-24-XXXXXXX)."""
+    result = await db.app_config.find_one_and_update(
+        {"_id": "member_number_seq"},
+        {"$inc": {"next": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+    return f"ZP-24-{result['next']:07d}"
+
+
+async def _ensure_member_fields(user: dict) -> dict:
+    """Lazily backfill member_number / subscribed_at for members who became
+    active before these fields existed. Never overwrites an existing value."""
+    updates = {}
+    if not user.get("member_number"):
+        updates["member_number"] = await _generate_member_number()
+    if not user.get("subscribed_at"):
+        updates["subscribed_at"] = user.get("created_at") or datetime.now(timezone.utc).isoformat()
+    if updates:
+        await db.users.update_one({"id": user["id"]}, {"$set": updates})
+        user = {**user, **updates}
+    return user
+
+
+def _format_since_label(iso_value: Optional[str]) -> str:
+    if not iso_value:
+        return ""
+    try:
+        dt = datetime.fromisoformat(iso_value)
+    except ValueError:
+        return ""
+    return dt.strftime("%B %Y").upper()
+
+
+class MembershipArrivalMember(BaseModel):
+    name: str
+    member_number: str
+    since: str
+
+
+class MembershipArrivalResponse(BaseModel):
+    status: str  # "ready" | "pending" | "already_seen"
+    member: Optional[MembershipArrivalMember] = None
+
+
+@api_router.get("/membership/arrival", response_model=MembershipArrivalResponse)
+async def get_membership_arrival(session_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Read-only. Never mutates state — safe to call from retries, prefetches, or reloads.
+
+    `session_id` is never trusted as proof of membership (that's decided purely by
+    the user's server-side subscription_tier/status below). It's used only, and
+    only while not-yet-active, to ask Stripe's own record what the checkout was
+    FOR — because /payment-success is also the return URL for non-membership
+    purchases (e.g. an audio pack), which will never flip subscription_status to
+    "active" and must not sit in the arrival-pending wait loop.
+    """
+    if not _is_active_pass_member(current_user):
+        if session_id:
+            try:
+                session = await asyncio.to_thread(stripe.checkout.Session.retrieve, session_id)
+                purchase_tier = session.get("metadata", {}).get("tier")
+                purchase_type = session.get("metadata", {}).get("purchase_type")
+                if purchase_type == "audio_pack" or purchase_tier not in ("premium", "founding_member"):
+                    return {"status": "not_applicable"}
+            except Exception as e:
+                logger.warning(f"membership/arrival: could not retrieve session {session_id}: {type(e).__name__}")
+        return {"status": "pending"}
+    if current_user.get("membership_arrival_seen_at"):
+        return {"status": "already_seen"}
+
+    member = await _ensure_member_fields(current_user)
+    return {
+        "status": "ready",
+        "member": {
+            "name": member.get("username", ""),
+            "member_number": member["member_number"],
+            "since": _format_since_label(member.get("subscribed_at")),
+        },
+    }
+
+
+@api_router.post("/membership/arrival/acknowledge")
+async def acknowledge_membership_arrival(current_user: dict = Depends(get_current_user)):
+    """Marks the one-time arrival experience as consumed. Called only after the
+    arrival screen has actually rendered for the member (or on CTA click) —
+    never from the webhook, and never from the read-only GET above."""
+    if not current_user.get("membership_arrival_seen_at"):
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"membership_arrival_seen_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    return {"status": "ok"}
+
+
 @api_router.post("/payments/create-checkout-session")
 async def create_checkout_session(
     request: CreateCheckoutSessionRequest,
@@ -3034,12 +3137,18 @@ async def _handle_checkout_completed(session: dict):
     if not user_id:
         logger.warning("checkout.session.completed: no user_id in metadata or client_reference_id")
         return
+    existing = await db.users.find_one({"id": user_id}, {"subscribed_at": 1, "member_number": 1})
     update = {
         "subscription_tier": tier,
         "subscription_status": "active",
         "stripe_customer_id": session.get("customer"),
-        "subscribed_at": datetime.now(timezone.utc).isoformat(),
     }
+    # subscribed_at / member_number represent the FIRST activation, not the latest
+    # billing event — never overwritten on renewal or re-subscription.
+    if not existing or not existing.get("subscribed_at"):
+        update["subscribed_at"] = datetime.now(timezone.utc).isoformat()
+    if not existing or not existing.get("member_number"):
+        update["member_number"] = await _generate_member_number()
     # stripe_subscription_id only present for subscription mode (premium); absent for payment mode (founding_member)
     if session.get("subscription"):
         update["stripe_subscription_id"] = session["subscription"]

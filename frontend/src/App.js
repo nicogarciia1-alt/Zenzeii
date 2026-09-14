@@ -20,6 +20,7 @@ import LibraryPage from "@/pages/LibraryPage";
 import BookDetailPage from "@/pages/BookDetailPage";
 import ShelfDetailPage from "@/pages/ShelfDetailPage";
 import ZenzeiiPage from "@/pages/ZenzeiiPage";
+import MembershipArrivalPage from "@/pages/MembershipArrivalPage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -64,6 +65,7 @@ function AppRoutes() {
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route path="/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
       <Route path="/upgrade" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
+      <Route path="/payment-success" element={<ProtectedRoute><MembershipArrivalPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
