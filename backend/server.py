@@ -2751,8 +2751,8 @@ async def create_checkout_session(
             stripe.checkout.Session.create,
             mode=mode,
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url="https://zenzeii.com/payment-success?session_id={CHECKOUT_SESSION_ID}",
-            cancel_url="https://zenzeii.com/payment-canceled",
+            success_url=f"https://zenzeii-ci1x.vercel.app/payment-success?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url=f"https://zenzeii-ci1x.vercel.app/payment-canceled",
             client_reference_id=current_user["id"],
             metadata={"tier": stored_tier, "user_id": current_user["id"]},
         )
@@ -2863,8 +2863,8 @@ async def purchase_audio_pack(
             stripe.checkout.Session.create,
             mode="payment",
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url="https://zenzeii.com/payment-success?session_id={CHECKOUT_SESSION_ID}",
-            cancel_url="https://zenzeii.com/payment-canceled",
+            success_url=f"https://zenzeii-ci1x.vercel.app/payment-success?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url=f"https://zenzeii-ci1x.vercel.app/payment-canceled",
             client_reference_id=current_user["id"],
             metadata={"purchase_type": "audio_pack", "pack_id": request.pack_id, "user_id": current_user["id"]},
         )
