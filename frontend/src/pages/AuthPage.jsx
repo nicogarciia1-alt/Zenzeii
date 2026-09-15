@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { formatApiError } from '@/lib/api';
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export const AuthPage = () => {
@@ -15,6 +16,7 @@ export const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [registerData, setRegisterData] = useState({ email: '', password: '', username: '' });
+  const [registerError, setRegisterError] = useState(null);
   const [forgotMode, setForgotMode] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
@@ -26,7 +28,7 @@ export const AuthPage = () => {
       await login(loginData.email, loginData.password);
       toast.success('Welcome back!');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Login failed');
+      toast.error(formatApiError(error, 'Login failed'));
     } finally {
       setLoading(false);
     }
@@ -35,11 +37,12 @@ export const AuthPage = () => {
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setRegisterError(null);
     try {
       await register(registerData.email, registerData.password, registerData.username);
       toast.success('Account created successfully!');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Registration failed');
+      setRegisterError(formatApiError(error, 'Registration failed'));
     } finally {
       setLoading(false);
     }
@@ -232,11 +235,19 @@ export const AuthPage = () => {
                         value={registerData.password}
                         onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
                         required
-                        minLength={6}
+                        minLength={8}
                         data-testid="register-password"
                       />
                     </div>
                   </div>
+                  {registerError && (
+                    <p
+                      style={{ fontSize: '13px', color: '#B5294E', fontFamily: 'EB Garamond, serif' }}
+                      data-testid="register-error"
+                    >
+                      {registerError}
+                    </p>
+                  )}
                   <Button type="submit" className="w-full" disabled={loading} data-testid="register-submit">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <BookOpen className="h-4 w-4 mr-2" />}
                     Create Account

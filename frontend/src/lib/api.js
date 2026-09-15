@@ -31,6 +31,25 @@ export const isLibraryLimitError = (err) =>
   err?.response?.status === 403 &&
   err?.response?.data?.detail?.error === 'library_limit_reached';
 
+// Normalizes err.response.data.detail into a displayable string. FastAPI's
+// `detail` isn't always a string — pydantic validation (422) sends an array
+// of {msg, loc, type} objects, and some endpoints send a structured object
+// (e.g. library_limit_reached) — handing either straight to a toast/JSX
+// text node crashes the render tree instead of showing an error.
+export const formatApiError = (err, fallback = 'Something went wrong. Please try again.') => {
+  const detail = err?.response?.data?.detail;
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail.map((d) => d?.msg).filter(Boolean);
+    return msgs.length ? msgs.join(' ') : fallback;
+  }
+  if (typeof detail === 'object') {
+    return detail.message || detail.error || fallback;
+  }
+  return fallback;
+};
+
 export const uploadBook = (file, title, author, sourceCatalogId = null) => {
   const formData = new FormData();
   formData.append('file', file);

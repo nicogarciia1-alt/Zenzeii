@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { formatApiError } from '@/lib/api';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -186,7 +187,7 @@ export const ResetPasswordPage = () => {
       });
       setSuccess(true);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Reset failed. This link may have expired.');
+      setError(formatApiError(err, 'Reset failed. This link may have expired.'));
     } finally {
       setLoading(false);
     }

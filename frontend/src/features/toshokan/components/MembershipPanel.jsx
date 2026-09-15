@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { createCheckoutSession } from '@/lib/api';
+import { createCheckoutSession, formatApiError } from '@/lib/api';
 import { ToshokanPassCard } from './ToshokanPassCard';
 import { MembershipPrice } from './MembershipPrice';
 import { PassCTA } from './PassCTA';
@@ -15,7 +15,7 @@ export function MembershipPanel() {
       const res = await createCheckoutSession(tier);
       window.location.href = res.data.checkout_url;
     } catch (err) {
-      toast(err?.response?.data?.detail || 'Could not start checkout. Please try again.');
+      toast(formatApiError(err, 'Could not start checkout. Please try again.'));
       setLoadingTier(null);
     }
   };

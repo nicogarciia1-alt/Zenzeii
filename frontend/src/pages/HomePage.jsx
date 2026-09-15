@@ -35,7 +35,8 @@ import {
   getBookStatus,
   cancelImport,
   prioritizeImport,
-  isLibraryLimitError
+  isLibraryLimitError,
+  formatApiError
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
@@ -244,8 +245,7 @@ export const HomePage = () => {
       if (isLibraryLimitError(error)) {
         openGate(TOSHOKAN_GATE.LIBRARY_LIMIT);
       } else {
-        const detail = error.response?.data?.detail;
-        toast.error(detail || 'Upload failed');
+        toast.error(formatApiError(error, 'Upload failed'));
       }
     } finally {
       setUploading(false);

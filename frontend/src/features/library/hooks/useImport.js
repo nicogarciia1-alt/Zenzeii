@@ -53,7 +53,7 @@
  * }}
  */
 import { useCallback, useState } from 'react';
-import { importBook, isLibraryLimitError } from '@/lib/api';
+import { importBook, isLibraryLimitError, formatApiError } from '@/lib/api';
 import { usePollBookStatus } from './usePollBookStatus';
 
 /**
@@ -114,7 +114,7 @@ export function useImport(bookId, onComplete, onError, initialStatus = 'idle', o
         onLibraryLimitReached?.();
         return;
       }
-      onError?.(err.response?.data?.detail || err.message || 'Failed to start import.');
+      onError?.(formatApiError(err, err.message || 'Failed to start import.'));
     }
   }, [bookId, importStatus, onComplete, onError, onLibraryLimitReached, startPolling]);
 

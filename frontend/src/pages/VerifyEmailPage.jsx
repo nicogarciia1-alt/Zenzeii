@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { formatApiError } from '@/lib/api';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -71,7 +72,7 @@ export const VerifyEmailPage = () => {
       .then(() => setStatus('success'))
       .catch(err => {
         setStatus('error');
-        setErrorMsg(err.response?.data?.detail || 'Verification failed. This link may have expired.');
+        setErrorMsg(formatApiError(err, 'Verification failed. This link may have expired.'));
       });
   }, [token]);
 

@@ -31,7 +31,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
-import { uploadBook, isLibraryLimitError } from '@/lib/api';
+import { uploadBook, isLibraryLimitError, formatApiError } from '@/lib/api';
 import { useToshokanGate } from '@/features/toshokan/context/ToshokanGateContext';
 import { TOSHOKAN_GATE } from '@/features/toshokan/constants/toshokanGates';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -113,7 +113,7 @@ export function AcquisitionModal({ isOpen, onClose, book, onImported }) {
         openGate(TOSHOKAN_GATE.LIBRARY_LIMIT);
         return;
       }
-      setUploadError(err.response?.data?.detail || err.message || 'Upload failed. Please try again.');
+      setUploadError(formatApiError(err, err.message || 'Upload failed. Please try again.'));
     }
   };
 
