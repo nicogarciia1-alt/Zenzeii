@@ -247,11 +247,11 @@
   color: #8d837c;
 }
 
-.audio-purchase-error {
+.audio-purchase-coming-soon {
   margin: 0 0 16px;
   text-align: center;
-  font-size: 13px;
-  color: #6b1f1f;
+  font-size: 12px;
+  color: #8d837c;
 }
 
 @media (max-width: 640px) {

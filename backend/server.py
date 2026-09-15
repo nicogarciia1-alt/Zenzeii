@@ -75,6 +75,7 @@ JWT_EXPIRATION_HOURS = 24
 # Stripe config — api_key set once at module load; price IDs read from env
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PRICE_PREMIUM_MONTHLY = os.environ.get("STRIPE_PRICE_PREMIUM_MONTHLY", "")
+STRIPE_PRICE_PREMIUM_ANNUAL = os.environ.get("STRIPE_PRICE_PREMIUM_ANNUAL", "")
 STRIPE_PRICE_FOUNDING_MEMBER = os.environ.get("STRIPE_PRICE_FOUNDING_MEMBER", "")
 STRIPE_PRICE_AUDIO_STARTER = os.environ.get("STRIPE_PRICE_AUDIO_STARTER", "")
 STRIPE_PRICE_AUDIO_STANDARD = os.environ.get("STRIPE_PRICE_AUDIO_STANDARD", "")
@@ -2698,8 +2699,8 @@ async def create_checkout_session(
     request: CreateCheckoutSessionRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    if request.tier not in ("premium", "founding_member"):
-        raise HTTPException(status_code=400, detail="Invalid tier. Must be 'premium' or 'founding_member'.")
+    if request.tier not in ("premium", "premium_annual", "founding_member"):
+        raise HTTPException(status_code=400, detail="Invalid tier. Must be 'premium', 'premium_annual', or 'founding_member'.")
 
     if current_user.get("subscription_tier") in ("premium", "founding_member"):
         raise HTTPException(status_code=400, detail="Already subscribed. You already have an active plan.")
@@ -2734,8 +2735,16 @@ async def create_checkout_session(
             raise HTTPException(status_code=409, detail="Founding member spots are sold out.")
         reserved_founding_spot = True
 
-    price_id = STRIPE_PRICE_PREMIUM_MONTHLY if request.tier == "premium" else STRIPE_PRICE_FOUNDING_MEMBER
-    mode = "subscription" if request.tier == "premium" else "payment"
+    price_id = {
+        "premium": STRIPE_PRICE_PREMIUM_MONTHLY,
+        "premium_annual": STRIPE_PRICE_PREMIUM_ANNUAL,
+        "founding_member": STRIPE_PRICE_FOUNDING_MEMBER,
+    }[request.tier]
+    mode = "subscription" if request.tier in ("premium", "premium_annual") else "payment"
+    # premium_annual is billed yearly but is the same membership tier as premium —
+    # normalize to "premium" in metadata so the webhook and every downstream
+    # subscription_tier check (audio allowance, upgrade eligibility, etc.) keep working.
+    stored_tier = "premium" if request.tier == "premium_annual" else request.tier
 
     try:
         session = await asyncio.to_thread(
@@ -2745,7 +2754,7 @@ async def create_checkout_session(
             success_url="https://zenzeii.com/payment-success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url="https://zenzeii.com/payment-canceled",
             client_reference_id=current_user["id"],
-            metadata={"tier": request.tier, "user_id": current_user["id"]},
+            metadata={"tier": stored_tier, "user_id": current_user["id"]},
         )
         if request.tier == "founding_member":
             await db.users.update_one(

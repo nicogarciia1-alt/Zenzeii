@@ -539,6 +539,47 @@
   box-shadow: 0 8px 20px rgba(112, 30, 29, 0.18);
 }
 
+.pass-cta-annual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: min(100%, 480px);
+  min-height: 40px;
+  margin-top: 10px;
+  border: 0;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #8e2726, #76201f);
+  opacity: 0.9;
+  color: #fff9f1;
+  font-family: var(--font-literary-serif);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.pass-cta-annual:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(112, 30, 29, 0.16);
+}
+
+.pass-cta-annual:disabled {
+  cursor: default;
+}
+
+.pass-cta-annual__badge {
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: #C8A830;
+  color: #3a2f0a;
+  font-family: var(--font-body, inherit);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .pass-fineprint {
   margin-top: 14px;
   text-align: center;
@@ -838,6 +879,11 @@
   .pass-cta {
     margin-top: 8px;
     min-height: 54px;
+  }
+
+  .pass-cta-annual {
+    margin-top: 8px;
+    min-height: 36px;
   }
 
   .pass-fineprint {

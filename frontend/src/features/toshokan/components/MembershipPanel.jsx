@@ -6,17 +6,17 @@ import { MembershipPrice } from './MembershipPrice';
 import { PassCTA } from './PassCTA';
 
 export function MembershipPanel() {
-  const [loading, setLoading] = useState(false);
+  const [loadingTier, setLoadingTier] = useState(null);
 
-  const handleGetPass = async () => {
-    if (loading) return;
-    setLoading(true);
+  const handleGetPass = async (tier) => {
+    if (loadingTier) return;
+    setLoadingTier(tier);
     try {
-      const res = await createCheckoutSession('premium');
+      const res = await createCheckoutSession(tier);
       window.location.href = res.data.checkout_url;
     } catch (err) {
       toast(err?.response?.data?.detail || 'Could not start checkout. Please try again.');
-      setLoading(false);
+      setLoadingTier(null);
     }
   };
 
@@ -25,7 +25,20 @@ export function MembershipPanel() {
       <ToshokanPassCard />
       <p className="pass-card-caption">Your membership card. Yours to keep.</p>
       <MembershipPrice />
-      <PassCTA onClick={handleGetPass} loading={loading} />
+      <PassCTA onClick={() => handleGetPass('premium')} loading={loadingTier === 'premium'} />
+      <button
+        type="button"
+        className="pass-cta-annual"
+        onClick={() => handleGetPass('premium_annual')}
+        disabled={loadingTier !== null}
+      >
+        {loadingTier === 'premium_annual' ? 'Redirecting…' : (
+          <>
+            €29.99 / year
+            <span className="pass-cta-annual__badge">Save 37%</span>
+          </>
+        )}
+      </button>
       <p className="pass-fineprint">Cancel anytime. No long-term commitment. Secured by Stripe.</p>
     </section>
   );

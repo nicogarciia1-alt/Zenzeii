@@ -1,6 +1,4 @@
-import { Loader2 } from 'lucide-react';
-
-export function AudioMinutePackCard({ label, minutes, price, recommended, loading, disabled, onBuy }) {
+export function AudioMinutePackCard({ label, minutes, price, recommended }) {
   return (
     <div className={`audio-pack-card${recommended ? ' audio-pack-card--recommended' : ''}`}>
       {recommended && <span className="audio-pack-card__badge">Most popular</span>}
@@ -11,18 +9,10 @@ export function AudioMinutePackCard({ label, minutes, price, recommended, loadin
       <button
         type="button"
         className="audio-pack-card__buy"
-        aria-label={`Buy ${label} — ${minutes} minutes for ${price}`}
-        disabled={disabled}
-        onClick={onBuy}
+        aria-label={`${label} — coming soon`}
+        disabled
       >
-        {loading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Opening checkout…
-          </>
-        ) : (
-          'Buy'
-        )}
+        We're working on it
       </button>
     </div>
   );
