@@ -2407,6 +2407,8 @@ async def ai_explain_word(
     current_user: dict = Depends(get_current_user)
 ):
     """Explain a Japanese word in context using GPT-4o-mini."""
+    if len(request.word) > 2000 or (request.context_sentence and len(request.context_sentence) > 2000):
+        raise HTTPException(status_code=400, detail="Text too long — maximum 2,000 characters")
     _check_ai_rate_limit(current_user["id"])
     await check_ai_limit(current_user, db)
     openai_key = os.environ.get("OPENAI_API_KEY", "")
@@ -2458,6 +2460,8 @@ async def ai_chat(
     current_user: dict = Depends(get_current_user)
 ):
     """Chat with Zenzeii, a scholarly Japanese literature companion."""
+    if len(request.message) > 2000:
+        raise HTTPException(status_code=400, detail="Message too long — maximum 2,000 characters")
     _check_ai_rate_limit(current_user["id"])
     await check_ai_limit(current_user, db)
     openai_key = os.environ.get("OPENAI_API_KEY", "")
