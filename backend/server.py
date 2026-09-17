@@ -2490,7 +2490,7 @@ async def ai_chat(
             system_prompt += f" Their current sentence is: {request.current_sentence}."
 
         messages = [{"role": "system", "content": system_prompt}]
-        for msg in request.chat_history:
+        for msg in request.chat_history[-10:]:
             if msg.get("role") in ("user", "assistant") and msg.get("content"):
                 messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": request.message})
