@@ -48,6 +48,7 @@ async def get_translation_jobs(db):
     2. Chapters with pending sentences that users have accessed
     """
     jobs = []
+    shelved_ids = set(await db.user_shelves.distinct("book_id"))
 
     # Priority 1 & 2: Any book with untranslated sentences (preparing or completed)
     all_books = await db.books.find(
@@ -56,6 +57,8 @@ async def get_translation_jobs(db):
     ).to_list(20)
 
     for book in all_books:
+        if book["id"] not in shelved_ids:
+            continue
         pending = await db.sentences.count_documents({
             "book_id": book["id"],
             "translation_status": "pending"
@@ -75,6 +78,8 @@ async def get_translation_jobs(db):
     ).to_list(10)
     
     for chapter in requested_chapters:
+        if chapter["book_id"] not in shelved_ids:
+            continue
         pending_count = await db.sentences.count_documents({
             "chapter_id": chapter["id"],
             "translation_status": "pending"
