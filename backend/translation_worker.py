@@ -110,6 +110,7 @@ async def process_translation_batch(db, sentences):
         return 0
     
     sentence_ids = [s["id"] for s in sentences]
+    retry_counts = {s["id"]: s.get("retry_count", 0) for s in sentences}
 
     if sentences[0].get("source_language") == "ja":
         from services.translation import translate_japanese_source_batch
@@ -119,14 +120,20 @@ async def process_translation_batch(db, sentences):
     else:
         english_texts = [s["english"] for s in sentences]
         results = await translate_batch_for_worker(sentence_ids, english_texts)
-    
+
     # Save results to database
     for sid, data in results.items():
+        if data.get("translation_status") == "pending":
+            # This attempt failed — count it and give up after 3 tries
+            attempts = retry_counts.get(sid, 0) + 1
+            data["retry_count"] = attempts
+            if attempts >= 3:
+                data["translation_status"] = "failed"
         await db.sentences.update_one(
             {"id": sid},
             {"$set": data}
         )
-    
+
     return len(results)
 
 
@@ -141,7 +148,7 @@ async def process_job(db, job, semaphore):
                         "book_id": job["book_id"],
                         "translation_status": "pending"
                     },
-                    {"_id": 0, "id": 1, "english": 1, "source_language": 1, "japanese_original": 1, "kanji_text": 1}
+                    {"_id": 0, "id": 1, "english": 1, "source_language": 1, "japanese_original": 1, "kanji_text": 1, "retry_count": 1}
                 ).sort("order", 1).limit(SENTENCES_PER_BOOK_BATCH).to_list(SENTENCES_PER_BOOK_BATCH)
                 
                 if sentences:
@@ -166,7 +173,7 @@ async def process_job(db, job, semaphore):
                         "chapter_id": job["chapter_id"],
                         "translation_status": "pending"
                     },
-                    {"_id": 0, "id": 1, "english": 1, "source_language": 1, "japanese_original": 1, "kanji_text": 1}
+                    {"_id": 0, "id": 1, "english": 1, "source_language": 1, "japanese_original": 1, "kanji_text": 1, "retry_count": 1}
                 ).sort("order", 1).limit(SENTENCES_PER_BOOK_BATCH).to_list(SENTENCES_PER_BOOK_BATCH)
                 
                 if sentences:
