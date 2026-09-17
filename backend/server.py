@@ -55,7 +55,7 @@ from services import catalog_service
 
 # Import rate limiting constants
 IMPORT_LIMIT_PER_HOUR = 3
-IMPORT_LIMIT_WINDOW_HOURS = 1
+IMPORT_LIMIT_WINDOW_HOURS = 24
 
 TRANSLATE_TIMEOUT_SECONDS = 10.0
 
