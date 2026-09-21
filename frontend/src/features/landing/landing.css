@@ -597,15 +597,6 @@
 .lp-pass__note-icon { flex: none; color: var(--landing-burgundy); }
 .lp-pass__note-jp { display: block; white-space: nowrap; font-size: 13px; line-height: 1.5; }
 .lp-pass__note-en { display: block; white-space: nowrap; font-size: 12.5px; line-height: 1.5; color: var(--landing-muted); }
-.lp-pass__quote {
-  margin: 0;
-  padding-left: 24px;
-  border-left: 1px solid var(--landing-burgundy);
-  font-size: 14px;
-  line-height: 1.9;
-  white-space: nowrap;
-}
-.lp-pass__quote-en { display: block; margin-top: 10px; font-size: 13px; line-height: 1.6; color: var(--landing-muted); }
 
 @media (max-width: 1199px) {
   .lp-pass__grid { grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 40px; }

@@ -49,10 +49,6 @@ export default function ToshokanPassSection() {
               );
             })}
           </ul>
-          <p className="lp-pass__quote">
-            <span lang="ja">よい文学は、<br />よい時間をつくる。</span>
-            <span className="lp-pass__quote-en">Good literature<br />creates a better you.</span>
-          </p>
         </div>
       </div>
     </section>
