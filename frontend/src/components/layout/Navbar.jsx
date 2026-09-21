@@ -125,14 +125,6 @@ export const Navbar = () => {
                   <Flag className="h-4 w-4" />
                   Report Problem
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => logout()}
-                  className="text-[#B5294E] focus:text-[#B5294E]"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Log Out
-                </DropdownMenuItem>
                 {user?.subscription_tier === 'free' && (
                   <>
                     <DropdownMenuSeparator />
@@ -142,6 +134,14 @@ export const Navbar = () => {
                     </DropdownMenuItem>
                   </>
                 )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => logout()}
+                  className="text-[#B5294E] focus:text-[#B5294E]"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Log Out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
