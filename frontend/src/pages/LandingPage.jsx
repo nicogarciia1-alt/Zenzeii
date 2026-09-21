@@ -1,24 +1,25 @@
 import React from 'react';
-import LandingNavbar from '@/components/landing/LandingNavbar';
-import HeroSection from '@/components/landing/HeroSection';
-import DiscoverByFeeling from '@/components/landing/DiscoverByFeeling';
-import ExploreStories from '@/components/landing/ExploreStories';
-import FeaturesSection from '@/components/landing/FeaturesSection';
-import StatsBar from '@/components/landing/StatsBar';
-import ClosingSection from '@/components/landing/ClosingSection';
+import LandingHeader from '@/features/landing/components/LandingHeader';
+import LandingHero from '@/features/landing/components/LandingHero';
+import ProductExperience from '@/features/landing/components/ProductExperience';
+import ToshokanPassSection from '@/features/landing/components/ToshokanPassSection';
+import LandingFinalCTA from '@/features/landing/components/LandingFinalCTA';
+import '@/features/landing/landing.css';
 
-const LandingPage = () => {
-  return (
-    <div className="min-h-screen bg-library-bg-primary">
-      <LandingNavbar />
-      <HeroSection />
-      <DiscoverByFeeling />
-      <ExploreStories />
-      <FeaturesSection />
-      <StatsBar />
-      <ClosingSection />
-    </div>
-  );
-};
+/**
+ * Logged-out home (`/`). Composition only — every section lives in
+ * features/landing. Authenticated users get HomePage (see App.js).
+ */
+const LandingPage = () => (
+  <div className="landing-root">
+    <LandingHeader />
+    <main>
+      <LandingHero />
+      <ProductExperience />
+      <ToshokanPassSection />
+      <LandingFinalCTA />
+    </main>
+  </div>
+);
 
 export default LandingPage;
