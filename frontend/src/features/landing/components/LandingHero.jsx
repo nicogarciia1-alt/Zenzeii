@@ -45,10 +45,6 @@ export default function LandingHero() {
             {LANDING_CTAS.enter.label}
           </Link>
         </div>
-        <p className="lp-hero__note">
-          <span className="lp-hero__note-rule" aria-hidden="true" />
-          Books are never read alone.
-        </p>
       </div>
     </section>
   );
